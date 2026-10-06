@@ -1,0 +1,64 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: tonkho-v2
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/qkshop_tonkho?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:dongduy122}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  sql:
+    init:
+      mode: always
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    open-in-view: true
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Ho_Chi_Minh
+    serialization:
+      write-dates-as-timestamps: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Default Admin Account
+app:
+  admin:
+    username: admin
+    password: admin123
+    fullname: Admin QKShop
+    email: admin@qkshop.vn
+
+  jwt:
+    secret: ${JWT_SECRET:QKShopTonKhoV2SecretKeyForJWTTokenGeneration2024VeryLongSecureKey!!}
+    expiration-ms: 86400000    # 24 hours
+    refresh-expiration-ms: 604800000  # 7 days
+
+# Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# Logging
+logging:
+  level:
+    com.qkshop.tonkho: DEBUG
+    org.springframework.security: INFO

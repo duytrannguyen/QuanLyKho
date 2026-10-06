@@ -1,0 +1,181 @@
+.page {
+  padding: 1.5rem 2rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchSection {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.searchHeader {
+  margin-bottom: 1rem;
+}
+
+.searchHeader h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.searchHeader p {
+  color: var(--gray-500);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.searchForm {
+  display: flex;
+  gap: 12px;
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.leftPanel, .rightPanel {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  padding: 1.5rem;
+}
+
+.panelTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary-700);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.machineNameHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.machineName {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.badgeReady {
+  background: #dcfce7;
+  color: #166534;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badgeWarning {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.machineConfig {
+  color: var(--gray-500);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.detailsTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detailsTable tr {
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.detailsTable tr:last-child {
+  border-bottom: none;
+}
+
+.detailsTable td {
+  padding: 12px 0;
+  font-size: 0.95rem;
+}
+
+.detailsTable td:first-child {
+  color: var(--gray-500);
+  width: 140px;
+}
+
+.detailsTable td:last-child {
+  font-weight: 600;
+  text-align: right;
+}
+
+.warningBox {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.formGroupFull {
+  grid-column: span 2;
+}
+
+.formFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--gray-200);
+}
+
+.footerNote {
+  color: var(--gray-400);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.footerBtns {
+  display: flex;
+  gap: 12px;
+}
+
+.emptyState {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--gray-400);
+}

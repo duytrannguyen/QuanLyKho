@@ -1,0 +1,188 @@
+.header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  height: var(--header-height);
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  z-index: 90;
+  transition: left var(--transition-slow);
+}
+
+.header.collapsed {
+  left: var(--sidebar-collapsed-width);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.searchBox {
+  position: relative;
+  width: 320px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-400);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: var(--space-2) var(--space-3) var(--space-2) 36px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  color: var(--gray-700);
+  font-family: var(--font-family);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.searchInput:focus {
+  background: white;
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.searchInput::placeholder {
+  color: var(--gray-400);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.statusBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  background: var(--primary-600);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.timestamp {
+  font-size: var(--font-sm);
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
+.headerBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--gray-600);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-family: var(--font-family);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.headerBtn:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+}
+
+.iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.iconBtn:hover {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.userArea {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-color);
+  margin-left: var(--space-1);
+}
+
+.userInfo {
+  text-align: right;
+  line-height: 1.3;
+}
+
+.userName {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.userRole {
+  font-size: var(--font-xs);
+  color: var(--gray-500);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: var(--font-base);
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast);
+}
+
+.avatar:hover {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}

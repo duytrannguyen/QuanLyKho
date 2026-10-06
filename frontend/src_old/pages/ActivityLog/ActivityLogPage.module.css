@@ -1,0 +1,221 @@
+.page {
+  animation: fadeIn 0.3s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.filters {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  align-items: center;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 400px;
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: var(--space-5);
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+
+.tableCard {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tableHeader {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tableHeader h3 {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.tableContainer {
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--gray-50);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table td {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--font-sm);
+  color: var(--gray-700);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+.tableRow {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tableRow:hover {
+  background: var(--gray-50);
+}
+
+.tableRow.active {
+  background: var(--primary-50);
+  border-left: 3px solid var(--primary-600);
+}
+
+.tableRow.active td:first-child {
+  padding-left: calc(var(--space-5) - 3px);
+}
+
+.statusTransition {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: var(--font-xs);
+}
+
+/* Details Panel */
+.detailsCard {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  padding: var(--space-6);
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-6));
+}
+
+.detailsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-5);
+}
+
+.detailsTitle {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: var(--space-1);
+}
+
+.detailsSub {
+  font-size: var(--font-sm);
+  color: var(--gray-500);
+}
+
+.badge {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+.badge.success {
+  color: #16a34a;
+  background: #dcfce7;
+}
+
+.eventBlock {
+  margin-bottom: var(--space-5);
+}
+
+.eventLabel {
+  font-size: var(--font-xs);
+  color: var(--gray-500);
+  margin-bottom: var(--space-1);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.eventValue {
+  font-size: var(--font-base);
+  color: var(--gray-900);
+  font-weight: 500;
+}
+
+.eventValue.large {
+  font-size: var(--font-2xl);
+  font-weight: 800;
+}
+
+.diffContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.diffBox {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--gray-50);
+}
+
+.diffTitle {
+  font-size: var(--font-sm);
+  color: var(--gray-600);
+  margin-bottom: var(--space-3);
+}
+
+.infoBox {
+  background: var(--primary-50);
+  border: 1px solid var(--primary-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-sm);
+  color: var(--primary-800);
+  margin-bottom: var(--space-5);
+}
+
+.actionBtns {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.btnGroup {
+  display: flex;
+  flex: 1;
+}
+
+.btnGroup .btn {
+  flex: 1;
+  justify-content: center;
+}

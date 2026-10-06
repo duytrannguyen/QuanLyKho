@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="bang_gia"
+              printOrder="Horizontal"
+              pageWidth="595" pageHeight="842"
+              columnWidth="190" columnCount="3" columnSpacing="0"
+              leftMargin="12" rightMargin="13" topMargin="4" bottomMargin="4">
+
+  <parameter name="LOGO_PATH" class="java.lang.String"/>
+
+  <field name="platformCode"     class="java.lang.String"/>
+  <field name="cpuCode"          class="java.lang.String"/>
+  <field name="gpuCode"          class="java.lang.String"/>
+  <field name="ramCode"          class="java.lang.String"/>
+  <field name="ssdCode"          class="java.lang.String"/>
+  <field name="screenSpec"       class="java.lang.String"/>
+  <field name="weightKg"         class="java.lang.String"/>
+  <field name="warrantyText"     class="java.lang.String"/>
+  <field name="defaultSalePrice" class="java.math.BigDecimal"/>
+
+  <detail>
+    <band height="274" splitType="Prevent">
+
+      <!-- Vien ngoai -->
+      <rectangle>
+        <reportElement x="0" y="0" width="190" height="274"/>
+        <graphicElement><pen lineWidth="1.0" lineColor="#111111"/></graphicElement>
+      </rectangle>
+
+      <!-- Logo -->
+      <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle">
+        <reportElement x="2" y="-10" width="200" height="60"/>
+        <imageExpression><![CDATA[$P{LOGO_PATH}]]></imageExpression>
+      </image>
+
+      <!-- Ten may -->
+      <rectangle>
+        <reportElement x="1" y="34" width="188" height="38" backcolor="#000000" mode="Opaque"/>
+        <graphicElement><pen lineWidth="0.0"/></graphicElement>
+      </rectangle>
+      <textField isBlankWhenNull="true">
+        <reportElement x="2" y="34" width="186" height="38" forecolor="#FFFFFF" backcolor="#000000" mode="Opaque"/>
+        <box topPadding="5" bottomPadding="5" leftPadding="3" rightPadding="3"/>
+        <textElement textAlignment="Center" verticalAlignment="Middle">
+          <font fontName="DejaVu Sans" size="12" isBold="true"/>
+        </textElement>
+        <textFieldExpression><![CDATA[$F{platformCode} != null ? $F{platformCode} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- Gia -->
+      <textField isBlankWhenNull="true">
+        <reportElement x="0" y="77" width="190" height="20"/>
+        <textElement textAlignment="Center" verticalAlignment="Middle">
+          <font fontName="DejaVu Sans" size="14" isBold="true"/>
+        </textElement>
+        <textFieldExpression><![CDATA["Giá: " + ($F{defaultSalePrice} == null ? "Liên hệ" : String.format("%,.0f", $F{defaultSalePrice}.doubleValue()).replace(",", ".") + "đ")]]></textFieldExpression>
+      </textField>
+
+      <!-- Duong ke -->
+      <line>
+        <reportElement x="6" y="95" width="178" height="1"/>
+        <graphicElement><pen lineWidth="1.5" lineColor="#000000"/></graphicElement>
+      </line>
+
+      <!-- CPU -->
+      <staticText>
+        <reportElement x="4" y="98" width="32" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[CPU:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="38" y="98" width="148" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[$F{cpuCode} != null ? $F{cpuCode} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- RAM -->
+      <staticText>
+        <reportElement x="4" y="111" width="32" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[Ram:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="38" y="111" width="148" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[$F{ramCode} != null ? $F{ramCode} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- SSD -->
+      <staticText>
+        <reportElement x="4" y="124" width="32" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[SSD:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="38" y="124" width="148" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[$F{ssdCode} != null ? $F{ssdCode} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- Man hinh -->
+      <staticText>
+        <reportElement x="4" y="137" width="55" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[Màn hình:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="61" y="137" width="125" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[$F{screenSpec} != null ? $F{screenSpec} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- VGA -->
+      <staticText>
+        <reportElement x="4" y="150" width="82" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[Card màn hình:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="88" y="150" width="98" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[($F{gpuCode} != null && !$F{gpuCode}.equals("ONBOARD")) ? $F{gpuCode} : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- Trong luong -->
+      <staticText>
+        <reportElement x="4" y="163" width="75" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9" isBold="true"/></textElement>
+        <text><![CDATA[Trọng lượng:]]></text>
+      </staticText>
+      <textField isBlankWhenNull="true">
+        <reportElement x="81" y="163" width="105" height="13"/>
+        <textElement><font fontName="DejaVu Sans" size="9"/></textElement>
+        <textFieldExpression><![CDATA[($F{weightKg} != null && !$F{weightKg}.isEmpty()) ? $F{weightKg} + " Kg" : ""]]></textFieldExpression>
+      </textField>
+
+      <!-- Bao hanh -->
+      <rectangle>
+        <reportElement x="1" y="178" width="188" height="22" backcolor="#333333" mode="Opaque"/>
+        <graphicElement><pen lineWidth="0.0"/></graphicElement>
+      </rectangle>
+      <textField isBlankWhenNull="true">
+        <reportElement x="2" y="178" width="186" height="22" forecolor="#FFFFFF" backcolor="#333333" mode="Opaque"/>
+        <textElement textAlignment="Center" verticalAlignment="Middle">
+          <font fontName="DejaVu Sans" size="10" isBold="true"/>
+        </textElement>
+        <textFieldExpression><![CDATA[($F{warrantyText} != null && !$F{warrantyText}.isEmpty()) ? $F{warrantyText} : "Bảo hành phần cứng 06 tháng"]]></textFieldExpression>
+      </textField>
+
+      <!-- Chinh sach -->
+      <textField isBlankWhenNull="true">
+        <reportElement x="4" y="202" width="182" height="72"/>
+        <textElement verticalAlignment="Top" lineSpacing="1_1_2">
+          <font fontName="DejaVu Sans" size="7" isItalic="true" isBold="true"/>
+        </textElement>
+        <textFieldExpression><![CDATA["- Vệ sinh bảo dưỡng, cài đặt máy miễn phí.\n- 1 đổi 1 trong vòng 07 ngày đầu nếu lỗi do nhà sx.\n- QUÀ TẶNG: Balo, chuột không dây, miếng lót chuột và túi chống sốc."]]></textFieldExpression>
+      </textField>
+
+    </band>
+  </detail>
+</jasperReport>

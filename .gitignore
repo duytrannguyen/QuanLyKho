@@ -1,0 +1,18 @@
+# IDE
+.vscode/
+.idea/
+
+# Backend
+backend/target/
+*.class
+
+# Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Tools/Logs
+ngrok.exe
+debug.json
+*.log
