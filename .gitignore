@@ -16,3 +16,9 @@ dist-ssr/
 ngrok.exe
 debug.json
 *.log
+
+# Deployment & Archives
+*.zip
+*.tar
+*.tar.gz
+
