@@ -6,6 +6,7 @@ import com.qkshop.tonkho.sale.SalesConfig;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -91,6 +92,21 @@ public class ClosedCycle {
 
     @Column(name = "warranty_period", length = 100)
     private String warrantyPeriod;
+
+    @Column(name = "warranty_expiry")
+    private LocalDate warrantyExpiry;
+
+    @Column(name = "payment_status", length = 50)
+    private String paymentStatus;
+
+    @Column(name = "gross_revenue", precision = 15, scale = 0)
+    private BigDecimal grossRevenue;
+
+    @Column(name = "product_full_name", length = 255)
+    private String productFullName;
+
+    @Column(name = "product_summary", columnDefinition = "TEXT")
+    private String productSummary;
 
     @Column(name = "sale_date")
     private LocalDateTime saleDate;

@@ -1,12 +1,13 @@
 server:
-  port: ${PORT:8080}
+  port: ${PORT:${HTTP_PORT:8080}}
+  address: ${BIND_IP:0.0.0.0}
 
 spring:
   application:
     name: tonkho-v2
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/qkshop_tonkho?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    url: ${DB_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:dongduy122}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -46,9 +47,42 @@ app:
     email: admin@qkshop.vn
 
   jwt:
-    secret: ${JWT_SECRET:QKShopTonKhoV2SecretKeyForJWTTokenGeneration2024VeryLongSecureKey!!}
-    expiration-ms: 86400000    # 24 hours
-    refresh-expiration-ms: 604800000  # 7 days
+    secret: ${JWT_SECRET:357638792F423F4428472B4B6250655368566D597133743677397A2443264629}
+    expiration-ms: ${JWT_EXPIRATION_MS:43200000}    # 12 giờ
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 ngày
+
+
+# Đồng bộ Google Sheet "DATABASE_BÁN HÀNG" -> trừ kho
+# Mặc định TẮT. Bật bằng biến môi trường GSHEET_ENABLED=true (và GSHEET_CRON_ENABLED=true để chạy tự động).
+gsheet:
+  enabled: ${GSHEET_ENABLED:false}
+  cron-enabled: ${GSHEET_CRON_ENABLED:false}
+  cron: ${GSHEET_CRON:0 */15 * * * *}
+  spreadsheet-id: ${GSHEET_SPREADSHEET_ID:13gxMGT1dDwlK-ncXi3fUx2nY17U3ax2v1hxNRt2oIqs}
+  sheet-name: ${GSHEET_SHEET_NAME:DATABASE_BÁN HÀNG}
+  read-range: ${GSHEET_READ_RANGE:A1:AE}
+  credentials-path: ${GSHEET_CREDENTIALS_PATH:secrets/service_account.json}
+  completed-status: "Hoàn tất"
+  done-marker: "Đã xuất kho"
+  error-prefix: "Lỗi: "
+  columns:
+    transaction-id: "transaction_ID"
+    order-status: "trạng thái đơn"
+    serial: "Serial"
+    sync-status: "trạng thái khớp CRM"
+    order-date: "ngày bán"
+    customer-name: "tên khách"
+    customer-phone: "SĐT"
+    payment-status: "trạng thái thanh toán"
+    product-full-name: "sản phẩm chính"
+    product-summary: "cấu hình tóm tắt"
+    warranty-period: "mức bảo hành"
+    warranty-expiry: "bảo hành đến ngày"
+    gross-revenue: "doanh thu"
+    discount: "giảm giá"
+    net-revenue: "doanh thu thuần"
+    note: "ghi chú"
+    salesperson: "nhân viên bán"
 
 # Swagger
 springdoc:

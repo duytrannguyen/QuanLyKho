@@ -1,37 +1,11 @@
 import { useState, useEffect } from 'react';
-import axiosClient from '../api/axiosClient';
+import { subscribeLoading } from '../api/axiosClient';
 
 export default function TaiToanCuc() {
   const [loadingCount, setLoadingCount] = useState(0);
 
   useEffect(() => {
-    // Add interceptors
-    const reqInterceptor = axiosClient.interceptors.request.use((config) => {
-      setLoadingCount(prev => prev + 1);
-      return config;
-    });
-
-    const resInterceptor = axiosClient.interceptors.response.use(
-      (response) => {
-        // Add a tiny artificial delay so the user can actually see the spinner on fast localhost
-        setTimeout(() => {
-          setLoadingCount(prev => Math.max(prev - 1, 0));
-        }, 300);
-        return response;
-      },
-      (error) => {
-        setTimeout(() => {
-          setLoadingCount(prev => Math.max(prev - 1, 0));
-        }, 300);
-        return Promise.reject(error);
-      }
-    );
-
-    return () => {
-      // Cleanup interceptors
-      axiosClient.interceptors.request.eject(reqInterceptor);
-      axiosClient.interceptors.response.eject(resInterceptor);
-    };
+    return subscribeLoading(setLoadingCount);
   }, []);
 
   if (loadingCount === 0) return null;

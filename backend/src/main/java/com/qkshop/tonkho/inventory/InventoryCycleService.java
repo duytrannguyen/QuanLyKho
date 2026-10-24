@@ -59,23 +59,37 @@ public class InventoryCycleService {
             
             // Filter by brand
             if (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) {
-                if (!variant.getPlatform().getModelLine().getBrand().getBrandName().equalsIgnoreCase(brand)) {
+                String brandName = null;
+                if (variant != null && variant.getPlatform() != null && variant.getPlatform().getModelLine() != null && variant.getPlatform().getModelLine().getBrand() != null) {
+                    brandName = variant.getPlatform().getModelLine().getBrand().getBrandName();
+                }
+                if (brandName == null || !brandName.equalsIgnoreCase(brand)) {
                     continue;
                 }
             }
             
             // Filter by segment
             if (StringUtils.hasText(segment) && !"Tất cả".equalsIgnoreCase(segment)) {
-                if (!variant.getPlatform().getModelLine().getSegmentCode().name().equalsIgnoreCase(segment)) {
+                String segName = null;
+                if (variant != null && variant.getPlatform() != null && variant.getPlatform().getModelLine() != null && variant.getPlatform().getModelLine().getSegmentCode() != null) {
+                    segName = variant.getPlatform().getModelLine().getSegmentCode().name();
+                }
+                if (segName == null || !segName.equalsIgnoreCase(segment)) {
                     continue;
                 }
             }
             
             // Filter by text query
             if (StringUtils.hasText(query)) {
-                String q = query.toLowerCase();
-                boolean match = ai.getSerialKey().toLowerCase().contains(q) || 
-                                variant.getVariantName().toLowerCase().contains(q);
+                String q = query.trim().toLowerCase();
+                boolean match = ai.getSerialKey().toLowerCase().contains(q)
+                        || (variant != null && variant.getVariantName() != null && variant.getVariantName().toLowerCase().contains(q))
+                        || (ai.getSourceModelText() != null && ai.getSourceModelText().toLowerCase().contains(q))
+                        || (config.getDisplayName() != null && config.getDisplayName().toLowerCase().contains(q))
+                        || (config.getConfigId() != null && config.getConfigId().toLowerCase().contains(q))
+                        || (variant != null && variant.getPlatform() != null && variant.getPlatform().getPlatformCode() != null && variant.getPlatform().getPlatformCode().toLowerCase().contains(q))
+                        || (variant != null && variant.getPlatform() != null && variant.getPlatform().getDisplayName() != null && variant.getPlatform().getDisplayName().toLowerCase().contains(q))
+                        || (variant != null && variant.getCpuCode() != null && variant.getCpuCode().toLowerCase().contains(q));
                 if (!match) continue;
             }
             
@@ -199,6 +213,40 @@ public class InventoryCycleService {
             Object discountObj = saleDetails.get("discount");
             if (discountObj != null) {
                 closed.setDiscount(new BigDecimal(discountObj.toString()));
+            }
+
+            Object grossRevenueObj = saleDetails.get("grossRevenue");
+            if (grossRevenueObj != null && !grossRevenueObj.toString().trim().isEmpty()) {
+                try {
+                    closed.setGrossRevenue(new BigDecimal(grossRevenueObj.toString().trim()));
+                } catch (Exception e) {
+                    log.warn("Invalid grossRevenue format: {}", grossRevenueObj);
+                }
+            }
+
+            if (saleDetails.containsKey("paymentStatus")) {
+                closed.setPaymentStatus((String) saleDetails.get("paymentStatus"));
+            }
+
+            if (saleDetails.containsKey("productFullName")) {
+                closed.setProductFullName((String) saleDetails.get("productFullName"));
+            }
+
+            if (saleDetails.containsKey("productSummary")) {
+                closed.setProductSummary((String) saleDetails.get("productSummary"));
+            }
+
+            Object warrantyExpiryObj = saleDetails.get("warrantyExpiry");
+            if (warrantyExpiryObj != null) {
+                if (warrantyExpiryObj instanceof java.time.LocalDate ld) {
+                    closed.setWarrantyExpiry(ld);
+                } else {
+                    try {
+                        closed.setWarrantyExpiry(java.time.LocalDate.parse(warrantyExpiryObj.toString().trim()));
+                    } catch (Exception e) {
+                        log.warn("Invalid warrantyExpiry format: {}", warrantyExpiryObj);
+                    }
+                }
             }
             
             Object saleDateObj = saleDetails.get("saleDate");

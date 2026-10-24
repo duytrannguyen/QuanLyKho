@@ -12,8 +12,10 @@ const generateUUID = () => {
 
 export const authApi = {
   login: (credentials) => axiosClient.post('/auth/login', credentials),
+  refreshToken: (refreshToken) => axiosClient.post('/auth/refresh', { refreshToken }),
   getMe: () => axiosClient.get('/auth/me'),
 };
+
 
 export const dashboardApi = {
   getSummary: () => axiosClient.get('/dashboard/summary'),
@@ -89,16 +91,36 @@ export const systemApi = {
   getConfig: () => axiosClient.get('/system/config'),
   updateConfig: (key, value) => axiosClient.put(`/system/config/${key}`, { value }),
   getUsers: () => axiosClient.get('/users'),
+  getPermissions: () => axiosClient.get('/users/permissions'),
   createUser: (data) => axiosClient.post('/users', data),
   updateUser: (id, data) => axiosClient.put(`/users/${id}`, data),
+  changePassword: (id, newPassword) => axiosClient.put(`/users/${id}/change-password`, { newPassword }),
+  toggleUserStatus: (id) => axiosClient.patch(`/users/${id}/toggle-status`),
+  deleteUser: (id) => axiosClient.delete(`/users/${id}`),
 };
+
 
 export const syncApi = {
   run: (mode) => axiosClient.post('/sync/run', { mode }),
   getIssues: () => axiosClient.get('/sync/issues'),
   getRuns: () => axiosClient.get('/sync/runs'),
+  getLatestStatus: () => axiosClient.get('/sync/latest-status', { silent: true }),
   recheckIssue: (id) => axiosClient.post(`/sync/issues/${id}/recheck`),
   resolveIssue: (id, note) => axiosClient.post(`/sync/issues/${id}/resolve`, { note }),
+  resolveAllIssues: (issueType, note) => axiosClient.post('/sync/issues/resolve-all', { issueType, note }),
+  approveReturn: (id, note) => axiosClient.post(`/sync/issues/${id}/approve-return`, { note }),
+  getSyncSettings: () => axiosClient.get('/sync/settings'),
+  updateSyncSettings: (settings) => axiosClient.post('/sync/settings', settings),
+};
+
+export const notificationApi = {
+  getAll: (params) => axiosClient.get('/notifications', { params }),
+  getUnreadCount: () => axiosClient.get('/notifications/unread-count', { silent: true }),
+  markAsRead: (id) => axiosClient.put(`/notifications/${id}/read`),
+  markAllAsRead: () => axiosClient.put('/notifications/read-all'),
+  delete: (id) => axiosClient.delete(`/notifications/${id}`),
+  deleteAllRead: () => axiosClient.delete('/notifications/read'),
+  createTest: (data) => axiosClient.post('/notifications/test', data),
 };
 
 export const apiCatalog = {

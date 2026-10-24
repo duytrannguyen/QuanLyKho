@@ -30,6 +30,7 @@ public class ClosedCycleDTO {
 
     // Metadata từ SerialRegistry (brand)
     private String brandId;
+    private String brandName;
 
     // Computed
     private long storageDays;         // Số ngày lưu kho = closedAt - intakeAt

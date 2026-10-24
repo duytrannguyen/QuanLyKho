@@ -28,8 +28,8 @@ const TrangTonKhoPhuKien = React.lazy(() => import('./pages/TonKhoPhuKien/TrangT
 const TrangBanPhuKien = React.lazy(() => import('./pages/BanPhuKien/TrangBanPhuKien'));
 const TrangLichSuBanPhuKien = React.lazy(() => import('./pages/LichSuBanPhuKien/TrangLichSuBanPhuKien'));
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+function ProtectedRoute({ children, permission }) {
+  const { user, loading, hasPermission } = useAuth();
 
   if (loading) {
     return (
@@ -41,6 +41,26 @@ function ProtectedRoute({ children }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (permission && !hasPermission(permission)) {
+    return (
+      <div className="container py-5 text-center">
+        <div className="card shadow-sm border-0 p-5 mx-auto" style={{ maxWidth: '520px', borderRadius: '16px' }}>
+          <div className="text-warning mb-3">
+            <svg width="56" height="56" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h4 className="fw-bold text-dark mb-2">Từ chối quyền truy cập</h4>
+          <p className="text-secondary mb-4">Tài khoản của bạn chưa được cấp quyền để truy cập tính năng này. Vui lòng liên hệ quản trị viên hệ thống để được cấp quyền.</p>
+          <div>
+            <a href="/" className="btn btn-primary px-4">Quay về trang chủ</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return children;
 }
 
@@ -68,22 +88,22 @@ function AppRoutes() {
             <BoCucChinh />
           </ProtectedRoute>
         }>
-          <Route index element={<TrangTongQuan />} />
-          <Route path="nhap-may" element={<TrangNhapMayMoc />} />
-          <Route path="nhap-phu-kien" element={<TrangNhapPhuKien />} />
-          <Route path="kiem-tra" element={<TrangKiemDinh />} />
-          <Route path="tra-cuu" element={<TrangTimKiemTonKho />} />
-          <Route path="quan-ly-ma-may" element={<TrangQuanLyMaMay />} />
-          <Route path="ton-kho-phu-kien" element={<TrangTonKhoPhuKien />} />
-          <Route path="ban-may" element={<TrangBanHang />} />
-          <Route path="ban-phu-kien" element={<TrangBanPhuKien />} />
-          <Route path="lich-su-ban-phu-kien" element={<TrangLichSuBanPhuKien />} />
-          <Route path="phan-tich" element={<TrangThongKe />} />
-          <Route path="doi-soat" element={<TrangDoiSoat />} />
-          <Route path="nhat-ky" element={<TrangNhatKyHoatDong />} />
-          <Route path="he-thong" element={<TrangCaiDatHeThong />} />
-          <Route path="bang-gia" element={<TrangBangGia />} />
-          <Route path="bao-hanh" element={<TrangKiemTraBaoHanh />} />
+          <Route index element={<ProtectedRoute permission="DASHBOARD_VIEW"><TrangTongQuan /></ProtectedRoute>} />
+          <Route path="nhap-may" element={<ProtectedRoute permission="IMPORT_MACHINE"><TrangNhapMayMoc /></ProtectedRoute>} />
+          <Route path="nhap-phu-kien" element={<ProtectedRoute permission="IMPORT_ACCESSORY"><TrangNhapPhuKien /></ProtectedRoute>} />
+          <Route path="kiem-tra" element={<ProtectedRoute permission="INSPECTION"><TrangKiemDinh /></ProtectedRoute>} />
+          <Route path="tra-cuu" element={<ProtectedRoute permission="SEARCH_INVENTORY"><TrangTimKiemTonKho /></ProtectedRoute>} />
+          <Route path="quan-ly-ma-may" element={<ProtectedRoute permission="MANAGE_MACHINE_CODES"><TrangQuanLyMaMay /></ProtectedRoute>} />
+          <Route path="ton-kho-phu-kien" element={<ProtectedRoute permission="INVENTORY_ACCESSORY"><TrangTonKhoPhuKien /></ProtectedRoute>} />
+          <Route path="ban-may" element={<ProtectedRoute permission="SALE_MACHINE"><TrangBanHang /></ProtectedRoute>} />
+          <Route path="ban-phu-kien" element={<ProtectedRoute permission="SALE_ACCESSORY"><TrangBanPhuKien /></ProtectedRoute>} />
+          <Route path="lich-su-ban-phu-kien" element={<ProtectedRoute permission="ACCESSORY_HISTORY"><TrangLichSuBanPhuKien /></ProtectedRoute>} />
+          <Route path="phan-tich" element={<ProtectedRoute permission="ANALYTICS_VIEW"><TrangThongKe /></ProtectedRoute>} />
+          <Route path="doi-soat" element={<ProtectedRoute permission="SYNC_MANAGE"><TrangDoiSoat /></ProtectedRoute>} />
+          <Route path="nhat-ky" element={<ProtectedRoute permission="LOGS_VIEW"><TrangNhatKyHoatDong /></ProtectedRoute>} />
+          <Route path="he-thong" element={<ProtectedRoute permission="SYSTEM_MANAGE"><TrangCaiDatHeThong /></ProtectedRoute>} />
+          <Route path="bang-gia" element={<ProtectedRoute permission="PRICING_VIEW"><TrangBangGia /></ProtectedRoute>} />
+          <Route path="bao-hanh" element={<ProtectedRoute permission="WARRANTY_CHECK"><TrangKiemTraBaoHanh /></ProtectedRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -91,6 +111,7 @@ function AppRoutes() {
     </Suspense>
   );
 }
+
 
 export default function App() {
   return (

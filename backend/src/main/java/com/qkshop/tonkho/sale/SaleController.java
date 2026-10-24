@@ -26,6 +26,7 @@ public class SaleController {
     private final SalesConfigRepository salesConfigRepo;
     private final ClosedCycleRepository closedCycleRepository;
     private final com.qkshop.tonkho.machine.SerialRegistryRepository serialRegistryRepository;
+    private final com.qkshop.tonkho.log.EventLogRepository eventLogRepository;
 
     @PostMapping("/lookup")
     public ResponseEntity<ApiResponse<Map<String, Object>>> lookupSaleCandidate(@RequestBody Map<String, String> payload) {
@@ -94,41 +95,111 @@ public class SaleController {
         List<ClosedCycle> list = closedCycleRepository.searchWarranty(keyword.trim());
         List<Map<String, Object>> result = new java.util.ArrayList<>();
         for (ClosedCycle cc : list) {
-            Map<String, Object> map = new java.util.HashMap<>();
-            map.put("serialKey", cc.getSerialKey());
-            map.put("sourceModelText", cc.getSourceModelText());
-            map.put("customerName", cc.getCustomerName());
-            map.put("customerPhone", cc.getCustomerPhone());
-            map.put("saleDate", cc.getSaleDate() != null ? cc.getSaleDate() : cc.getClosedAt());
-            map.put("warrantyPeriod", cc.getWarrantyPeriod());
-            map.put("salePrice", cc.getSalePriceSnapshot());
-            map.put("discount", cc.getDiscount());
-            
-            boolean isVoided = false;
-            java.util.Optional<com.qkshop.tonkho.machine.SerialRegistry> regOpt = serialRegistryRepository.findBySerialKey(cc.getSerialKey());
-            if (regOpt.isPresent()) {
-                String currentCycle = regOpt.get().getCurrentCycleId();
-                if (currentCycle != null && !currentCycle.equals(cc.getCycleId())) {
-                    isVoided = true;
-                }
-            }
-            map.put("isVoided", isVoided);
-            
-            String configInfo = "";
-            if (cc.getConfig() != null) {
-                configInfo = cc.getConfig().getDisplayName();
-            }
-            if (cc.getUpgradeNote() != null && !cc.getUpgradeNote().isEmpty()) {
-                configInfo += " (Nâng cấp: " + cc.getUpgradeNote() + ")";
-            }
-            map.put("configInfo", configInfo.isEmpty() ? "Không rõ cấu hình" : configInfo);
-            
-            result.add(map);
+            result.add(mapClosedCycleToDetail(cc));
         }
         
         ApiResponse<List<Map<String, Object>>> response = new ApiResponse<>();
         response.setSuccess(true);
         response.setData(result);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/order/{cycleId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOrderDetail(@PathVariable String cycleId) {
+        ClosedCycle cc = closedCycleRepository.findByCycleId(cycleId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng với mã chu kỳ: " + cycleId));
+        return ResponseEntity.ok(ApiResponse.ok(mapClosedCycleToDetail(cc)));
+    }
+
+    private Map<String, Object> mapClosedCycleToDetail(ClosedCycle cc) {
+        Map<String, Object> map = new java.util.HashMap<>();
+        map.put("id", cc.getId());
+        map.put("cycleId", cc.getCycleId());
+        map.put("serialKey", cc.getSerialKey());
+        map.put("sourceModelText", cc.getSourceModelText());
+        map.put("customerName", cc.getCustomerName());
+        map.put("customerPhone", cc.getCustomerPhone());
+        map.put("saleDate", cc.getSaleDate() != null ? cc.getSaleDate() : cc.getClosedAt());
+        map.put("closedAt", cc.getClosedAt());
+        map.put("intakeAt", cc.getIntakeAt());
+        map.put("readyAt", cc.getReadyAt());
+        map.put("intakeType", cc.getIntakeType() != null ? cc.getIntakeType().name() : null);
+        map.put("warrantyPeriod", cc.getWarrantyPeriod());
+        map.put("salePrice", cc.getSalePriceSnapshot());
+        map.put("discount", cc.getDiscount());
+        map.put("grossRevenue", cc.getGrossRevenue());
+        map.put("paymentStatus", cc.getPaymentStatus());
+        map.put("warrantyExpiry", cc.getWarrantyExpiry());
+        map.put("productFullName", cc.getProductFullName());
+        map.put("productSummary", cc.getProductSummary());
+        map.put("sourceReference", cc.getSourceReference());
+        map.put("closeReason", cc.getCloseReason());
+        map.put("upgradeNote", cc.getUpgradeNote());
+        map.put("saleNote", cc.getSaleNote());
+        map.put("pausedDays", cc.getPausedDays());
+
+        // Get salesperson from EventLog
+        String salesperson = "Không rõ";
+        if (cc.getCloseEventId() != null) {
+            java.util.Optional<com.qkshop.tonkho.log.EventLog> eventOpt = eventLogRepository.findByEventId(cc.getCloseEventId());
+            if (eventOpt.isPresent() && eventOpt.get().getActor() != null) {
+                salesperson = eventOpt.get().getActor();
+            }
+        }
+        map.put("salesperson", salesperson);
+
+        // Check if voided/returned
+        boolean isVoided = false;
+        java.util.Optional<com.qkshop.tonkho.machine.SerialRegistry> regOpt = serialRegistryRepository.findBySerialKey(cc.getSerialKey());
+        if (regOpt.isPresent()) {
+            String currentCycle = regOpt.get().getCurrentCycleId();
+            if (currentCycle != null && !currentCycle.equals(cc.getCycleId())) {
+                isVoided = true;
+            }
+        }
+        map.put("isVoided", isVoided);
+        
+        // Detailed laptop specifications
+        String configInfo = "";
+        if (cc.getConfig() != null) {
+            com.qkshop.tonkho.sale.SalesConfig cfg = cc.getConfig();
+            configInfo = cfg.getDisplayName();
+            map.put("configId", cfg.getConfigId());
+            map.put("configDisplayName", cfg.getDisplayName());
+            map.put("ramCode", cfg.getRamCode());
+            map.put("ssdCode", cfg.getSsdCode());
+            map.put("defaultSalePrice", cfg.getDefaultSalePrice());
+
+            if (cfg.getVariant() != null) {
+                com.qkshop.tonkho.catalog.VariantV2 var = cfg.getVariant();
+                map.put("cpuCode", var.getCpuCode());
+                map.put("gpuCode", var.getGpuCode());
+                map.put("screenSize", var.getScreenSize());
+                map.put("touchFlag", var.getTouchFlag());
+                map.put("variantName", var.getVariantName());
+
+                if (var.getPlatform() != null) {
+                    com.qkshop.tonkho.catalog.Platform pf = var.getPlatform();
+                    map.put("platformCode", pf.getPlatformCode());
+                    map.put("platformDisplayName", pf.getDisplayName());
+
+                    if (pf.getModelLine() != null) {
+                        com.qkshop.tonkho.catalog.ModelLine ml = pf.getModelLine();
+                        map.put("modelLineName", ml.getModelLineName());
+                        map.put("segmentCode", ml.getSegmentCode() != null ? ml.getSegmentCode().name() : null);
+
+                        if (ml.getBrand() != null) {
+                            map.put("brandName", ml.getBrand().getBrandName());
+                        }
+                    }
+                }
+            }
+        }
+        if (cc.getUpgradeNote() != null && !cc.getUpgradeNote().isEmpty()) {
+            configInfo += " (Nâng cấp: " + cc.getUpgradeNote() + ")";
+        }
+        map.put("configInfo", configInfo.isEmpty() ? "Không rõ cấu hình" : configInfo);
+        
+        return map;
     }
 }

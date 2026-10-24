@@ -1,10 +1,13 @@
 package com.qkshop.tonkho.user;
 
-import com.qkshop.tonkho.user.UserRole;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -21,6 +24,7 @@ public class User {
     @Column(unique = true, nullable = false, length = 50)
     private String username;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -41,6 +45,12 @@ public class User {
     @Builder.Default
     private Boolean isActive = true;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_permissions", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "permission", length = 50)
+    @Builder.Default
+    private Set<String> permissions = new HashSet<>();
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -58,3 +68,4 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 }
+

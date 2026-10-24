@@ -40,3 +40,13 @@ export const formatEventType = (eventType) => {
   if (!eventType) return '-';
   return EVENT_TYPE_MAP[eventType] || eventType;
 };
+
+export const getCleanWarrantyType = (warrantyPeriod) => {
+  if (!warrantyPeriod) return 'Không có';
+  return warrantyPeriod
+    .replace(/\s*[\/\-]\s*ngày\s*hết\s*(bảo\s*hành|hạn).*$/i, '')
+    .replace(/\s*[\/\-]\s*hết\s*(bảo\s*hành|hạn).*$/i, '')
+    .replace(/\s*\(\s*ngày\s*hết\s*(bảo\s*hành|hạn).*?\)/i, '')
+    .replace(/\s*[\/\-]\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}\s*$/i, '')
+    .trim() || warrantyPeriod;
+};

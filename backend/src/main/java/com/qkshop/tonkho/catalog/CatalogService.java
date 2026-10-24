@@ -64,6 +64,7 @@ public class CatalogService {
      */
     @Transactional
     public Brand findOrCreateBrand(String brandName) {
+        if (brandName == null || brandName.isBlank()) brandName = "KHÁC";
         String key = brandName.trim().toUpperCase().replaceAll("\\s+", "");
         if (key.length() > 100) key = key.substring(0, 100);
         Optional<Brand> existing = brandRepo.findByBrandKey(key);
@@ -87,6 +88,8 @@ public class CatalogService {
      */
     @Transactional
     public ModelLine findOrCreateModelLine(Brand brand, String modelLineName, SegmentCode segmentCode) {
+        if (modelLineName == null || modelLineName.isBlank()) modelLineName = "Chưa phân loại";
+        if (segmentCode == null) segmentCode = SegmentCode.UNCLASSIFIED;
         String key = (brand.getBrandKey() + "-" + modelLineName).trim().toUpperCase().replaceAll("\\s+", "");
         if (key.length() > 200) key = key.substring(0, 200);
         Optional<ModelLine> existing = modelLineRepo.findByModelLineKey(key);
@@ -112,6 +115,7 @@ public class CatalogService {
      */
     @Transactional
     public Platform findOrCreatePlatform(ModelLine modelLine, String platformCode) {
+        if (platformCode == null || platformCode.isBlank()) platformCode = "Laptop";
         String key = (modelLine.getModelLineKey() + "-" + platformCode).trim().toUpperCase().replaceAll("\\s+", "");
         if (key.length() > 100) key = key.substring(0, 100);
         Optional<Platform> existing = platformRepo.findByPlatformKey(key);
@@ -120,6 +124,7 @@ public class CatalogService {
         }
 
         String safePlatformCode = cleanModelString(platformCode);
+        if (safePlatformCode.isBlank()) safePlatformCode = "Laptop";
         if (safePlatformCode.length() > 100) safePlatformCode = safePlatformCode.substring(0, 100);
         
         String prefix = modelLine.getBrand().getBrandName() + " " + modelLine.getModelLineName();
@@ -195,6 +200,8 @@ public class CatalogService {
      */
     @Transactional
     public SalesConfig findOrCreateConfig(VariantV2 variant, String ram, String ssd) {
+        if (ram == null || ram.isBlank()) ram = "Chưa rõ";
+        if (ssd == null || ssd.isBlank()) ssd = "Chưa rõ";
         String key = SalesConfig.buildConfigKey(variant.getVariantKey(), ram, ssd);
         if (key.length() > 300) key = key.substring(0, 300);
         Optional<SalesConfig> existing = configRepo.findByConfigKey(key);

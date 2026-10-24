@@ -8,7 +8,8 @@ public enum SegmentCode {
     OFFICE("Văn phòng"),
     GAMING("Gaming"),
     WORKSTATION("Máy trạm"),
-    MACBOOK("MacBook");
+    MACBOOK("MacBook"),
+    UNCLASSIFIED("Chưa phân loại");
 
     private final String displayName;
 

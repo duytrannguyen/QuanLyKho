@@ -52,6 +52,7 @@ public class MachineService {
     private final UserRepository userRepository;
     private final StateTransitionService stateTransitionService;
     private final CatalogService catalogService;
+    private final com.qkshop.tonkho.catalog.BrandRepository brandRepository;
     @Lazy
     private final com.qkshop.tonkho.intake.IntakeService intakeService;
 
@@ -84,12 +85,26 @@ public class MachineService {
      */
     public Page<ClosedCycleDTO> searchHistory(String query, String brand, String segment, String status, int page, int size) {
         List<ClosedCycleDTO> combined = new ArrayList<>();
+        Map<String, String> brandMap = brandRepository.findAll().stream()
+                .filter(b -> b.getBrandId() != null && b.getBrandName() != null)
+                .collect(Collectors.toMap(com.qkshop.tonkho.catalog.Brand::getBrandId, com.qkshop.tonkho.catalog.Brand::getBrandName, (a, b) -> a));
 
         // 1. Máy đang trong kho (Active)
         List<ActiveInventory> actives = activeInventoryRepository.findAll();
         for (ActiveInventory ai : actives) {
             String brandId = serialRegistryRepository.findBySerialKey(ai.getSerialKey())
                     .map(sr -> sr.getBrandId()).orElse(null);
+            
+            String brandName = brandId != null ? brandMap.get(brandId) : null;
+            if (brandName == null && ai.getConfig() != null && ai.getConfig().getVariant() != null
+                    && ai.getConfig().getVariant().getPlatform() != null
+                    && ai.getConfig().getVariant().getPlatform().getModelLine() != null
+                    && ai.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
+                brandName = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
+                if (brandId == null) {
+                    brandId = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
+                }
+            }
             
             String configName = null;
             if (ai.getConfig() != null) {
@@ -118,6 +133,7 @@ public class MachineService {
                     .salePriceSnapshot(ai.getSalePrice())
                     .note(ai.getNote())
                     .brandId(brandId)
+                    .brandName(brandName)
                     .storageDays(days)
                     .build());
         }
@@ -127,6 +143,17 @@ public class MachineService {
         for (ClosedCycle cc : closeds) {
             String brandId = serialRegistryRepository.findBySerialKey(cc.getSerialKey())
                     .map(sr -> sr.getBrandId()).orElse(null);
+
+            String brandName = brandId != null ? brandMap.get(brandId) : null;
+            if (brandName == null && cc.getConfig() != null && cc.getConfig().getVariant() != null
+                    && cc.getConfig().getVariant().getPlatform() != null
+                    && cc.getConfig().getVariant().getPlatform().getModelLine() != null
+                    && cc.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
+                brandName = cc.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
+                if (brandId == null) {
+                    brandId = cc.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
+                }
+            }
 
             String configName = null;
             if (cc.getConfig() != null) {
@@ -155,6 +182,7 @@ public class MachineService {
                     .customerName(cc.getCustomerName())
                     .note(cc.getSaleNote())
                     .brandId(brandId)
+                    .brandName(brandName)
                     .storageDays(days)
                     .build());
         }
@@ -173,15 +201,20 @@ public class MachineService {
         List<ClosedCycleDTO> filtered = combined.stream()
             .filter(dto -> {
                 if (StringUtils.hasText(query)) {
-                    String q = query.toLowerCase();
+                    String q = query.trim().toLowerCase();
                     boolean match = (dto.getSerialKey() != null && dto.getSerialKey().toLowerCase().contains(q))
                             || (dto.getSourceModelText() != null && dto.getSourceModelText().toLowerCase().contains(q))
-                            || (dto.getConfigId() != null && dto.getConfigId().toLowerCase().contains(q));
+                            || (dto.getConfigId() != null && dto.getConfigId().toLowerCase().contains(q))
+                            || (dto.getConfigDisplayName() != null && dto.getConfigDisplayName().toLowerCase().contains(q))
+                            || (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(q));
                     if (!match) return false;
                 }
                 if (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) {
-                    // Cần match theo brandId (nếu brand passed from frontend là ID) 
-                    // Tạm thời chưa filter chặt brand vì frontend truyền tên thay vì ID, có thể bỏ qua hoặc map
+                    String b = brand.trim().toLowerCase();
+                    boolean matchBrand = (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(b))
+                            || (dto.getBrandId() != null && dto.getBrandId().equalsIgnoreCase(brand))
+                            || (dto.getSourceModelText() != null && dto.getSourceModelText().toLowerCase().contains(b));
+                    if (!matchBrand) return false;
                 }
                 if (StringUtils.hasText(status) && !"Tất cả".equalsIgnoreCase(status)) {
                     if (status.equalsIgnoreCase("ACTIVE_ONLY")) {

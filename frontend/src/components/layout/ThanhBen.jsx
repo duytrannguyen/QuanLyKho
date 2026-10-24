@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, PackagePlus, ClipboardCheck,
@@ -6,64 +6,73 @@ import {
   ChevronsLeft, ChevronsRight, ShoppingCart, List, Tag, ShieldCheck,
   ChevronRight, Package, History, X
 } from 'lucide-react';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import '../../styles/Sidebar.css';
 
 const navGroups = [
   {
     title: 'TỔNG QUAN',
     items: [
-      { path: '/', label: 'Điều hành', icon: LayoutDashboard },
-      { path: '/phan-tich', label: 'Phân tích', icon: BarChart3 },
+      { path: '/', label: 'Điều hành', icon: LayoutDashboard, permission: 'DASHBOARD_VIEW' },
+      { path: '/phan-tich', label: 'Phân tích', icon: BarChart3, permission: 'ANALYTICS_VIEW' },
     ]
   },
   {
     title: 'BÁN HÀNG',
     items: [
-      { path: '/ban-may', label: 'Bán máy', icon: ShoppingCart },
-      { path: '/ban-phu-kien', label: 'Bán phụ kiện lẻ', icon: ShoppingCart },
-      { path: '/bang-gia', label: 'Bảng giá', icon: Tag },
+      { path: '/ban-may', label: 'Bán máy', icon: ShoppingCart, permission: 'SALE_MACHINE' },
+      { path: '/ban-phu-kien', label: 'Bán phụ kiện lẻ', icon: ShoppingCart, permission: 'SALE_ACCESSORY' },
+      { path: '/bang-gia', label: 'Bảng giá', icon: Tag, permission: 'PRICING_VIEW' },
     ]
   },
   {
     title: 'KHO HÀNG',
     items: [
-      { path: '/quan-ly-ma-may', label: 'Quản lý mã máy', icon: List },
-      { path: '/nhap-may', label: 'Nhập máy', icon: PackagePlus },
-      { path: '/nhap-phu-kien', label: 'Nhập phụ kiện', icon: PackagePlus },
-      { path: '/ton-kho-phu-kien', label: 'Tồn kho phụ kiện', icon: Package },
-      { path: '/kiem-tra', label: 'Kiểm tra máy', icon: ClipboardCheck },
+      { path: '/quan-ly-ma-may', label: 'Quản lý mã máy', icon: List, permission: 'MANAGE_MACHINE_CODES' },
+      { path: '/nhap-may', label: 'Nhập máy', icon: PackagePlus, permission: 'IMPORT_MACHINE' },
+      { path: '/nhap-phu-kien', label: 'Nhập phụ kiện', icon: PackagePlus, permission: 'IMPORT_ACCESSORY' },
+      { path: '/ton-kho-phu-kien', label: 'Tồn kho phụ kiện', icon: Package, permission: 'INVENTORY_ACCESSORY' },
+      { path: '/kiem-tra', label: 'Kiểm tra máy', icon: ClipboardCheck, permission: 'INSPECTION' },
     ]
   },
   {
     title: 'HẬU MÃI & TRA CỨU',
     items: [
-      { path: '/tra-cuu', label: 'Tra cứu chung', icon: Search },
-      { path: '/lich-su-ban-phu-kien', label: 'Lịch sử phụ kiện', icon: History },
-      { path: '/bao-hanh', label: 'Bảo hành', icon: ShieldCheck },
+      { path: '/tra-cuu', label: 'Tra cứu chung', icon: Search, permission: 'SEARCH_INVENTORY' },
+      { path: '/lich-su-ban-phu-kien', label: 'Lịch sử phụ kiện', icon: History, permission: 'ACCESSORY_HISTORY' },
+      { path: '/bao-hanh', label: 'Bảo hành', icon: ShieldCheck, permission: 'WARRANTY_CHECK' },
     ]
   },
   {
     title: 'HỆ THỐNG',
     items: [
-      { path: '/doi-soat', label: 'Đối soát & đồng bộ', icon: RefreshCw },
-      { path: '/nhat-ky', label: 'Nhật ký', icon: FileText },
-      { path: '/he-thong', label: 'Cấu hình', icon: Settings },
+      { path: '/doi-soat', label: 'Đối soát & đồng bộ', icon: RefreshCw, permission: 'SYNC_MANAGE' },
+      { path: '/nhat-ky', label: 'Nhật ký', icon: FileText, permission: 'LOGS_VIEW' },
+      { path: '/he-thong', label: 'Cấu hình', icon: Settings, permission: 'SYSTEM_MANAGE' },
     ]
   }
 ];
 
 export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileOpen, setMobileOpen }) {
   const location = useLocation();
+  const { hasPermission } = useAuth();
   const [activeGroup, setActiveGroup] = useState(null);
 
+  const allowedNavGroups = useMemo(() => {
+    return navGroups.map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.permission || hasPermission(item.permission))
+    })).filter(group => group.items.length > 0);
+  }, [hasPermission]);
+
   useEffect(() => {
-    const currentGroup = navGroups.find(group => 
+    const currentGroup = allowedNavGroups.find(group => 
       group.items.some(item => item.path === location.pathname)
     );
     if (currentGroup) {
       setActiveGroup(currentGroup.title);
     }
-  }, [location.pathname]);
+  }, [location.pathname, allowedNavGroups]);
 
   const toggleGroup = (title) => {
     setActiveGroup(prev => (prev === title ? null : title));
@@ -129,7 +138,7 @@ export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileO
 
       {/* NAVIGATION */}
       <nav className="flex-grow-1 px-3 py-2 hide-scrollbar overflow-y-auto" style={{ overflowX: 'hidden' }}>
-        {navGroups.map((group) => {
+        {allowedNavGroups.map((group) => {
           const isOpen = activeGroup === group.title;
           const showContent = isCollapsed ? false : (collapsed || isOpen);
 

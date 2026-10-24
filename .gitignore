@@ -1,24 +1,75 @@
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.history/
 
-# Backend
+# Backend (Java/Maven)
 backend/target/
+target/
 *.class
 
-# Frontend
+# Frontend (Node/Vite)
 node_modules/
+frontend/node_modules/
 dist/
+frontend/dist/
 dist-ssr/
 *.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Tools/Logs
+# Secrets & Environment
+.env
+.env.*
+!.env.example
+!.env.deploy.example
+service_account*.json
+backend/secrets/
+
+# Database Dumps & Backups
+*.sql
+*.sqlite
+*.db
+backups/
+
+# Raw Data & Spreadsheets
+*.xlsx
+*.xls
+*.csv
+
+# Tools & Logs
 ngrok.exe
 debug.json
 *.log
+*.tmp
+*.bak
+
+# OS Junk
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Office Temporary Files
+~$*.xlsx
+~$*.xls
+~$*.docx
+~$*.pptx
 
 # Deployment & Archives
 *.zip
 *.tar
 *.tar.gz
+
 

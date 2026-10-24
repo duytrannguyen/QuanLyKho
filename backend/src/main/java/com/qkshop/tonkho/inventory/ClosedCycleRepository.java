@@ -15,7 +15,12 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     List<ClosedCycle> findBySerialKeyOrderByClosedAtDesc(String serialKey);
     List<ClosedCycle> findByCloseType(CloseType closeType);
 
-    @Query("SELECT cc FROM ClosedCycle cc WHERE (LOWER(cc.serialKey) LIKE LOWER(CONCAT('%', :keyword, '%')) OR cc.customerPhone LIKE CONCAT('%', :keyword, '%')) AND cc.closeType = 'SALE' ORDER BY cc.saleDate DESC")
+    @Query("SELECT cc FROM ClosedCycle cc WHERE (LOWER(cc.serialKey) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR cc.customerPhone LIKE CONCAT('%', :keyword, '%') " +
+           "OR LOWER(cc.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(cc.cycleId) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(cc.sourceReference) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "AND cc.closeType = 'SALE' ORDER BY cc.saleDate DESC")
     List<ClosedCycle> searchWarranty(@Param("keyword") String keyword);
 
     @Query("SELECT cc FROM ClosedCycle cc WHERE cc.closedAt BETWEEN :from AND :to")

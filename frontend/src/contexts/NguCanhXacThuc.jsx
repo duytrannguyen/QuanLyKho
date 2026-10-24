@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api';
 
 const NguCanhXacThuc = createContext(null);
@@ -10,9 +10,21 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await authApi.getMe();
+      if (res && res.data) {
+        setUser(res.data);
+        localStorage.setItem('user', JSON.stringify(res.data));
+      }
+    } catch {
+      // Bỏ qua lỗi nếu mạng gián đoạn
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token && !user) {
+    if (token) {
       authApi.getMe()
         .then((res) => {
           setUser(res.data);
@@ -20,6 +32,7 @@ export function AuthProvider({ children }) {
         })
         .catch(() => {
           localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
           setUser(null);
         })
@@ -46,8 +59,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const hasPermission = useCallback((permissionCode) => {
+    if (!user) return false;
+    const roleUpper = (user.role || '').toUpperCase();
+    if (roleUpper === 'ADMIN' || roleUpper.includes('ADMIN') || roleUpper === 'QUẢN TRỊ VIÊN') {
+      return true;
+    }
+    if (!permissionCode) return true;
+    return Array.isArray(user.permissions) && user.permissions.includes(permissionCode);
+  }, [user]);
+
   return (
-    <NguCanhXacThuc.Provider value={{ user, login, logout, loading }}>
+    <NguCanhXacThuc.Provider value={{ user, login, logout, loading, refreshUser, hasPermission }}>
       {children}
     </NguCanhXacThuc.Provider>
   );
@@ -58,3 +81,4 @@ export function useAuth() {
   if (!contexts) throw new Error('useAuth must be used within AuthProvider');
   return contexts;
 }
+

@@ -187,12 +187,12 @@ export default function TrangTimKiemTonKho() {
 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <p className="text-secondary small mb-0 fw-medium">
-          {hasActiveSearchOrFilter 
-            ? (pageInfo.totalElements > 0 ? `${pageInfo.totalElements} biến thể phù hợp` : `${results.length} biến thể phù hợp`)
-            : 'Nhập từ khóa hoặc chọn bộ lọc để hiển thị kết quả'}
+          {pageInfo.totalElements > 0 
+            ? `${pageInfo.totalElements} cấu hình tồn kho (${results.reduce((sum, item) => sum + (item.totalCount || 0), 0)} máy đang hiển thị trên trang)`
+            : 'Không tìm thấy máy phù hợp'}
         </p>
         
-        {(hasActiveSearchOrFilter && pageInfo.totalPages > 1) && (
+        {pageInfo.totalPages > 1 && (
           <div className="d-flex gap-2 align-items-center">
             <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button>
             <span className="small text-secondary">Trang {page + 1} / {pageInfo.totalPages}</span>
@@ -201,7 +201,7 @@ export default function TrangTimKiemTonKho() {
         )}
       </div>
 
-      {hasActiveSearchOrFilter ? (
+      {results.length > 0 ? (
         <div className="row g-4 align-items-start">
         {/* Left Column - Variants */}
         <div className="col-xl-4 col-lg-5 col-md-12 d-flex flex-column gap-3 mb-4 mb-lg-0">
@@ -218,7 +218,7 @@ export default function TrangTimKiemTonKho() {
             const isItemActive = activeVariant?.variant?.id === item?.variant?.id;
 
             return (
-              <div key={item?.variant?.id || Math.random()} 
+              <div key={item?.config?.configId || item?.config?.id || item?.variant?.id || Math.random()} 
                   className={`card shadow-sm border p-3 ${isItemActive ? 'border-primary shadow' : ''}`}
                   onClick={() => setActiveVariant(item)}
                   style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}>
@@ -398,8 +398,8 @@ export default function TrangTimKiemTonKho() {
       ) : (
         <div className="text-center p-5 text-secondary">
           <Search size={48} className="mb-3 opacity-50" />
-          <h4 className="fw-bold text-dark mb-2">Sẵn sàng tìm kiếm</h4>
-          <p>Nhập từ khóa hoặc chọn bộ lọc ở trên để bắt đầu tra cứu kho</p>
+          <h4 className="fw-bold text-dark mb-2">Không tìm thấy máy trong kho</h4>
+          <p>Thử thay đổi từ khóa tìm kiếm hoặc chọn lại bộ lọc tra cứu</p>
         </div>
       )}
 

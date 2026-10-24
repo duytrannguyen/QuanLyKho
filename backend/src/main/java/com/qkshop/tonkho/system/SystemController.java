@@ -17,6 +17,7 @@ import java.util.Map;
 public class SystemController {
 
     private final SystemConfigService systemConfigService;
+    private final DataMaintenanceService dataMaintenanceService;
 
     /** Lấy tất cả cấu hình dạng key-value */
     @GetMapping("/config")
@@ -41,5 +42,13 @@ public class SystemController {
         String description = payload.get("description");
         SystemConfig updated = systemConfigService.upsertConfig(key, value, description);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thành công", updated));
+    }
+
+    /** Chuẩn hóa và làm sạch dữ liệu danh mục & kho máy (Chỉ Admin) */
+    @PostMapping("/maintenance/cleanup")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> cleanUpDirtyData() {
+        String result = dataMaintenanceService.cleanUpDirtyData();
+        return ResponseEntity.ok(ApiResponse.okWithMessage(result, result));
     }
 }
