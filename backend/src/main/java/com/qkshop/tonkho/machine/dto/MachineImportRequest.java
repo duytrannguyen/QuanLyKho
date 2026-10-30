@@ -46,4 +46,6 @@ public class MachineImportRequest {
     private String initialStatus;
 
     private String importDate;
+    private String warrantyPeriod;
+    private java.time.LocalDate warrantyExpiry;
 }

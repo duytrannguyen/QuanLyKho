@@ -70,8 +70,7 @@ export default function TrangLichSuBanPhuKien() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN', {
-      hour: '2-digit', minute: '2-digit',
+    return new Date(dateString).toLocaleDateString('vi-VN', {
       day: '2-digit', month: '2-digit', year: 'numeric'
     });
   };

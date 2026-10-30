@@ -47,6 +47,9 @@ class ReconciliationServiceTest {
     @Mock
     private IntakeService intakeService;
 
+    @Mock
+    private com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+
     @InjectMocks
     private ReconciliationService reconciliationService;
 

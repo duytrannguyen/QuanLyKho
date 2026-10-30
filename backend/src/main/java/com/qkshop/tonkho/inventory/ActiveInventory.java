@@ -6,6 +6,7 @@ import com.qkshop.tonkho.sale.SalesConfig;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -68,6 +69,12 @@ public class ActiveInventory {
 
     @Column(columnDefinition = "TEXT")
     private String note;
+
+    @Column(name = "warranty_period", length = 100)
+    private String warrantyPeriod;
+
+    @Column(name = "warranty_expiry")
+    private LocalDate warrantyExpiry;
 
     @Column(name = "batch_id", length = 50)
     private String batchId;

@@ -161,6 +161,14 @@ public class IntakeService {
                 }
             }
 
+            String wp = payload.getWarrantyPeriod() != null ? payload.getWarrantyPeriod().trim() : null;
+            // Gói bảo hành được cửa hàng gán cho máy; thời gian bảo hành sẽ tính khi máy được bán cho khách (saleDate).
+            // Nếu có warrantyExpiry truyền trực tiếp từ frontend (ví dụ chọn bảo hành hãng và nhập ngày), ưu tiên dùng.
+            java.time.LocalDate fixedCompanyExpiry = payload.getWarrantyExpiry();
+            if (fixedCompanyExpiry == null) {
+                fixedCompanyExpiry = com.qkshop.tonkho.salesreport.SourceNormalizer.extractSpecificDate(wp);
+            }
+
             ActiveInventory inventory = ActiveInventory.builder()
                     .cycleId(cycleId)
                     .serialKey(serialKey)
@@ -173,6 +181,8 @@ public class IntakeService {
                     .lastPausedAt(initialState == CycleState.NEEDS_INSPECTION ? LocalDateTime.now() : null)
                     .salePrice(payload.getPrice())
                     .note(payload.getNotes())
+                    .warrantyPeriod(wp)
+                    .warrantyExpiry(fixedCompanyExpiry)
                     .build();
             inventory = activeInventoryRepo.save(inventory);
 
@@ -259,6 +269,8 @@ public class IntakeService {
                         .importType(singleReq.getImportType())
                         .initialStatus(singleReq.getInitialStatus())
                         .importDate(singleReq.getImportDate())
+                        .warrantyPeriod(singleReq.getWarrantyPeriod())
+                        .warrantyExpiry(singleReq.getWarrantyExpiry())
                         .build();
 
                 // Tạo sub-requestId cho từng máy để tracking, nhưng vẫn trong 1 transaction lớn

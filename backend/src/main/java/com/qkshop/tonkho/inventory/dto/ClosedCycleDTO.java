@@ -2,6 +2,7 @@ package com.qkshop.tonkho.inventory.dto;
 
 import lombok.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -27,6 +28,8 @@ public class ClosedCycleDTO {
     private BigDecimal salePriceSnapshot;
     private String customerName;
     private String note;
+    private String warrantyPeriod;
+    private LocalDate warrantyExpiry;
 
     // Metadata từ SerialRegistry (brand)
     private String brandId;

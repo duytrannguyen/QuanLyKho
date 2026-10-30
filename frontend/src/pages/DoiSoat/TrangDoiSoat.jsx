@@ -5,7 +5,7 @@ import { useToast } from '../../contexts/notification/NguCanhThongBao';
 
 export default function TrangDoiSoat() {
   const { showToast, confirm } = useToast();
-  const [activeTab, setActiveTab] = useState('Lỗi cần xử lý');
+  const [activeTab, setActiveTab] = useState('Tổng quan');
   const [loading, setLoading] = useState(false);
   const [issues, setIssues] = useState([]);
   const [runs, setRuns] = useState([]);

@@ -16,6 +16,14 @@ export const authApi = {
   getMe: () => axiosClient.get('/auth/me'),
 };
 
+export const userApi = {
+  getProfile: () => axiosClient.get('/users/me'),
+  updateProfile: (data) => axiosClient.put('/users/me', data),
+  changePassword: (data) => axiosClient.put('/users/me/change-password', data),
+  getPermissions: () => axiosClient.get('/users/permissions'),
+};
+
+
 
 export const dashboardApi = {
   getSummary: () => axiosClient.get('/dashboard/summary'),
@@ -134,3 +142,33 @@ export const priceListApi = {
   getConfigsByGroup: (platformIds) =>
     axiosClient.get('/pricelist/configs-by-group', { params: { platformIds: platformIds.join(',') } }),
 };
+
+export const apiPhuKien = {
+  getAvailable: () => axiosClient.get('/accessory/available'),
+  getAll: () => axiosClient.get('/accessory/all'),
+  getHistory: () => axiosClient.get('/accessory/history'),
+  sellStandalone: (payload) => axiosClient.post('/accessory/sell-standalone', payload),
+  getOrders: () => axiosClient.get('/accessory/orders'),
+  getOrderById: (id) => axiosClient.get(`/accessory/order/${id}`),
+};
+
+export const apiSuaChua = {
+  getOrders: (params) => axiosClient.get('/repair', { params }),
+  getOrderById: (id) => axiosClient.get(`/repair/${id}`),
+  createOrder: (payload) => axiosClient.post('/repair', payload),
+  updateOrder: (id, payload) => axiosClient.put(`/repair/${id}`, payload),
+  searchServices: (params) => axiosClient.get('/repair/services', { params }),
+};
+
+export const apiBaoHanh = {
+  checkWarranty: (keyword) => axiosClient.get(`/sale/warranty`, { params: { keyword } }),
+  updateMachineOrder: (cycleId, payload) => axiosClient.put(`/sale/order/${cycleId}`, payload),
+  updateAccessoryOrder: (orderId, payload) => axiosClient.put(`/sale/accessory-order/${orderId}`, payload),
+  updateRepairOrder: (orderId, payload) => axiosClient.put(`/sale/repair-order/${orderId}`, payload),
+};
+
+export const salesReportApi = {
+  getDashboard: (params) => axiosClient.get('/sales-report/dashboard', { params }),
+  rebuild: () => axiosClient.post('/sales-report/rebuild'),
+};
+

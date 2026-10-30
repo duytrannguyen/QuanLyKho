@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiMayMoc, apiTonKho, apiNhapKho, apiCatalog } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { INTAKE_TYPE_MAP, CYCLE_STATE_MAP } from '../../constants/trangThai';
-import { formatCurrency, parseCurrency } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, tinhNgayHetHanBaoHanh, formatDate } from '../../utils/dinh_dang';
 
 const getTodayDateString = () => {
   const d = new Date();
@@ -27,6 +27,10 @@ export default function TrangNhapMayMoc() {
     serial: '', brand: '', productLine: '', modelFull: '',
     segment: '', importType: 'PURCHASE', initialStatus: 'READY',
     importDate: getTodayDateString(),
+    warrantyOption: '',
+    warrantyPeriod: '',
+    warrantyExpiry: '',
+    customWarranty: '',
     cpu: '', gpu: '', ram: '16GB', ssd: '512GB',
     touchscreen: 'Không cảm ứng', screenSize: '', price: '', notes: ''
   });
@@ -122,6 +126,14 @@ export default function TrangNhapMayMoc() {
                       (m.intakeType || 'PURCHASE'),
           initialStatus: m.state === 'READY' ? 'READY' : 'NEEDS_INSPECTION',
           importDate: getTodayDateString(),
+          warrantyOption: (m.warrantyExpiry || (m.warrantyPeriod && m.warrantyPeriod.toLowerCase().includes('hãng')))
+            ? 'Bảo hành hãng'
+            : ['BH phần cứng 3 tháng', 'BH phần cứng 6 tháng', 'BH phần cứng 9 tháng', 'BH phần cứng 12 tháng', 'Không BH'].includes(m.warrantyPeriod)
+              ? m.warrantyPeriod
+              : m.warrantyPeriod ? 'Khác' : 'BH phần cứng 6 tháng',
+          warrantyPeriod: m.warrantyPeriod || 'BH phần cứng 6 tháng',
+          warrantyExpiry: m.warrantyExpiry ? m.warrantyExpiry.substring(0, 10) : '',
+          customWarranty: (!['BH phần cứng 3 tháng', 'BH phần cứng 6 tháng', 'BH phần cứng 9 tháng', 'BH phần cứng 12 tháng', 'Bảo hành hãng', 'Không BH'].includes(m.warrantyPeriod)) ? (m.warrantyPeriod || '') : '',
           cpu: (!m.cpu || m.cpu === 'N/A') ? '' : m.cpu,
           gpu: (!m.gpu || m.gpu === 'ONBOARD' || m.gpu === 'N/A') ? '' : m.gpu,
           ram: m.ram || '16GB',
@@ -160,12 +172,29 @@ export default function TrangNhapMayMoc() {
     setIsPreviewing(true);
     try {
       if (tab === 'single') {
-        const payload = { ...form, price: form.price ? form.price : null };
+        const resolvedWarranty = !form.warrantyOption
+          ? null
+          : form.warrantyOption === 'Bảo hành hãng'
+            ? 'Bảo hành hãng'
+            : form.warrantyOption === 'Khác'
+              ? (form.customWarranty ? form.customWarranty.trim() : null)
+              : form.warrantyOption;
+        const resolvedExpiry = form.warrantyOption === 'Bảo hành hãng' && form.warrantyExpiry
+          ? form.warrantyExpiry
+          : null;
+
+        const payload = {
+          ...form,
+          warrantyPeriod: resolvedWarranty,
+          warrantyExpiry: resolvedExpiry,
+          price: form.price ? form.price : null
+        };
         if (isExisting) {
           const updatePayload = {
             brand: payload.brand, productLine: payload.productLine, modelFull: payload.modelFull,
             segment: payload.segment, importType: payload.importType, status: payload.initialStatus,
-            importDate: payload.importDate,
+            importDate: payload.importDate, warrantyPeriod: payload.warrantyPeriod,
+            warrantyExpiry: payload.warrantyExpiry,
             cpu: payload.cpu, gpu: payload.gpu, ram: payload.ram, ssd: payload.ssd, touchscreen: payload.touchscreen,
             screenSize: payload.screenSize, price: payload.price, notes: payload.notes
           };
@@ -203,7 +232,24 @@ export default function TrangNhapMayMoc() {
         if (rawSerials.length > serialsList.length) {
             showToast(`Đã tự động loại bỏ ${rawSerials.length - serialsList.length} serial trùng lặp`, 'info');
         }
-        const payload = { serials: serialsList, count: serialsList.length, ...form, price: form.price ? form.price : null };
+        const resolvedWarranty = !form.warrantyOption
+          ? null
+          : form.warrantyOption === 'Bảo hành hãng'
+            ? 'Bảo hành hãng'
+            : form.warrantyOption === 'Khác'
+              ? (form.customWarranty ? form.customWarranty.trim() : null)
+              : form.warrantyOption;
+        const resolvedExpiry = form.warrantyOption === 'Bảo hành hãng' && form.warrantyExpiry
+          ? form.warrantyExpiry
+          : null;
+        const payload = { 
+          serials: serialsList, 
+          count: serialsList.length, 
+          ...form, 
+          warrantyPeriod: resolvedWarranty,
+          warrantyExpiry: resolvedExpiry,
+          price: form.price ? form.price : null 
+        };
         setPreviewGroups([{ isUpdate: false, ...payload }]);
       }
     } catch (err) {
@@ -232,7 +278,14 @@ export default function TrangNhapMayMoc() {
       setPreviewGroups(null);
       setExcelFile(null);
       setSerialsText('');
-      setForm({ serial: '', brand: '', productLine: '', modelFull: '', segment: '', importType: 'PURCHASE', initialStatus: 'READY', importDate: getTodayDateString(), cpu: '', gpu: '', ram: '16GB', ssd: '512GB', touchscreen: 'Không cảm ứng', screenSize: '', price: '', notes: '' });
+      setForm({ 
+        serial: '', brand: '', productLine: '', modelFull: '', segment: '', 
+        importType: 'PURCHASE', initialStatus: 'READY', importDate: getTodayDateString(), 
+        warrantyOption: '', warrantyPeriod: '', 
+        warrantyExpiry: '', customWarranty: '',
+        cpu: '', gpu: '', ram: '16GB', ssd: '512GB', touchscreen: 'Không cảm ứng', 
+        screenSize: '', price: '', notes: '' 
+      });
       setIsExisting(false);
     } catch (err) {
       showToast(err.userMessage || 'Lỗi hệ thống', 'danger');
@@ -334,18 +387,90 @@ export default function TrangNhapMayMoc() {
               </div>
 
               {/* Hàng 4 */}
-              <div className="col-md-6">
+              <div className="col-md-4">
                 <label className="form-label fw-semibold text-dark">Trạng thái ban đầu <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.initialStatus} onChange={e => handleChange('initialStatus', e.target.value)}>
                   <option value="READY">{CYCLE_STATE_MAP['READY']}</option>
                   <option value="NEEDS_INSPECTION">{CYCLE_STATE_MAP['NEEDS_INSPECTION']}</option>
                 </select>
               </div>
-              <div className="col-md-6">
+              <div className="col-md-4">
                 <label className="form-label fw-semibold text-dark">Ngày nhập <span className="text-danger">*</span></label>
                 <input type="date" className="form-control"
                   value={form.importDate} onChange={e => handleChange('importDate', e.target.value)} />
               </div>
+              <div className="col-md-4">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <label className="form-label fw-semibold text-dark mb-0">Gói bảo hành gán cho máy</label>
+                  {form.warrantyOption && form.warrantyOption !== 'Bảo hành hãng' && (
+                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle" style={{ fontSize: '0.70rem' }}>
+                      Kích hoạt khi bán
+                    </span>
+                  )}
+                </div>
+                <select 
+                  className="form-select" 
+                  value={form.warrantyOption || ''} 
+                  onChange={e => handleChange('warrantyOption', e.target.value)}
+                >
+                  <option value="">-- Chưa gán (Cập nhật sau) --</option>
+                  <option value="BH phần cứng 3 tháng">BH phần cứng 3 tháng</option>
+                  <option value="BH phần cứng 6 tháng">BH phần cứng 6 tháng</option>
+                  <option value="BH phần cứng 9 tháng">BH phần cứng 9 tháng</option>
+                  <option value="BH phần cứng 12 tháng">BH phần cứng 12 tháng</option>
+                  <option value="Bảo hành hãng">Bảo hành hãng</option>
+                  <option value="Không BH">Không BH</option>
+                  <option value="Khác">Khác (Tự nhập)</option>
+                </select>
+                {!form.warrantyOption ? (
+                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
+                    * Không bắt buộc, có thể cập nhật sau khi máy trong kho hoặc khi bán
+                  </div>
+                ) : form.warrantyOption !== 'Bảo hành hãng' ? (
+                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
+                    * Thời gian bảo hành được tính từ ngày xuất bán máy cho khách
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Nếu chọn Bảo hành hãng -> Xuất hiện ô nhập ngày kết thúc bảo hành hãng */}
+              {form.warrantyOption === 'Bảo hành hãng' && (
+                <div className="col-md-12 mt-3">
+                  <div className="p-3 bg-primary bg-opacity-10 rounded-3 border border-primary border-opacity-25">
+                    <label className="form-label fw-bold text-primary mb-1">
+                      Ngày kết thúc bảo hành hãng (Không bắt buộc)
+                    </label>
+                    <input 
+                      type="date" 
+                      className="form-control border-primary" 
+                      value={form.warrantyExpiry || ''} 
+                      onChange={e => handleChange('warrantyExpiry', e.target.value)} 
+                    />
+                    <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+                      * Có thể để trống và cập nhật sau khi tra cứu được trên trang web của hãng (Dell, HP, Lenovo, Asus...)
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Nếu chọn Khác (Tự nhập) -> Xuất hiện ô nhập text */}
+              {form.warrantyOption === 'Khác' && (
+                <div className="col-md-12 mt-3">
+                  <label className="form-label fw-semibold text-dark mb-1">
+                    Nhập nội dung gói bảo hành (Không bắt buộc)
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="VD: Bảo hành 1 đổi 1 trong 30 ngày..." 
+                    value={form.customWarranty || ''} 
+                    onChange={e => handleChange('customWarranty', e.target.value)} 
+                  />
+                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
+                    * Thời gian bảo hành được tính từ ngày xuất bán máy cho khách
+                  </div>
+                </div>
+              )}
             </div>
 
             <hr className="my-4 text-secondary" />
@@ -437,6 +562,14 @@ export default function TrangNhapMayMoc() {
                     <div className="d-flex flex-wrap gap-3 mb-2 small text-secondary">
                       <span>Giá: <strong className={group.isUpdate ? 'text-info' : 'text-success'}>{group.price ? formatCurrency(group.price) + 'đ' : 'Chưa có'}</strong></span>
                       <span>T.Thái ban đầu: <strong className="text-dark">{CYCLE_STATE_MAP[group.initialStatus] || group.initialStatus}</strong></span>
+                      <span>
+                        Gói bảo hành: <strong className="text-primary">{group.warrantyPeriod || 'Không BH'}</strong>
+                        {group.warrantyExpiry ? (
+                          <span className="text-success ms-1" style={{ fontSize: '11px' }}>(Hạn hãng: {formatDate(group.warrantyExpiry)})</span>
+                        ) : group.warrantyPeriod && group.warrantyPeriod !== 'Không BH' ? (
+                          <span className="text-muted ms-1" style={{ fontSize: '11px' }}>(Kích hoạt khi bán)</span>
+                        ) : null}
+                      </span>
                       <span>SL: <strong className="text-dark">{group.count}</strong> máy</span>
                     </div>
                     <div className="small text-secondary text-break">

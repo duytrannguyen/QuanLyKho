@@ -32,6 +32,10 @@ public class Accessory {
 
     private BigDecimal price; // Giá nhập/bán
 
+    @Column(name = "default_warranty_months")
+    @Builder.Default
+    private Integer defaultWarrantyMonths = 0; // Số tháng bảo hành mặc định
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

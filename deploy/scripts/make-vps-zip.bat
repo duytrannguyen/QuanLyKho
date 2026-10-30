@@ -5,9 +5,9 @@ echo   QKSHOP WMS - ĐÓNG GÓI GÓI ZIP ĐẨY LÊN SERVER VPS
 echo ========================================================
 echo.
 
-set ROOT_DIR=%~dp0..\..
-set DEPLOY_DIR=%ROOT_DIR%\deploy
-set ZIP_FILE=%DEPLOY_DIR%\qkshop-vps-deploy.zip
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI"
+set "DEPLOY_DIR=%ROOT_DIR%\deploy"
+set "ZIP_FILE=%DEPLOY_DIR%\qkshop-vps-deploy.zip"
 
 cd /d "%ROOT_DIR%"
 
@@ -40,7 +40,7 @@ copy /y "%ROOT_DIR%\database\seed\02_initial_data.sql" "%DEPLOY_DIR%\database\in
 
 echo.
 echo [4/4] Đang nén các thành phần deploy thành file ZIP (%ZIP_FILE%)...
-powershell -NoProfile -Command "$items = Get-ChildItem -Path '%DEPLOY_DIR%' | Where-Object { $_.Name -notin @('scripts', 'qkshop-vps-deploy.zip') }; Compress-Archive -Path $items.FullName -DestinationPath '%ZIP_FILE%' -Force"
+tar.exe -a -c -f "%ZIP_FILE%" -C "%DEPLOY_DIR%" --exclude "scripts" --exclude "qkshop-vps-deploy.zip" .
 
 echo.
 echo ========================================================

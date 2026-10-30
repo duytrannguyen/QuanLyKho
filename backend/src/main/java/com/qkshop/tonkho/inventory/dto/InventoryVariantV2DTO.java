@@ -30,5 +30,7 @@ public class InventoryVariantV2DTO {
         private String notes;
         private String cycleId;
         private java.time.LocalDateTime intakeAt;
+        private String warrantyPeriod;
+        private java.time.LocalDate warrantyExpiry;
     }
 }

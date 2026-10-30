@@ -16,6 +16,13 @@ function getShortModelName(fullName) {
   }
   return fullName.substring(0, minIdx).trim();
 }
+
+function getFullModelName(item) {
+  if (!item) return '';
+  // Ưu tiên platformName (hoặc displayName có đủ Hãng Dòng Model ví dụ: "Dell Latitude 7410")
+  const raw = item.platformName || item.platformCode || item.displayName || item.shortName || '';
+  return getShortModelName(raw) || raw;
+}
 /* ============================================================
    Preview card (Bước 3 — hiển thị trên màn hình)
    ============================================================ */
@@ -23,6 +30,9 @@ function PriceCard({ item }) {
   const priceDisplay = item.editPrice
     ? formatCurrency(item.editPrice) + 'đ'
     : (item.defaultSalePrice ? formatCurrency(item.defaultSalePrice) + 'đ' : 'Liên hệ');
+
+  const modelTitle = getFullModelName(item);
+  const fullDetail = item.configName || item.platformName || [item.platformCode, item.cpuCode, item.ramCode, item.ssdCode].filter(Boolean).join(' / ');
 
   return (
     <div style={{
@@ -50,7 +60,7 @@ function PriceCard({ item }) {
         padding: '6px 8px', width: '100%', boxSizing: 'border-box',
         wordWrap: 'break-word', flexShrink: 0, marginTop:'-20px' 
       }}>
-        {getShortModelName(item.platformCode || item.platformName || item.configId)}
+        {modelTitle}
       </div>
 
       {/* Giá bán: Rõ ràng, nổi bật */}
@@ -139,7 +149,12 @@ function StepChonNhom({ onNext }) {
         const data = res.data || [];
         const grouped = new Map();
         data.forEach(p => {
-          const name = getShortModelName(p.platformCode || p.displayName);
+          let name = getFullModelName(p);
+          // Đảm bảo tên có thương hiệu hoặc dòng máy nếu displayName chỉ có mã model (VD: "7400" -> "Dell Latitude 7400")
+          const brandPrefix = [selectedBrand?.brandName, ml.modelLineName].filter(Boolean).join(' ');
+          if (brandPrefix && !name.toLowerCase().includes((ml.modelLineName || '').toLowerCase())) {
+            name = `${brandPrefix} ${name}`.trim();
+          }
           if (!grouped.has(name)) {
             grouped.set(name, { ...p, platformIds: [p.platformId], shortName: name });
           } else {
@@ -164,7 +179,7 @@ function StepChonNhom({ onNext }) {
   const filteredBrands = brands.filter(b => (b.brandName || '').toLowerCase().includes((brandSearch || '').toLowerCase()));
   const filteredML = modelLines.filter(ml => (ml.modelLineName || '').toLowerCase().includes((mlSearch || '').toLowerCase()));
   const filteredPF = platforms.filter(pf => {
-    const searchStr = (pf.shortName || '').toLowerCase();
+    const searchStr = ((pf.shortName || '') + ' ' + (pf.displayName || '')).toLowerCase();
     return searchStr.includes((pfSearch || '').toLowerCase());
   });
 
@@ -364,7 +379,7 @@ function StepChinhSua({ platformIds, onBack, onNext }) {
                     <input type="number" min="0" className="form-control form-control-sm text-center px-1" value={item.printQty} onChange={e => updateItem(item.configId, 'printQty', parseInt(e.target.value) || 0)} />
                   </td>
                   <td>
-                    <div className="fw-bold">{getShortModelName(item.platformCode || item.platformName)}</div>
+                    <div className="fw-bold">{getFullModelName(item)}</div>
                     <div className="text-secondary small">{item.configName || item.platformName}</div>
                     <div className="text-muted" style={{fontSize:'10px'}}>{item.configId}</div>
                   </td>
@@ -449,6 +464,9 @@ function StepXemTruoc({ items, onBack }) {
           ? Number(item.editPrice).toLocaleString('vi-VN') + 'đ'
           : (item.defaultSalePrice ? Number(item.defaultSalePrice).toLocaleString('vi-VN') + 'đ' : 'Liên hệ');
 
+        const modelTitle = getFullModelName(item);
+        const fullDetail = item.configName || item.platformName || [item.platformCode, item.cpuCode, item.ramCode, item.ssdCode].filter(Boolean).join(' / ');
+
         const specs = [
           `<div class="spec"><b>CPU:</b> ${item.cpuCode || ''}</div>`,
           `<div class="spec"><b>RAM:</b> ${item.ramCode || ''}</div>`,
@@ -460,7 +478,7 @@ function StepXemTruoc({ items, onBack }) {
 
         return `<div class="card">
           <div class="logo"><img src="${logoSrc}" alt="QK"/></div>
-          <div class="model">${getShortModelName(item.platformCode || item.platformName || item.configId)}</div>
+          <div class="model">${modelTitle}</div>
           <div class="price">Giá: ${price}</div>
           <div class="divider"></div>
           <div class="specs">${specs}</div>
@@ -592,6 +610,7 @@ ${pagesHtml}
         pageSize: pageSize, // 'A4' hoặc 'A5'
         items: items.map(item => ({
           ...item,
+          platformCode: getFullModelName(item),
           defaultSalePrice: item.editPrice !== undefined ? item.editPrice : item.defaultSalePrice,
           warrantyText: item.warrantyText || 'Bảo hành phần cứng 06 tháng'
         }))
@@ -599,7 +618,7 @@ ${pagesHtml}
 
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const res = await fetch(
-        `http://localhost:8080/api/pricelist/export-pdf`,
+        `/api/pricelist/export-pdf`,
         {
           method: 'POST',
           headers: {

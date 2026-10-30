@@ -36,11 +36,12 @@ docker compose up -d --build
 
 ## 🎉 KẾT QUẢ & TRUY CẬP
 
-- **Giao diện Web:** Mở trình duyệt và truy cập vào IP của VPS: `http://<IP_VPS>` (cổng 80).
+- **Giao diện Web:** Mở trình duyệt và truy cập vào IP hoặc tên miền VPS: `http://<IP_VPS>` (cổng 80).
 - **Tài khoản Quản trị khởi tạo mặc định:**
   - Tên đăng nhập: `admin`
   - Mật khẩu: `admin123`
 *(Cơ sở dữ liệu sẽ tự động được khởi tạo cấu trúc 28 bảng và nạp tài khoản admin thông qua thư mục `database/init/`)*.
+- **Lưu ý về SSL / Tên miền:** Khi bạn trỏ tên miền (ví dụ: `kho.qkshop.vn`) vào IP VPS, bạn có thể dễ dàng bật SSL miễn phí qua Cloudflare (chỉ 1 click) hoặc dùng Certbot / Let's Encrypt theo tên miền chính thức.
 
 ---
 
@@ -62,3 +63,7 @@ docker compose up -d --build
   ```bash
   docker compose start
   ```
+- **Xóa hệ thống:**
+  ```bash
+  docker compose rm
+  ````

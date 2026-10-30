@@ -25,9 +25,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
       return d.toLocaleDateString('vi-VN', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        year: 'numeric'
       });
     } catch {
       return dateStr;
@@ -325,12 +323,18 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                       </span>
                     </h6>
                     <div className="small mt-1 opacity-75">
-                      {statusInfo?.endDate ? (
+                      {order.isInStock ? (
+                        statusInfo?.endDate ? (
+                          <>Hạn bảo hành hãng: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
+                        ) : (
+                          <>Gói bảo hành gán cho máy: <strong>{order.warrantyPeriod || 'Chưa thiết lập'}</strong> (Sẽ kích hoạt tính từ ngày bán máy cho khách)</>
+                        )
+                      ) : statusInfo?.endDate ? (
                         <>Hạn bảo hành đến ngày: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
                       ) : (
                         'Thời hạn bảo hành theo thỏa thuận hoặc chưa xác định'
                       )}
-                      {statusInfo?.diffDays !== undefined && (
+                      {!order.isInStock && statusInfo?.diffDays !== undefined && (
                         <span className="ms-2">
                           ({statusInfo.status === 'VALID' 
                             ? `Còn ${statusInfo.diffDays} ngày` 

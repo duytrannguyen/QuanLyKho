@@ -5,7 +5,7 @@ echo   QKSHOP WMS - ĐÓNG GÓI TOÀN BỘ SẢN PHẨM (BUILD ALL)
 echo ========================================================
 echo.
 
-set ROOT_DIR=%~dp0..\..
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI"
 cd /d "%ROOT_DIR%"
 
 echo [1/2] Đang đóng gói Backend Spring Boot (Maven Package)...

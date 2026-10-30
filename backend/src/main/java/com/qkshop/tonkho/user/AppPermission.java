@@ -11,6 +11,7 @@ public enum AppPermission {
     // Tổng quan
     DASHBOARD_VIEW("DASHBOARD_VIEW", "Tổng quan điều hành", "Tổng quan", "Xem các chỉ số tổng quan, doanh số và cảnh báo kho"),
     ANALYTICS_VIEW("ANALYTICS_VIEW", "Báo cáo phân tích", "Tổng quan", "Xem biểu đồ chuyên sâu, tỷ lệ quay vòng, tuổi thọ tồn kho"),
+    SALES_REPORT_VIEW("SALES_REPORT_VIEW", "Báo cáo bán hàng", "Tổng quan", "Xem biểu đồ doanh thu, KPI và phân tích kênh bán theo Google Sheets"),
 
     // Bán hàng
     SALE_MACHINE("SALE_MACHINE", "Bán máy", "Bán hàng", "Lập đơn bán máy lẻ, xuất kho bán và in hóa đơn"),
@@ -28,6 +29,7 @@ public enum AppPermission {
     SEARCH_INVENTORY("SEARCH_INVENTORY", "Tra cứu kho máy", "Hậu mãi & Tra cứu", "Tra cứu nhanh thông tin máy theo Serial, cấu hình, tình trạng"),
     ACCESSORY_HISTORY("ACCESSORY_HISTORY", "Lịch sử phụ kiện", "Hậu mãi & Tra cứu", "Xem nhật ký giao dịch và lịch sử xuất bán phụ kiện"),
     WARRANTY_CHECK("WARRANTY_CHECK", "Bảo hành", "Hậu mãi & Tra cứu", "Tra cứu thông tin đơn hàng và thời hạn bảo hành của khách"),
+    SERVICE_REPAIR("SERVICE_REPAIR", "Dịch vụ sửa chữa", "Hậu mãi & Tra cứu", "Tiếp nhận máy sửa chữa, lập phiếu dịch vụ và tra cứu sửa chữa"),
 
     // Hệ thống
     SYNC_MANAGE("SYNC_MANAGE", "Đối soát & đồng bộ", "Hệ thống", "Đồng bộ dữ liệu Google Sheets / DataSale và giải quyết sai lệch"),
@@ -76,12 +78,14 @@ public enum AppPermission {
             case STAFF:
                 return Set.of(
                         DASHBOARD_VIEW.getCode(),
+                        SALES_REPORT_VIEW.getCode(),
                         SALE_MACHINE.getCode(),
                         SALE_ACCESSORY.getCode(),
                         PRICING_VIEW.getCode(),
                         SEARCH_INVENTORY.getCode(),
                         ACCESSORY_HISTORY.getCode(),
                         WARRANTY_CHECK.getCode(),
+                        SERVICE_REPAIR.getCode(),
                         INSPECTION.getCode()
                 );
             default:

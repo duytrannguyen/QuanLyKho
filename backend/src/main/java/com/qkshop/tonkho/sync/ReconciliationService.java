@@ -35,6 +35,7 @@ public class ReconciliationService {
     private final SalesSyncLedgerRepository ledgerRepo;
     private final SyncRunRepository syncRunRepo;
     private final IntakeService intakeService;
+    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
 
     @Transactional
     public DataIssue recheckIssue(String issueId) {
@@ -166,6 +167,25 @@ public class ReconciliationService {
                 ledger.setReturnCycleId(newInv.getCycleId());
                 ledgerRepo.save(ledger);
             }
+        }
+
+        // Cập nhật chu kỳ đóng cũ thành CUSTOMER_RETURN
+        if (cc != null) {
+            cc.setCloseType(CloseType.CUSTOMER_RETURN);
+            cc.setCloseReason("Khách trả máy - duyệt nhập lại kho với chu kỳ " + newInv.getCycleId());
+            closedCycleRepo.save(cc);
+        }
+
+        // Đồng bộ sổ cái SalesOrder: chuyển trạng thái sang "Trả hàng" và doanh thu thuần = 0
+        try {
+            for (com.qkshop.tonkho.salesreport.SalesOrder so : salesOrderRepo.findBySerialKeysContaining(serial)) {
+                so.setOrderStatus("Trả hàng");
+                so.setNetRevenue(java.math.BigDecimal.ZERO);
+                so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newInv.getCycleId());
+                salesOrderRepo.save(so);
+            }
+        } catch (Exception e) {
+            log.warn("Không thể cập nhật SalesOrder khi duyệt trả máy {}: {}", serial, e.getMessage());
         }
 
         issue.setStatus(IssueStatus.RESOLVED);

@@ -173,8 +173,48 @@ public class UserService {
         log.info("Đã xóa tài khoản người dùng: {} (ID: {}) bởi {}", user.getUsername(), id, currentUsername);
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public User updateProfile(String username, com.qkshop.tonkho.user.dto.UpdateProfileRequest request) {
+        User user = getUserByUsername(username);
+
+        if (request.getFullName() != null) {
+            user.setFullName(request.getFullName().trim());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail().trim());
+        }
+        if (request.getAvatarUrl() != null) {
+            user.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        log.info("Người dùng '{}' đã cập nhật thông tin cá nhân thành công.", username);
+        return userRepository.save(user);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void changeMyPassword(String username, com.qkshop.tonkho.user.dto.ChangeMyPasswordRequest request) {
+        User user = getUserByUsername(username);
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra lại.");
+        }
+
+        if (request.getNewPassword() == null || request.getNewPassword().trim().length() < 6) {
+            throw new IllegalArgumentException("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword().trim(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu mới không được trùng với mật khẩu hiện tại.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+        userRepository.save(user);
+        log.info("Người dùng '{}' đã tự đổi mật khẩu thành công.", username);
+    }
+
     public List<PermissionDto> getAllPermissions() {
         return AppPermission.getAllPermissionDtos();
     }
 }
+
 

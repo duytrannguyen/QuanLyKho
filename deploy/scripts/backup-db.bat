@@ -5,14 +5,20 @@ echo   QKSHOP WMS - SAO LƯU CƠ SỞ DỮ LIỆU TỰ ĐỘNG (BACKUP)
 echo ========================================================
 echo.
 
-set ROOT_DIR=%~dp0..\..
+for %%I in ("%~dp0..\..") do set "ROOT_DIR=%%~fI"
 cd /d "%ROOT_DIR%"
 
 if not exist "%ROOT_DIR%\backups" mkdir "%ROOT_DIR%\backups"
 
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
-set TIMESTAMP=%datetime:~0,8%_%datetime:~8,6%
-set BACKUP_FILE=%ROOT_DIR%\backups\backup_qkshop_%TIMESTAMP%.sql
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^^>nul') do set datetime=%%I
+if "%datetime%"=="" (
+    for /f "tokens=1-3 delims=/ " %%a in ("%date%") do set mydate=%%c%%b%%a
+    for /f "tokens=1-3 delims=:. " %%a in ("%time%") do set mytime=%%a%%b%%c
+    set TIMESTAMP=%mydate%_%mytime%
+) else (
+    set TIMESTAMP=%datetime:~0,8%_%datetime:~8,6%
+)
+set "BACKUP_FILE=%ROOT_DIR%\backups\backup_qkshop_%TIMESTAMP%.sql"
 
 echo Đang tiến hành trích xuất CSDL MySQL...
 echo File đích: %BACKUP_FILE%

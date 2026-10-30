@@ -66,12 +66,12 @@ public class SecurityConfig {
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setContentType("application/json;charset=UTF-8");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("{\"success\":false,\"errorCode\":\"UNAUTHORIZED\",\"userMessage\":\"Chưa đăng nhập hoặc phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.\"}");
+                    response.getWriter().write("{\"success\":false,\"errorCode\":\"UNAUTHORIZED\",\"message\":\"Chưa đăng nhập hoặc phiên hết hạn\",\"userMessage\":\"Chưa đăng nhập hoặc phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.\"}");
                 })
                 .accessDeniedHandler((request, response, accessDeniedException) -> {
                     response.setContentType("application/json;charset=UTF-8");
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                    response.getWriter().write("{\"success\":false,\"errorCode\":\"FORBIDDEN\",\"userMessage\":\"Bạn không có quyền truy cập hoặc thực hiện thao tác này.\"}");
+                    response.getWriter().write("{\"success\":false,\"errorCode\":\"FORBIDDEN\",\"message\":\"Từ chối quyền truy cập\",\"userMessage\":\"Bạn không có quyền truy cập hoặc thực hiện thao tác này.\"}");
                 })
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

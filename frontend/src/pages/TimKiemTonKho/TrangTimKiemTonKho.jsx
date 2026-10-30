@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Check } from 'lucide-react';
 import { apiTonKho, apiMayMoc } from '../../api';
-import { formatCurrency, parseCurrency } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, formatDate } from '../../utils/dinh_dang';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatCycleState } from '../../constants/trangThai';
 
@@ -115,6 +115,36 @@ export default function TrangTimKiemTonKho() {
     setActiveModal({ type: 'INSPECTION', payload: { machine } });
   };
 
+  const handleUpdateSingleWarranty = (machine) => {
+    const validPresets = [
+      'BH phần cứng 3 tháng',
+      'BH phần cứng 6 tháng',
+      'BH phần cứng 9 tháng',
+      'BH phần cứng 12 tháng',
+      'Bảo hành hãng',
+      'Không BH'
+    ];
+    let opt = 'BH phần cứng 6 tháng';
+    let custom = '';
+    const currentWp = machine.warrantyPeriod || '';
+    if (machine.warrantyExpiry || currentWp.toLowerCase().includes('hãng')) {
+      opt = 'Bảo hành hãng';
+    } else if (validPresets.includes(currentWp)) {
+      opt = currentWp;
+    } else if (currentWp) {
+      opt = 'Khác';
+      custom = currentWp;
+    }
+    setModalForm({ 
+      price: '', 
+      reason: '', 
+      warrantyOption: opt, 
+      warrantyExpiry: machine.warrantyExpiry ? machine.warrantyExpiry.substring(0, 10) : '',
+      customWarranty: custom
+    });
+    setActiveModal({ type: 'WARRANTY_SINGLE', payload: { machine } });
+  };
+
   const handleExportOther = (machine) => {
     setModalForm({ price: '', reason: '' });
     setActiveModal({ type: 'EXPORT_OTHER', payload: { machine } });
@@ -135,6 +165,23 @@ export default function TrangTimKiemTonKho() {
         if (!newPrice || isNaN(newPrice)) throw new Error("Giá không hợp lệ");
         await apiMayMoc.update(payload.machine.serial, { price: newPrice });
         showToast('Cập nhật giá thành công', 'success');
+      } else if (type === 'WARRANTY_SINGLE') {
+        const resolvedWp = !modalForm.warrantyOption
+          ? null
+          : modalForm.warrantyOption === 'Bảo hành hãng'
+            ? 'Bảo hành hãng'
+            : modalForm.warrantyOption === 'Khác'
+              ? (modalForm.customWarranty ? modalForm.customWarranty.trim() : null)
+              : modalForm.warrantyOption;
+        const resolvedExpiry = modalForm.warrantyOption === 'Bảo hành hãng' && modalForm.warrantyExpiry
+          ? modalForm.warrantyExpiry
+          : null;
+        await apiMayMoc.update(payload.machine.serial, { 
+          warrantyPeriod: resolvedWp,
+          warrantyExpiry: resolvedExpiry
+        });
+        showToast('Cập nhật bảo hành thành công', 'success');
+        fetchInventory();
       } else if (type === 'INSPECTION') {
         if (!modalForm.reason.trim()) throw new Error("Vui lòng nhập lý do");
         await apiMayMoc.update(payload.machine.serial, { status: 'NEEDS_INSPECTION', notes: modalForm.reason });
@@ -311,6 +358,7 @@ export default function TrangTimKiemTonKho() {
                         <th className="py-3">Cấu hình (RAM/SSD)</th>
                         <th className="py-3">Trạng thái</th>
                         <th className="py-3">Ngày nhập</th>
+                        <th className="py-3">Bảo hành</th>
                         <th className="py-3">Giá bán</th>
                         <th className="pe-3 py-3">Thao tác</th>
                       </tr>
@@ -328,7 +376,23 @@ export default function TrangTimKiemTonKho() {
                                   {formatCycleState(machine.status).toUpperCase()}
                                 </span>
                               </td>
-                              <td>{machine.intakeAt ? new Date(machine.intakeAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</td>
+                              <td>{formatDate(machine.intakeAt)}</td>
+                              <td>
+                                <span className="badge bg-light text-dark border">
+                                  {machine.warrantyPeriod || 'Không BH'}
+                                </span>
+                                {machine.warrantyExpiry ? (
+                                  <div className="text-muted" style={{ fontSize: '11px' }}>
+                                    Hãng: {formatDate(machine.warrantyExpiry)}
+                                  </div>
+                                ) : (
+                                  machine.warrantyPeriod && machine.warrantyPeriod !== 'Không BH' && (
+                                    <div className="text-secondary opacity-75" style={{ fontSize: '11px' }}>
+                                      Kích hoạt khi bán
+                                    </div>
+                                  )
+                                )}
+                              </td>
                               <td>{machine.price ? formatCurrency(machine.price) + ' đ' : '—'}</td>
                               <td className="pe-3">
                                 <button className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(machine.serial)}>
@@ -338,7 +402,7 @@ export default function TrangTimKiemTonKho() {
                             </tr>
                             {isExpanded && (
                               <tr className="border-start border-primary border-3 bg-light">
-                                <td colSpan="6" className="p-4 border-bottom">
+                                <td colSpan="7" className="p-4 border-bottom">
                                   <div className="d-flex flex-column align-items-center">
                                     <div className="d-flex align-items-start justify-content-between mb-4 position-relative w-75">
                                       <div className="position-absolute bg-success" style={{height: '2px', top: '12px', left: '10%', right: '10%', zIndex: 1}}></div>
@@ -348,7 +412,7 @@ export default function TrangTimKiemTonKho() {
                                           <Check size={14} />
                                         </div>
                                         <div className="small fw-bold text-dark mb-1">Nhập kho</div>
-                                        <div className="text-secondary opacity-75" style={{fontSize: '11px'}}>{machine.intakeAt ? new Date(machine.intakeAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</div>
+                                        <div className="text-secondary opacity-75" style={{fontSize: '11px'}}>{formatDate(machine.intakeAt)}</div>
                                       </div>
                                       
                                       <div className="d-flex flex-column align-items-center position-relative z-2" style={{width: '100px'}}>
@@ -369,6 +433,7 @@ export default function TrangTimKiemTonKho() {
                                     </div>
 
                                     <div className="d-flex gap-2 justify-content-end w-100">
+                                      <button className="btn btn-outline-secondary btn-sm" onClick={() => handleUpdateSingleWarranty(machine)}>Sửa bảo hành</button>
                                       <button className="btn btn-outline-secondary btn-sm" onClick={() => handleUpdateSinglePrice(machine)}>Sửa giá riêng</button>
                                       <button className="btn btn-outline-secondary btn-sm" onClick={() => handleMoveToInspection(machine)}>Đưa về kiểm tra</button>
                                       <button className="btn btn-outline-danger btn-sm" onClick={() => handleExportOther(machine)}>Xuất khác</button>
@@ -493,6 +558,95 @@ export default function TrangTimKiemTonKho() {
                   <div className="modal-footer border-top p-3 d-flex gap-2">
                     <button className="btn btn-outline-secondary" onClick={() => setActiveModal({type: null, payload: null})} disabled={isSubmitting}>Quay lại</button>
                     <button className="btn btn-primary" onClick={submitModal} disabled={isSubmitting}>Kiểm tra thay đổi</button>
+                  </div>
+                </>
+              )}
+
+              {activeModal.type === 'WARRANTY_SINGLE' && (
+                <>
+                  <div className="modal-header border-bottom p-4">
+                    <h5 className="modal-title fw-bold">Gói bảo hành gán cho máy (Kích hoạt khi bán)</h5>
+                  </div>
+                  <div className="modal-body p-4 d-flex flex-column gap-3">
+                    <div className="d-flex justify-content-between">
+                      <span className="text-secondary small">Serial</span>
+                      <span className="fw-bold text-dark">{activeModal.payload.machine.serial}</span>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <span className="text-secondary small">Tên máy</span>
+                      <span className="fw-bold text-dark">{getDisplayName(activeVariant?.variant)}</span>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <span className="text-secondary small">Gói bảo hành hiện tại</span>
+                      <span className="fw-bold text-primary">
+                        {activeModal.payload.machine.warrantyPeriod || 'Không BH'}
+                        {activeModal.payload.machine.warrantyExpiry && (
+                          <span className="text-success small ms-1">(Hãng: {formatDate(activeModal.payload.machine.warrantyExpiry)})</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="mt-2">
+                      <label className="form-label fw-semibold text-dark">Gói bảo hành gán cho máy</label>
+                      <select 
+                        className="form-select"
+                        value={modalForm.warrantyOption || ''}
+                        onChange={e => setModalForm({...modalForm, warrantyOption: e.target.value})}
+                      >
+                        <option value="">-- Chưa gán gói (Để trống) --</option>
+                        <option value="BH phần cứng 3 tháng">BH phần cứng 3 tháng</option>
+                        <option value="BH phần cứng 6 tháng">BH phần cứng 6 tháng</option>
+                        <option value="BH phần cứng 9 tháng">BH phần cứng 9 tháng</option>
+                        <option value="BH phần cứng 12 tháng">BH phần cứng 12 tháng</option>
+                        <option value="Bảo hành hãng">Bảo hành hãng</option>
+                        <option value="Không BH">Không BH</option>
+                        <option value="Khác">Khác (Tự nhập)</option>
+                      </select>
+                    </div>
+
+                    {/* Nếu chọn Bảo hành hãng -> Xuất hiện ô nhập ngày kết thúc bảo hành hãng */}
+                    {modalForm.warrantyOption === 'Bảo hành hãng' && (
+                      <div className="p-3 bg-primary bg-opacity-10 rounded-3 border border-primary border-opacity-25">
+                        <label className="form-label fw-bold text-primary mb-1">
+                          Ngày kết thúc bảo hành hãng (Không bắt buộc)
+                        </label>
+                        <input 
+                          type="date" 
+                          className="form-control border-primary" 
+                          value={modalForm.warrantyExpiry || ''} 
+                          onChange={e => setModalForm({...modalForm, warrantyExpiry: e.target.value})} 
+                        />
+                        <div className="text-muted mt-1 small">
+                          * Có thể để trống và cập nhật sau khi tra cứu được trên trang web của hãng (Dell, HP, Lenovo, Asus...)
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nếu chọn Khác (Tự nhập) -> Xuất hiện ô nhập text */}
+                    {modalForm.warrantyOption === 'Khác' && (
+                      <div>
+                        <label className="form-label fw-semibold text-dark mb-1">
+                          Nhập nội dung gói bảo hành (Không bắt buộc)
+                        </label>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="VD: Bảo hành 1 đổi 1 trong 30 ngày..." 
+                          value={modalForm.customWarranty || ''} 
+                          onChange={e => setModalForm({...modalForm, customWarranty: e.target.value})} 
+                        />
+                      </div>
+                    )}
+
+                    {modalForm.warrantyOption !== 'Bảo hành hãng' && (
+                      <div className="alert alert-info border-info small mb-0 mt-2 p-3">
+                        * <strong>Lưu ý:</strong> Gói bảo hành này của cửa hàng được gán cho máy và sẽ tự động bắt đầu tính thời hạn kể từ ngày máy được xuất bán cho khách hàng.
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-footer border-top p-3 d-flex gap-2">
+                    <button className="btn btn-outline-secondary" onClick={() => setActiveModal({type: null, payload: null})} disabled={isSubmitting}>Quay lại</button>
+                    <button className="btn btn-primary" onClick={submitModal} disabled={isSubmitting}>Lưu bảo hành</button>
                   </div>
                 </>
               )}

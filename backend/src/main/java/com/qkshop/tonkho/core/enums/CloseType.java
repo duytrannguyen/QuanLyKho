@@ -8,6 +8,7 @@ public enum CloseType {
     SALE("Giao dịch bán"),
     GIFT("Xuất tặng"),
     SUPPLIER_RETURN("Trả nhà cung cấp"),
+    CUSTOMER_RETURN("Khách đổi trả"),
     INTERNAL("Dùng nội bộ"),
     CANCEL("Hủy"),
     OTHER("Xuất khác");

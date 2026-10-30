@@ -83,4 +83,16 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
            "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
            "  AND (:modelLineId IS NULL OR m.modelLineId = :modelLineId)")
     List<ActiveInventory> findFilteredAll(@Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
+
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN ai.config c LEFT JOIN c.variant v LEFT JOIN v.platform p " +
+           "LEFT JOIN p.modelLine m " +
+           "LEFT JOIN m.brand b " +
+           "WHERE (:state IS NULL OR ai.state = :state) " +
+           "  AND (:brandName IS NULL OR LOWER(b.brandName) = LOWER(:brandName)) " +
+           "  AND (:segment IS NULL OR m.segmentCode = :segment)")
+    List<ActiveInventory> findByFilters(
+            @Param("state") CycleState state,
+            @Param("brandName") String brandName,
+            @Param("segment") com.qkshop.tonkho.core.enums.SegmentCode segment);
 }

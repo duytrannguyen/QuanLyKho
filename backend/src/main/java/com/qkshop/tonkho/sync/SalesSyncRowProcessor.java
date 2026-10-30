@@ -27,6 +27,9 @@ import java.security.MessageDigest;
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.qkshop.tonkho.salesreport.SalesOrder;
+import com.qkshop.tonkho.salesreport.SalesOrderRepository;
+import com.qkshop.tonkho.salesreport.SourceNormalizer;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -34,7 +37,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Xử lý 1 dòng bán hàng từ Google Sheet trong transaction riêng (REQUIRES_NEW):
  * Hỗ trợ 1 dòng nhiều Serial, đơn Hủy/Trả hàng tạo yêu cầu duyệt nhập kho,
- * và lưu đầy đủ 16 trường vào hệ thống.
+ * và lưu đầy đủ 31 trường vào bảng sales_orders và hệ thống.
  */
 @Slf4j
 @Component
@@ -53,6 +56,7 @@ public class SalesSyncRowProcessor {
     private final InventoryCycleService inventoryCycleService;
     private final GoogleSheetProperties props;
     private final com.qkshop.tonkho.system.SystemConfigService systemConfigService;
+    private final SalesOrderRepository salesOrderRepo;
 
     /** Lấy ký hiệu đánh dấu hoàn tất động từ SystemConfig (mặc định từ props). */
     private String getDoneMarker() {
@@ -129,13 +133,19 @@ public class SalesSyncRowProcessor {
             }
         }
 
+        RowOutcome outcome;
         if (successCount == machineCount) {
-            return new RowOutcome(SyncState.MATCHED, getDoneMarker());
+            outcome = new RowOutcome(SyncState.MATCHED, getDoneMarker());
         } else if (successCount > 0) {
-            return new RowOutcome(SyncState.ERROR, errorText("Đã trừ " + successCount + "/" + machineCount + " máy. Lỗi: " + String.join("; ", errors)));
+            outcome = new RowOutcome(SyncState.ERROR, errorText("Đã trừ " + successCount + "/" + machineCount + " máy. Lỗi: " + String.join("; ", errors)));
         } else {
-            return new RowOutcome(SyncState.ERROR, errorText(String.join("; ", errors)));
+            outcome = new RowOutcome(SyncState.ERROR, errorText(String.join("; ", errors)));
         }
+
+        // Luôn đồng bộ dữ liệu vào bảng sales_orders để Dashboard có số liệu đầy đủ
+        upsertSalesOrder(row, null);
+
+        return outcome;
     }
 
     private RowOutcome processSingleMachine(
@@ -416,7 +426,7 @@ public class SalesSyncRowProcessor {
             DateTimeFormatter.ofPattern("d.M.yyyy"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
-    static LocalDateTime parseDate(String s) {
+    public static LocalDateTime parseDate(String s) {
         if (s == null || s.isBlank()) return null;
         String v = s.trim();
 
@@ -442,7 +452,7 @@ public class SalesSyncRowProcessor {
         return null;
     }
 
-    static LocalDate parseLocalDate(String s) {
+    public static LocalDate parseLocalDate(String s) {
         if (s == null || s.isBlank()) return null;
         LocalDateTime dt = parseDate(s);
         return dt != null ? dt.toLocalDate() : null;
@@ -460,5 +470,100 @@ public class SalesSyncRowProcessor {
     private static String truncate(String s, int max) {
         if (s == null) return null;
         return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    /**
+     * Lưu hoặc cập nhật đầy đủ 31 trường dữ liệu vào bảng sales_orders
+     * phục vụ trực tiếp cho Sales Dashboard.
+     */
+    private void upsertSalesOrder(SheetSaleRow row, String matchedCycleId) {
+        try {
+            if (row.transactionId().isBlank()) return;
+            SalesOrder order = salesOrderRepo.findByTransactionId(row.transactionId())
+                    .orElseGet(() -> SalesOrder.builder()
+                            .transactionId(row.transactionId())
+                            .build());
+
+            order.setCustomerId(emptyToNull(row.customerId()));
+            order.setLeadId(emptyToNull(row.leadId()));
+            order.setCustomerName(emptyToNull(row.customerName()));
+            order.setCustomerPhone(emptyToNull(row.customerPhone()));
+            order.setCustomerType(emptyToNull(row.customerType()));
+            order.setFirstSource(emptyToNull(row.firstSource()));
+            order.setSecondSource(emptyToNull(row.secondSource()));
+            order.setLastSource(emptyToNull(row.lastSource()));
+
+            if (row.isStudent() != null && !row.isStudent().isBlank()) {
+                String is = row.isStudent().trim().toLowerCase(Locale.ROOT);
+                order.setIsStudent(is.equals("1") || is.equals("true") || is.contains("sinh viên") || is.contains("học sinh"));
+            }
+
+            order.setOrderStatus(emptyToNull(row.orderStatus()));
+            order.setPaymentStatus(emptyToNull(row.paymentStatus()));
+            order.setProductName(emptyToNull(row.productFullName()));
+            order.setBrand(emptyToNull(row.brand()));
+            order.setSeries(emptyToNull(row.series()));
+            order.setSegment(emptyToNull(row.segment()));
+            order.setModelName(emptyToNull(row.modelName()));
+            order.setConfigSummary(emptyToNull(row.productSummary()));
+            order.setWarrantyPeriod(emptyToNull(row.warrantyPeriod()));
+            order.setNote(emptyToNull(row.note()));
+            order.setCrmSyncStatus(emptyToNull(row.syncStatus()));
+            order.setMessageSyncStatus(emptyToNull(row.messageSyncStatus()));
+            order.setDataQualityStatus(emptyToNull(row.dataQualityStatus()));
+            order.setSalesperson(emptyToNull(row.salesperson()));
+            order.setOrigin("GSHEET");
+            if (matchedCycleId != null) {
+                order.setMatchedCycleId(matchedCycleId);
+            }
+            if (order.getSerialKeys() == null || order.getSerialKeys().isBlank()) {
+                order.setSerialKeys(emptyToNull(row.serial()));
+            }
+
+            LocalDateTime saleDate = parseDate(row.orderDate());
+            if (saleDate != null) {
+                order.setSaleDate(saleDate);
+                order.setMonthDate(saleDate.toLocalDate().withDayOfMonth(1));
+            }
+
+            LocalDate expiry = parseLocalDate(row.warrantyExpiry());
+            order.setWarrantyExpiry(expiry);
+
+            LocalDateTime importedAt = parseDate(row.importDate());
+            if (importedAt != null) {
+                order.setImportedAt(importedAt);
+            }
+
+            BigDecimal gross = parseMoney(row.grossRevenue());
+            BigDecimal disc = parseMoney(row.discount());
+            BigDecimal net = parseMoney(row.netRevenue());
+
+            if (net == null && gross != null) {
+                net = disc != null ? gross.subtract(disc) : gross;
+            }
+
+            order.setGrossRevenue(gross != null ? gross : BigDecimal.ZERO);
+            order.setDiscount(disc != null ? disc : BigDecimal.ZERO);
+            order.setNetRevenue(net != null ? net : BigDecimal.ZERO);
+
+            if (order.getSeries() == null || order.getSeries().isBlank()) {
+                order.setSeries(SourceNormalizer.extractSeries(order.getProductName(), order.getModelName()));
+            }
+
+            order.setNormalizedSource(SourceNormalizer.normalizeSource(order.getFirstSource(), order.getLastSource()));
+            order.setInboxType(SourceNormalizer.determineInboxType(order.getNormalizedSource()));
+
+            if (order.getWarrantyExpiry() == null && order.getSaleDate() != null && order.getWarrantyPeriod() != null) {
+                order.setWarrantyExpiry(SourceNormalizer.calculateWarrantyExpiry(order.getSaleDate().toLocalDate(), order.getWarrantyPeriod()));
+            }
+
+            salesOrderRepo.save(order);
+        } catch (Exception e) {
+            log.warn("[GSHEET] Không thể ghi sales_orders cho đơn {}: {}", row.transactionId(), e.getMessage());
+        }
+    }
+
+    private static String emptyToNull(String s) {
+        return (s == null || s.trim().isEmpty()) ? null : s.trim();
     }
 }

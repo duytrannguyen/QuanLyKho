@@ -28,7 +28,6 @@ public class UserController {
     }
 
     @GetMapping("/permissions")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<List<PermissionDto>>> getPermissions() {
         return ResponseEntity.ok(ApiResponse.ok(userService.getAllPermissions()));
     }
@@ -74,5 +73,22 @@ public class UserController {
         User user = userService.getUserByUsername(authentication.getName());
         return ResponseEntity.ok(ApiResponse.ok(user));
     }
+
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<User>> updateMyProfile(
+            Authentication authentication,
+            @Valid @RequestBody com.qkshop.tonkho.user.dto.UpdateProfileRequest request) {
+        User updated = userService.updateProfile(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thông tin cá nhân thành công", updated));
+    }
+
+    @PutMapping("/me/change-password")
+    public ResponseEntity<ApiResponse<Void>> changeMyPassword(
+            Authentication authentication,
+            @Valid @RequestBody com.qkshop.tonkho.user.dto.ChangeMyPasswordRequest request) {
+        userService.changeMyPassword(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Đổi mật khẩu thành công. Vui lòng sử dụng mật khẩu mới cho các lần đăng nhập tiếp theo.", null));
+    }
 }
+
 

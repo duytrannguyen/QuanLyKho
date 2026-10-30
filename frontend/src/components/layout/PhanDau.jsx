@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, RefreshCw, Settings, Plus, Menu, Bell, CheckCircle2,
   AlertTriangle, ArrowRight, Trash2, Check, CheckCheck, Info,
-  AlertCircle, Package, Clock, ExternalLink, X
+  AlertCircle, Package, Clock, ExternalLink, X,
+  User, KeyRound, Shield, LogOut, Sliders
 } from 'lucide-react';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { syncApi, notificationApi } from '../../api';
+import ModalCaiDatCaNhan from './ModalCaiDatCaNhan';
 
 export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', isMobile, onOpenMenu }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -23,6 +25,13 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
   const [showNotiDropdown, setShowNotiDropdown] = useState(false);
   const [isQuickSyncing, setIsQuickSyncing] = useState(false);
   const notiRef = useRef(null);
+
+  // State Cài đặt cá nhân & Dropdown người dùng
+  const [showPersonalModal, setShowPersonalModal] = useState(false);
+  const [personalModalTab, setPersonalModalTab] = useState('profile');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const userDropdownRef = useRef(null);
+
 
   // Danh sách thông báo & trạng thái thời gian thực
   const [notifications, setNotifications] = useState([]);
@@ -127,10 +136,14 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
       if (notiRef.current && !notiRef.current.contains(e.target)) {
         setShowNotiDropdown(false);
       }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target)) {
+        setShowUserDropdown(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
 
   // Khi mở dropdown, load lại dữ liệu mới nhất
   const handleToggleDropdown = () => {
@@ -602,22 +615,172 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
           )}
         </div>
 
-        {/* Settings */}
-        <button className="btn btn-light btn-sm p-1 d-none d-sm-flex" onClick={() => showToast('Cài đặt cá nhân đang phát triển', 'info')} style={{ width: '32px', height: '32px' }}>
-          <Settings size={18} className="text-secondary m-auto" />
+        {/* Settings Button */}
+        <button 
+          className="btn btn-light btn-sm p-1 d-none d-sm-flex align-items-center justify-content-center border" 
+          onClick={() => {
+            setPersonalModalTab('preferences');
+            setShowPersonalModal(true);
+          }} 
+          title="Cài đặt & Tùy chọn trải nghiệm cá nhân"
+          style={{ width: '38px', height: '38px', borderRadius: '10px' }}
+        >
+          <Settings size={18} className="text-secondary" />
         </button>
 
-        {/* User */}
-        <div className="d-flex align-items-center gap-3 ps-3 border-start ms-1">
-          <div className="text-end" style={{ lineHeight: '1.2' }}>
-            <div className="fw-bold small">{user?.username || 'User'}</div>
-            <div className="text-secondary" style={{ fontSize: '0.7rem' }}>{user?.role || 'Quản lý'}</div>
+        {/* User Profile & Menu */}
+        <div className="position-relative" ref={userDropdownRef}>
+          <div 
+            className="d-flex align-items-center gap-2.5 ps-3 border-start ms-1 user-select-none"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setShowUserDropdown(prev => !prev)}
+            title="Nhấp để mở menu cá nhân"
+          >
+            <div className="text-end d-none d-sm-block" style={{ lineHeight: '1.2' }}>
+              <div className="fw-bold small text-dark text-truncate" style={{ maxWidth: '140px' }}>
+                {user?.fullName || user?.username || 'User'}
+              </div>
+              <div className="text-secondary" style={{ fontSize: '0.7rem' }}>
+                {user?.role || 'Nhân viên'}
+              </div>
+            </div>
+            <div 
+              className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm transition-all" 
+              style={{ 
+                width: '38px', height: '38px', 
+                background: (() => {
+                  const cId = user?.username ? localStorage.getItem(`user_avatar_color_${user.username}`) : 'grad-orange';
+                  const map = {
+                    'grad-orange': 'linear-gradient(135deg, #ef4444, #f97316)',
+                    'grad-blue': 'linear-gradient(135deg, #0d6efd, #0dcaf0)',
+                    'grad-purple': 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                    'grad-green': 'linear-gradient(135deg, #10b981, #059669)',
+                    'grad-dark': 'linear-gradient(135deg, #1e293b, #0f172a)'
+                  };
+                  return map[cId] || map['grad-orange'];
+                })(),
+                outline: showUserDropdown ? '2px solid #0d6efd' : 'none'
+              }}
+            >
+              {initials}
+            </div>
           </div>
-          <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #ef4444, #f97316)', cursor: 'pointer' }}>
-            {initials}
-          </div>
+
+          {/* User Dropdown Menu */}
+          {showUserDropdown && (
+            <div 
+              className="card shadow-lg border-0 position-absolute end-0 mt-2 rounded-3 text-start overflow-hidden animate__animated animate__fadeIn"
+              style={{ width: '270px', zIndex: 1060, top: '100%', boxShadow: '0 12px 35px rgba(0,0,0,0.18)' }}
+            >
+              <div className="bg-light p-3 border-bottom d-flex align-items-center gap-2.5">
+                <div 
+                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0" 
+                  style={{ 
+                    width: '42px', height: '42px', 
+                    background: (() => {
+                      const cId = user?.username ? localStorage.getItem(`user_avatar_color_${user.username}`) : 'grad-orange';
+                      const map = {
+                        'grad-orange': 'linear-gradient(135deg, #ef4444, #f97316)',
+                        'grad-blue': 'linear-gradient(135deg, #0d6efd, #0dcaf0)',
+                        'grad-purple': 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+                        'grad-green': 'linear-gradient(135deg, #10b981, #059669)',
+                        'grad-dark': 'linear-gradient(135deg, #1e293b, #0f172a)'
+                      };
+                      return map[cId] || map['grad-orange'];
+                    })(),
+                    fontSize: '1rem' 
+                  }}
+                >
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-grow-1">
+                  <div className="fw-bold text-dark text-truncate small">
+                    {user?.fullName || user?.username}
+                  </div>
+                  <div className="text-secondary small text-truncate" style={{ fontSize: '0.72rem' }}>
+                    @{user?.username}
+                  </div>
+                  <span className="badge bg-primary-subtle text-primary border" style={{ fontSize: '0.65rem' }}>
+                    {user?.role}
+                  </span>
+                </div>
+              </div>
+
+              <div className="list-group list-group-flush p-1.5">
+                <button 
+                  className="list-group-item list-group-item-action border-0 rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5 small"
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    setPersonalModalTab('profile');
+                    setShowPersonalModal(true);
+                  }}
+                >
+                  <User size={16} className="text-primary" />
+                  <span>Hồ sơ & Thông tin cá nhân</span>
+                </button>
+
+                <button 
+                  className="list-group-item list-group-item-action border-0 rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5 small"
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    setPersonalModalTab('password');
+                    setShowPersonalModal(true);
+                  }}
+                >
+                  <KeyRound size={16} className="text-warning" />
+                  <span>Đổi mật khẩu</span>
+                </button>
+
+                <button 
+                  className="list-group-item list-group-item-action border-0 rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5 small"
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    setPersonalModalTab('permissions');
+                    setShowPersonalModal(true);
+                  }}
+                >
+                  <Shield size={16} className="text-success" />
+                  <span>Quyền hạn của tôi</span>
+                </button>
+
+                <button 
+                  className="list-group-item list-group-item-action border-0 rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5 small"
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    setPersonalModalTab('preferences');
+                    setShowPersonalModal(true);
+                  }}
+                >
+                  <Sliders size={16} className="text-info" />
+                  <span>Tùy chọn trải nghiệm</span>
+                </button>
+
+                <hr className="my-1 border-secondary opacity-15" />
+
+                <button 
+                  className="list-group-item list-group-item-action border-0 rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5 small text-danger"
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    logout();
+                    navigate('/login');
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span className="fw-semibold">Đăng xuất tài khoản</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal Cài đặt cá nhân */}
+      <ModalCaiDatCaNhan 
+        show={showPersonalModal}
+        onClose={() => setShowPersonalModal(false)}
+        initialTab={personalModalTab}
+      />
     </header>
   );
 }
+

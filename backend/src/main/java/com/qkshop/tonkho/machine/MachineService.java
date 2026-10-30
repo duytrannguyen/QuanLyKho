@@ -132,6 +132,8 @@ public class MachineService {
                     .intakeAt(ai.getIntakeAt())
                     .salePriceSnapshot(ai.getSalePrice())
                     .note(ai.getNote())
+                    .warrantyPeriod(ai.getWarrantyPeriod())
+                    .warrantyExpiry(ai.getWarrantyExpiry())
                     .brandId(brandId)
                     .brandName(brandName)
                     .storageDays(days)
@@ -181,6 +183,8 @@ public class MachineService {
                     .salePriceSnapshot(cc.getSalePriceSnapshot())
                     .customerName(cc.getCustomerName())
                     .note(cc.getSaleNote())
+                    .warrantyPeriod(cc.getWarrantyPeriod())
+                    .warrantyExpiry(cc.getWarrantyExpiry())
                     .brandId(brandId)
                     .brandName(brandName)
                     .storageDays(days)
@@ -278,6 +282,36 @@ public class MachineService {
 
         if (updates.containsKey("notes")) {
             ai.setNote(updates.get("notes") != null ? updates.get("notes").toString() : "");
+        }
+
+        if (updates.containsKey("warrantyPeriod")) {
+            String wp = updates.get("warrantyPeriod") != null ? updates.get("warrantyPeriod").toString().trim() : null;
+            ai.setWarrantyPeriod(wp);
+            if (updates.containsKey("warrantyExpiry")) {
+                Object expObj = updates.get("warrantyExpiry");
+                if (expObj != null && !expObj.toString().trim().isEmpty()) {
+                    try {
+                        ai.setWarrantyExpiry(java.time.LocalDate.parse(expObj.toString().trim()));
+                    } catch (Exception ignored) {
+                        ai.setWarrantyExpiry(null);
+                    }
+                } else {
+                    ai.setWarrantyExpiry(null);
+                }
+            } else {
+                ai.setWarrantyExpiry(com.qkshop.tonkho.salesreport.SourceNormalizer.extractSpecificDate(wp));
+            }
+        } else if (updates.containsKey("warrantyExpiry")) {
+            Object expObj = updates.get("warrantyExpiry");
+            if (expObj != null && !expObj.toString().trim().isEmpty()) {
+                try {
+                    ai.setWarrantyExpiry(java.time.LocalDate.parse(expObj.toString().trim()));
+                } catch (Exception ignored) {
+                    ai.setWarrantyExpiry(null);
+                }
+            } else {
+                ai.setWarrantyExpiry(null);
+            }
         }
 
         if (updates.containsKey("status")) {
@@ -456,6 +490,8 @@ public class MachineService {
                     .notes(bulkRequest.getCommonConfig().getNotes())
                     .importType(bulkRequest.getCommonConfig().getImportType())
                     .initialStatus(bulkRequest.getCommonConfig().getInitialStatus())
+                    .importDate(bulkRequest.getCommonConfig().getImportDate())
+                    .warrantyPeriod(bulkRequest.getCommonConfig().getWarrantyPeriod())
                     .build();
 
             try {
@@ -512,6 +548,7 @@ public class MachineService {
                             .initialStatus(Optional.ofNullable(getCellValueAsString(currentRow.getCell(11))).filter(s -> !s.isEmpty()).orElse("SẴN SÀNG BÁN"))
                             .price(parseBigDecimal(getCellValueAsString(currentRow.getCell(12))))
                             .importDate(getCellValueAsString(currentRow.getCell(13)))
+                            .warrantyPeriod(getCellValueAsString(currentRow.getCell(14)))
                             .build();
 
                     importSingleMachine(req, username);
@@ -576,9 +613,10 @@ public class MachineService {
                     String initialStatus = Optional.ofNullable(getCellValueAsString(currentRow.getCell(11))).filter(s -> !s.isEmpty()).orElse("SẴN SÀNG BÁN");
                     BigDecimal price = parseBigDecimal(getCellValueAsString(currentRow.getCell(12)));
                     String importDate = getCellValueAsString(currentRow.getCell(13));
+                    String warrantyPeriod = getCellValueAsString(currentRow.getCell(14));
 
-                    String configKey = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
-                            brand, modelFull, cpu, gpu, ram, ssd, touchscreen, price, initialStatus, importDate);
+                    String configKey = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+                            brand, modelFull, cpu, gpu, ram, ssd, touchscreen, price, initialStatus, importDate, warrantyPeriod);
 
                     Map<String, Object> machine = new HashMap<>();
                     machine.put("serial", trimmedSerial);
@@ -595,6 +633,7 @@ public class MachineService {
                     machine.put("initialStatus", initialStatus);
                     machine.put("price", price);
                     machine.put("importDate", importDate);
+                    machine.put("warrantyPeriod", warrantyPeriod);
                     machine.put("configKey", configKey);
                     validMachines.add(machine);
 
@@ -642,6 +681,8 @@ public class MachineService {
         detail.put("readyAt", ai.getReadyAt());
         detail.put("salePrice", ai.getSalePrice());
         detail.put("note", ai.getNote());
+        detail.put("warrantyPeriod", ai.getWarrantyPeriod());
+        detail.put("warrantyExpiry", ai.getWarrantyExpiry());
         detail.put("sourceModelText", ai.getSourceModelText());
         detail.put("configId", ai.getConfig() != null ? ai.getConfig().getConfigId() : null);
 
@@ -682,6 +723,8 @@ public class MachineService {
         detail.put("salePrice", cc.getSalePriceSnapshot());
         detail.put("customerName", cc.getCustomerName());
         detail.put("customerPhone", cc.getCustomerPhone());
+        detail.put("warrantyPeriod", cc.getWarrantyPeriod());
+        detail.put("warrantyExpiry", cc.getWarrantyExpiry());
         detail.put("sourceModelText", cc.getSourceModelText());
         detail.put("configId", cc.getConfig() != null ? cc.getConfig().getConfigId() : null);
 
@@ -730,7 +773,7 @@ public class MachineService {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Template Nhập Máy");
             org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
             
-            String[] headers = {"Serial", "Hãng", "Dòng máy", "Model đầy đủ", "Phân khúc", "CPU", "GPU", "RAM", "SSD", "Cảm ứng", "Nghiệp vụ nhập", "Trạng thái", "Giá bán", "Ngày nhập"};
+            String[] headers = {"Serial", "Hãng", "Dòng máy", "Model đầy đủ", "Phân khúc", "CPU", "GPU", "RAM", "SSD", "Cảm ứng", "Nghiệp vụ nhập", "Trạng thái", "Giá bán", "Ngày nhập", "Bảo hành"};
             for (int i = 0; i < headers.length; i++) {
                 org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -763,6 +806,7 @@ public class MachineService {
                         row.createCell(12).setCellValue("");
                     }
                     row.createCell(13).setCellValue(req.getImportDate() != null ? req.getImportDate() : "");
+                    row.createCell(14).setCellValue(req.getWarrantyPeriod() != null ? req.getWarrantyPeriod() : "");
                 }
             }
 
@@ -777,6 +821,7 @@ public class MachineService {
             addValidationToSheet(sheet, 9, new String[]{"Không cảm ứng", "Cảm ứng"});
             addValidationToSheet(sheet, 10, new String[]{"MUA/NHẬP HÀNG", "THU LẠI CỦA KHÁCH", "KHÁCH ĐỔI/TRẢ", "TỒN ĐẦU KỲ"});
             addValidationToSheet(sheet, 11, new String[]{"SẴN SÀNG BÁN", "CẦN KIỂM TRA"});
+            addValidationToSheet(sheet, 14, new String[]{"BH phần cứng 3 tháng", "BH phần cứng 6 tháng", "BH phần cứng 9 tháng", "BH phần cứng 12 tháng", "Bảo hành hãng", "Không BH"});
 
             workbook.write(out);
             return new org.springframework.core.io.ByteArrayResource(out.toByteArray());

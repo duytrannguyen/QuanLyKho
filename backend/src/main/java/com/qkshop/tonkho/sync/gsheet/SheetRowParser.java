@@ -29,7 +29,21 @@ public final class SheetRowParser {
             int sync,
             int note,
             int serial,
-            int salesperson
+            int salesperson,
+            int customerId,
+            int leadId,
+            int customerType,
+            int firstSource,
+            int secondSource,
+            int lastSource,
+            int isStudent,
+            int brand,
+            int series,
+            int segment,
+            int modelName,
+            int messageSyncStatus,
+            int dataQualityStatus,
+            int importDate
     ) {}
 
     public static String normalize(String s) {
@@ -77,7 +91,21 @@ public final class SheetRowParser {
                 sync,
                 optional(idx, cfg.getNote(), "ghi chú", "note"),
                 serial,
-                optional(idx, cfg.getSalesperson(), "nhân viên bán", "người bán", "sale", "nhân viên")
+                optional(idx, cfg.getSalesperson(), "nhân viên bán", "người bán", "sale", "nhân viên"),
+                optional(idx, cfg.getCustomerId(), "customer_id", "mã khách", "mã khách hàng"),
+                optional(idx, cfg.getLeadId(), "lead_id", "mã lead"),
+                optional(idx, cfg.getCustomerType(), "phân loại khách", "loại khách", "nhóm khách"),
+                optional(idx, cfg.getFirstSource(), "nguồn đầu tiên biết đến", "nguồn đầu tiên", "nguồn đầu"),
+                optional(idx, cfg.getSecondSource(), "nguồn thứ 2 tham khảo", "nguồn tham khảo"),
+                optional(idx, cfg.getLastSource(), "nguồn chốt cuối cùng", "nguồn chốt", "nguồn"),
+                optional(idx, cfg.getIsStudent(), "sinh viên?", "sinh viên", "học sinh sinh viên"),
+                optional(idx, cfg.getBrand(), "hãng", "hãng máy", "brand"),
+                optional(idx, cfg.getSeries(), "series", "dòng series"),
+                optional(idx, cfg.getSegment(), "phân khúc", "phân khúc máy"),
+                optional(idx, cfg.getModelName(), "dòng máy", "model"),
+                optional(idx, cfg.getMessageSyncStatus(), "trạng thái khớp tin nhắn"),
+                optional(idx, cfg.getDataQualityStatus(), "trạng thái chất lượng dữ liệu"),
+                optional(idx, cfg.getImportDate(), "ngày nạp")
         );
     }
 
@@ -137,6 +165,20 @@ public final class SheetRowParser {
                     cell(row, m.note()),
                     serial,
                     cell(row, m.salesperson()),
+                    cell(row, m.customerId()),
+                    cell(row, m.leadId()),
+                    cell(row, m.customerType()),
+                    cell(row, m.firstSource()),
+                    cell(row, m.secondSource()),
+                    cell(row, m.lastSource()),
+                    cell(row, m.isStudent()),
+                    cell(row, m.brand()),
+                    cell(row, m.series()),
+                    cell(row, m.segment()),
+                    cell(row, m.modelName()),
+                    cell(row, m.messageSyncStatus()),
+                    cell(row, m.dataQualityStatus()),
+                    cell(row, m.importDate()),
                     String.join("\u001F", row)
             ));
         }

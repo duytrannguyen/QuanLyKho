@@ -16,6 +16,7 @@ public class AccessoryController {
     private final AccessoryRepository accessoryRepository;
     private final AccessoryService accessoryService;
     private final AccessoryHistoryRepository accessoryHistoryRepository;
+    private final AccessoryOrderRepository accessoryOrderRepository;
 
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<List<AccessoryHistory>>> getAccessoryHistory() {
@@ -47,21 +48,22 @@ public class AccessoryController {
     }
 
     @PostMapping("/sell-standalone")
-    public ResponseEntity<ApiResponse<String>> sellStandalone(@RequestBody Map<String, Object> payload) {
-        List<Map<String, Object>> accessories = (List<Map<String, Object>>) payload.get("accessories");
-        if (accessories == null || accessories.isEmpty()) {
-            throw new IllegalArgumentException("Không có phụ kiện nào để xuất");
-        }
-        
-        String customerName = (String) payload.get("customerName");
-        String customerPhone = (String) payload.get("customerPhone");
-        
-        accessoryService.deductAccessories(accessories, customerName, customerPhone);
-        
-        ApiResponse<String> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData("Xuất phụ kiện thành công");
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<AccessoryOrder>> sellStandalone(@RequestBody Map<String, Object> payload) {
+        AccessoryOrder order = accessoryService.createAccessoryOrder(payload);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Xuất phụ kiện thành công", order));
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<ApiResponse<List<AccessoryOrder>>> getAllOrders() {
+        List<AccessoryOrder> orders = accessoryOrderRepository.findAllByOrderBySaleDateDesc();
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Lấy danh sách đơn phụ kiện thành công", orders));
+    }
+
+    @GetMapping("/order/{id}")
+    public ResponseEntity<ApiResponse<AccessoryOrder>> getOrderById(@PathVariable Long id) {
+        AccessoryOrder order = accessoryOrderRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn phụ kiện với ID: " + id));
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Chi tiết đơn phụ kiện", order));
     }
     
     @PostMapping("/submit")

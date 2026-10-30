@@ -39,6 +39,7 @@ public class InventoryCycleService {
     private final StateTransitionService stateTransitionService;
     private final CommandLedgerRepository commandLedgerRepo;
     private final AccessoryService accessoryService;
+    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
 
     /**
      * Tra cứu theo VariantV2.
@@ -46,7 +47,25 @@ public class InventoryCycleService {
      * Rồi gom nhóm theo VariantV2.
      */
     public Page<InventoryVariantV2DTO> searchInventory(String query, String brand, String segment, String status, int page, int size) {
-        List<ActiveInventory> allActive = activeInventoryRepo.findAll();
+        CycleState cycleState = null;
+        if (StringUtils.hasText(status) && !"Tất cả".equalsIgnoreCase(status)) {
+            if (status.equalsIgnoreCase("READY") || status.equalsIgnoreCase("SAN_SANG_BAN")) {
+                cycleState = CycleState.READY;
+            } else if (status.equalsIgnoreCase("NEEDS_INSPECTION") || status.equalsIgnoreCase("CAN_KIEM_TRA") || status.equalsIgnoreCase("DANG_KIEM_TRA")) {
+                cycleState = CycleState.NEEDS_INSPECTION;
+            }
+        }
+
+        String filterBrand = (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) ? brand.trim() : null;
+
+        com.qkshop.tonkho.core.enums.SegmentCode segEnum = null;
+        if (StringUtils.hasText(segment) && !"Tất cả".equalsIgnoreCase(segment)) {
+            try {
+                segEnum = com.qkshop.tonkho.core.enums.SegmentCode.valueOf(segment.trim().toUpperCase());
+            } catch (Exception ignored) {}
+        }
+
+        List<ActiveInventory> allActive = activeInventoryRepo.findByFilters(cycleState, filterBrand, segEnum);
 
         // Group by SalesConfig
         Map<SalesConfig, List<ActiveInventory>> grouped = new HashMap<>();
@@ -56,28 +75,6 @@ public class InventoryCycleService {
             if (config == null) continue;
             
             VariantV2 variant = config.getVariant();
-            
-            // Filter by brand
-            if (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) {
-                String brandName = null;
-                if (variant != null && variant.getPlatform() != null && variant.getPlatform().getModelLine() != null && variant.getPlatform().getModelLine().getBrand() != null) {
-                    brandName = variant.getPlatform().getModelLine().getBrand().getBrandName();
-                }
-                if (brandName == null || !brandName.equalsIgnoreCase(brand)) {
-                    continue;
-                }
-            }
-            
-            // Filter by segment
-            if (StringUtils.hasText(segment) && !"Tất cả".equalsIgnoreCase(segment)) {
-                String segName = null;
-                if (variant != null && variant.getPlatform() != null && variant.getPlatform().getModelLine() != null && variant.getPlatform().getModelLine().getSegmentCode() != null) {
-                    segName = variant.getPlatform().getModelLine().getSegmentCode().name();
-                }
-                if (segName == null || !segName.equalsIgnoreCase(segment)) {
-                    continue;
-                }
-            }
             
             // Filter by text query
             if (StringUtils.hasText(query)) {
@@ -91,15 +88,6 @@ public class InventoryCycleService {
                         || (variant != null && variant.getPlatform() != null && variant.getPlatform().getDisplayName() != null && variant.getPlatform().getDisplayName().toLowerCase().contains(q))
                         || (variant != null && variant.getCpuCode() != null && variant.getCpuCode().toLowerCase().contains(q));
                 if (!match) continue;
-            }
-            
-            // Filter by status
-            if (StringUtils.hasText(status) && !"Tất cả".equalsIgnoreCase(status)) {
-                if (status.equalsIgnoreCase("READY") || status.equalsIgnoreCase("SAN_SANG_BAN")) {
-                    if (ai.getState() != CycleState.READY) continue;
-                } else if (status.equalsIgnoreCase("NEEDS_INSPECTION") || status.equalsIgnoreCase("CAN_KIEM_TRA") || status.equalsIgnoreCase("DANG_KIEM_TRA")) {
-                    if (ai.getState() != CycleState.NEEDS_INSPECTION) continue;
-                }
             }
 
             grouped.computeIfAbsent(config, k -> new ArrayList<>()).add(ai);
@@ -125,6 +113,8 @@ public class InventoryCycleService {
                         .notes(m.getNote())
                         .cycleId(m.getCycleId())
                         .intakeAt(m.getIntakeAt())
+                        .warrantyPeriod(m.getWarrantyPeriod())
+                        .warrantyExpiry(m.getWarrantyExpiry())
                         .build()
             ).collect(Collectors.toList());
 
@@ -208,7 +198,11 @@ public class InventoryCycleService {
                 closed.setUpgradeNote((String) saleDetails.get("upgradeNote"));
             }
             closed.setSaleNote((String) saleDetails.get("saleNote"));
-            closed.setWarrantyPeriod((String) saleDetails.get("warrantyPeriod"));
+            String wp = (String) saleDetails.get("warrantyPeriod");
+            if ((wp == null || wp.isBlank()) && ai.getWarrantyPeriod() != null) {
+                wp = ai.getWarrantyPeriod();
+            }
+            closed.setWarrantyPeriod(wp);
             
             Object discountObj = saleDetails.get("discount");
             if (discountObj != null) {
@@ -247,12 +241,25 @@ public class InventoryCycleService {
                         log.warn("Invalid warrantyExpiry format: {}", warrantyExpiryObj);
                     }
                 }
+            } else if (wp != null && !wp.isBlank()) {
+                java.time.LocalDate baseSaleDate = java.time.LocalDate.now();
+                if (closed.getSaleDate() != null) {
+                    baseSaleDate = closed.getSaleDate().toLocalDate();
+                } else if (closed.getClosedAt() != null) {
+                    baseSaleDate = closed.getClosedAt().toLocalDate();
+                }
+                closed.setWarrantyExpiry(com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseSaleDate, wp));
             }
             
             Object saleDateObj = saleDetails.get("saleDate");
             if (saleDateObj != null) {
+                String strDate = saleDateObj.toString().trim();
                 try {
-                    closed.setSaleDate(LocalDateTime.parse(saleDateObj.toString()));
+                    if (strDate.length() == 10) {
+                        closed.setSaleDate(java.time.LocalDate.parse(strDate).atStartOfDay());
+                    } else {
+                        closed.setSaleDate(LocalDateTime.parse(strDate));
+                    }
                 } catch (Exception e) {
                     log.warn("Invalid saleDate format: {}", saleDateObj);
                 }
@@ -261,14 +268,35 @@ public class InventoryCycleService {
             // Deduct accessories
             List<Map<String, Object>> accessories = (List<Map<String, Object>>) saleDetails.get("accessories");
             if (accessories != null && !accessories.isEmpty()) {
-                accessoryService.deductAccessories(accessories, closed.getCustomerName(), closed.getCustomerPhone());
-                // Also update the note to include accessories
-                String accessoryNames = accessories.stream()
-                        .map(a -> a.get("name") + " (x" + a.get("quantity") + ")")
-                        .collect(Collectors.joining(", "));
+                accessoryService.deductAccessories(accessories, closed.getCustomerName(), closed.getCustomerPhone(), closed.getCycleId(), salesperson, closed.getSaleDate());
+                
+                // Phân loại quà tặng mặc định (0đ) vs phụ kiện bán kèm ngoài mặc định để ghi chú đầy đủ
+                List<String> giftItems = new java.util.ArrayList<>();
+                List<String> paidItems = new java.util.ArrayList<>();
+                for (Map<String, Object> a : accessories) {
+                    boolean isGift = Boolean.TRUE.equals(a.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(a.get("isGift")));
+                    String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
+                    if (isGift) {
+                        giftItems.add(nameWithQty);
+                    } else {
+                        Object p = a.get("price");
+                        String priceStr = (p != null && !p.toString().isEmpty()) ? " [" + p + "đ]" : "";
+                        paidItems.add(nameWithQty + priceStr);
+                    }
+                }
+
+                StringBuilder accNote = new StringBuilder();
+                if (!giftItems.isEmpty()) {
+                    accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
+                }
+                if (!paidItems.isEmpty()) {
+                    if (accNote.length() > 0) accNote.append(" | ");
+                    accNote.append("Phụ kiện bán thêm: ").append(String.join(", ", paidItems));
+                }
+
                 String currentNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
-                String newNote = currentNote.isEmpty() ? "Phụ kiện bán kèm: " + accessoryNames 
-                                                       : currentNote + " | Phụ kiện bán kèm: " + accessoryNames;
+                String newNote = currentNote.isEmpty() ? accNote.toString() 
+                                                       : currentNote + " | " + accNote.toString();
                 closed.setSaleNote(newNote);
             }
             
@@ -278,6 +306,84 @@ public class InventoryCycleService {
             // Wait, stateTransitionService might save and return it, let's assume it's managed or we need to save it.
             // If there's no closedCycleRepo here, since it's returned by stateTransitionService, it might be persisted.
             // But let's verify if JPA auto-commits changes to `closed` since it's within @Transactional. Yes, it will.
+            // Lưu hoặc cập nhật vào bảng sales_orders để Dashboard có số liệu bán ngay lập tức
+            try {
+                String rawTxnId = (String) saleDetails.get("transactionId");
+                final String txnId = (rawTxnId != null && !rawTxnId.isBlank()) ? rawTxnId : ("WEB-" + requestId);
+
+                String firstSrc = (String) saleDetails.get("firstSource");
+                String lastSrc = (String) saleDetails.get("lastSource");
+                if (lastSrc == null || lastSrc.isBlank()) {
+                    lastSrc = (String) saleDetails.get("source");
+                }
+                String custType = (String) saleDetails.get("customerType");
+                Boolean isStudent = null;
+                Object stuObj = saleDetails.get("isStudent");
+                if (stuObj != null) {
+                    if (stuObj instanceof Boolean b) isStudent = b;
+                    else isStudent = "true".equalsIgnoreCase(stuObj.toString()) || "1".equals(stuObj.toString());
+                }
+
+                String brand = null;
+                String segment = null;
+                String series = null;
+                String modelName = ai.getSourceModelText();
+                if (ai.getConfig() != null && ai.getConfig().getVariant() != null) {
+                    var v = ai.getConfig().getVariant();
+                    if (v.getPlatform() != null && v.getPlatform().getModelLine() != null) {
+                        var ml = v.getPlatform().getModelLine();
+                        if (ml.getBrand() != null) brand = ml.getBrand().getBrandName();
+                        if (ml.getSegmentCode() != null) segment = ml.getSegmentCode().name();
+                        if (ml.getModelLineName() != null) modelName = ml.getModelLineName();
+                    }
+                }
+                if (series == null) {
+                    series = com.qkshop.tonkho.salesreport.SourceNormalizer.extractSeries(closed.getProductFullName(), modelName);
+                }
+
+                String normSource = com.qkshop.tonkho.salesreport.SourceNormalizer.normalizeSource(firstSrc, lastSrc);
+                String inboxType = com.qkshop.tonkho.salesreport.SourceNormalizer.determineInboxType(normSource);
+
+                LocalDateTime sDate = closed.getSaleDate() != null ? closed.getSaleDate() : LocalDateTime.now();
+
+                com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(txnId)
+                        .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
+                                .transactionId(txnId)
+                                .build());
+
+                so.setSaleDate(sDate);
+                so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
+                so.setCustomerName(closed.getCustomerName());
+                so.setCustomerPhone(closed.getCustomerPhone());
+                so.setCustomerType(custType != null ? custType : "Khách mua lần đầu");
+                so.setFirstSource(firstSrc);
+                so.setLastSource(lastSrc);
+                so.setNormalizedSource(normSource);
+                so.setInboxType(inboxType);
+                so.setIsStudent(isStudent != null ? isStudent : false);
+                so.setOrderStatus("Hoàn tất");
+                so.setPaymentStatus(closed.getPaymentStatus() != null ? closed.getPaymentStatus() : "Đã thanh toán");
+                so.setProductName(closed.getProductFullName() != null ? closed.getProductFullName() : ai.getSourceModelText());
+                so.setBrand(brand);
+                so.setSeries(series);
+                so.setSegment(segment);
+                so.setModelName(modelName);
+                so.setConfigSummary(closed.getProductSummary());
+                so.setWarrantyPeriod(closed.getWarrantyPeriod());
+                so.setWarrantyExpiry(closed.getWarrantyExpiry());
+                so.setGrossRevenue(closed.getGrossRevenue() != null ? closed.getGrossRevenue() : finalPrice);
+                so.setDiscount(closed.getDiscount() != null ? closed.getDiscount() : BigDecimal.ZERO);
+                so.setNetRevenue(finalPrice);
+                so.setNote(closed.getSaleNote());
+                so.setSerialKeys(serialKey);
+                so.setSalesperson(salesperson);
+                so.setMatchedCycleId(closed.getCycleId());
+                so.setOrigin("WEB_APP");
+
+                salesOrderRepo.save(so);
+            } catch (Exception e) {
+                log.warn("Không thể lưu SalesOrder từ submitSale: {}", e.getMessage());
+            }
         }
         
         CommandLedger cmd = CommandLedger.builder()

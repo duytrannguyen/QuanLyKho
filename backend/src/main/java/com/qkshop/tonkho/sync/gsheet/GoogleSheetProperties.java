@@ -58,6 +58,20 @@ public class GoogleSheetProperties {
         private String note = "ghi chú";
         private String serial = "Serial";
         private String salesperson = "nhân viên bán";
+        private String customerId = "customer_ID";
+        private String leadId = "lead_ID";
+        private String customerType = "phân loại khách";
+        private String firstSource = "nguồn đầu tiên biết đến";
+        private String secondSource = "nguồn thứ 2 tham khảo";
+        private String lastSource = "nguồn chốt cuối cùng";
+        private String isStudent = "sinh viên?";
+        private String brand = "hãng";
+        private String series = "series";
+        private String segment = "phân khúc";
+        private String modelName = "dòng máy";
+        private String messageSyncStatus = "trạng thái khớp tin nhắn";
+        private String dataQualityStatus = "trạng thái chất lượng dữ liệu";
+        private String importDate = "ngày nạp";
     }
 
     /** Tên sheet đã được bọc nháy đơn, dùng trong A1 notation (sheet có dấu cách / tiếng Việt). */

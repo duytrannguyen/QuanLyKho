@@ -1,0 +1,584 @@
+/* ==========================================================================
+   CSS CHO BÁO CÁO DOANH SỐ BÁN HÀNG QKSHOP (EXECUTIVE SALES DASHBOARD)
+   ========================================================================== */
+
+:root {
+  --primary-rgb: 37, 99, 235;
+  --primary-blue: #2563eb;
+  --primary-hover: #1d4ed8;
+  --navy-dark: #0f172a;
+  --slate-subtle: #64748b;
+  --bg-dashboard: #f8fafc;
+  --card-border: #e2e8f0;
+  --card-radius: 16px;
+  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+  --card-hover-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+}
+
+.sales-dashboard-wrapper {
+  padding: 1.75rem 2rem;
+  background-color: var(--bg-dashboard);
+  min-height: calc(100vh - 60px);
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ==================== 1. HEADER & CONTROL TOOLBAR ==================== */
+.dashboard-topbar {
+  background: #ffffff;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--navy-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-subtitle {
+  font-size: 0.875rem;
+  color: var(--slate-subtle);
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.period-badge {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Filter Pills Bar */
+.filter-pills-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.pills-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  background: #f1f5f9;
+  padding: 0.3rem;
+  border-radius: 12px;
+}
+
+.pill-item {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pill-item:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.pill-item.active {
+  background: #ffffff;
+  color: var(--primary-blue);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}
+
+/* Custom Date Box */
+.custom-date-box {
+  background: #f8fafc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+/* ==================== 2. CORE FINANCIAL HERO METRICS ==================== */
+.hero-card {
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 1.35rem 1.4rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.hero-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--card-hover-shadow);
+}
+
+/* Thẻ Hero Doanh Thu Chính (Accent Gradient) */
+.hero-card.primary-accent {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.35);
+}
+
+.hero-card.primary-accent .hero-card-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero-card.primary-accent .hero-card-value {
+  color: #ffffff;
+}
+
+.hero-card.primary-accent .hero-card-subtext {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.hero-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.hero-card-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-subtle);
+}
+
+.hero-icon-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: var(--primary-blue);
+}
+
+.hero-card.primary-accent .hero-icon-circle {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+}
+
+.hero-card-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--navy-dark);
+  line-height: 1.15;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+}
+
+.hero-card.primary-accent .hero-card-value {
+  font-size: 2.15rem;
+}
+
+.hero-card-subtext {
+  font-size: 0.8rem;
+  color: var(--slate-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Trend Badges */
+.badge-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+}
+
+.badge-trend.up {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badge-trend.down {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-trend.flat {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.hero-card.primary-accent .badge-trend.up {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.hero-card.primary-accent .badge-trend.down {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fee2e2;
+}
+
+/* ==================== 3. CHANNELS INTELLIGENCE STRIP ==================== */
+.channels-strip {
+  margin-bottom: 1.75rem;
+}
+
+.channel-summary-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 1rem 1.15rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.channel-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-hover-shadow);
+}
+
+.channel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.channel-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.channel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.channel-pct-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+}
+
+.channel-amount {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--navy-dark);
+  margin-bottom: 0.4rem;
+}
+
+.channel-progress {
+  height: 5px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  overflow: hidden;
+  margin-bottom: 0.35rem;
+}
+
+.channel-progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s ease;
+}
+
+.channel-orders-text {
+  font-size: 0.75rem;
+  color: var(--slate-subtle);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ==================== 4. EXECUTIVE WORKSPACE TABS ==================== */
+.workspace-tabs-nav {
+  display: flex;
+  gap: 0.75rem;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0;
+}
+
+.workspace-tab-btn {
+  background: none;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.workspace-tab-btn:hover {
+  color: var(--primary-blue);
+}
+
+.workspace-tab-btn.active {
+  color: var(--primary-blue);
+  border-bottom-color: var(--primary-blue);
+}
+
+/* ==================== 5. CHART & CONTENT CARDS ==================== */
+.chart-card-pro {
+  background: #ffffff;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 1.4rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card-pro:hover {
+  box-shadow: var(--card-hover-shadow);
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.chart-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--navy-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chart-toggle-group {
+  display: inline-flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 0.2rem;
+}
+
+.chart-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chart-toggle-btn.active {
+  background: #ffffff;
+  color: var(--primary-blue);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Custom Tooltip */
+.custom-tooltip-pro {
+  background: #0f172a;
+  color: #ffffff;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  font-size: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 170px;
+}
+
+.custom-tooltip-pro .tooltip-label {
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.25rem;
+}
+
+.custom-tooltip-pro .tooltip-value {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+
+/* Leaderboard Table */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 0.4rem;
+}
+
+.leaderboard-table th {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 0.75rem;
+  border: none;
+}
+
+.leaderboard-table td {
+  padding: 0.65rem 0.75rem;
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.86rem;
+}
+
+.leaderboard-table tr:hover td {
+  background: #f1f5f9;
+}
+
+.leaderboard-table tr td:first-child {
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+  border-left: 1px solid #f1f5f9;
+}
+
+.leaderboard-table tr td:last-child {
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  border-right: 1px solid #f1f5f9;
+}
+
+/* Medal Badges */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+
+.rank-1 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+}
+
+.rank-2 {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  color: #ffffff;
+}
+
+.rank-3 {
+  background: linear-gradient(135deg, #b45309, #78350f);
+  color: #ffffff;
+}
+
+.rank-other {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+/* Model Name & Tag */
+.model-text-main {
+  font-weight: 700;
+  color: var(--navy-dark);
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Custom Donut Legend */
+.donut-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #334155;
+  background: #f8fafc;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.donut-legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Spin Animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 991px) {
+  .sales-dashboard-wrapper {
+    padding: 1rem;
+  }
+  .hero-card-value {
+    font-size: 1.5rem;
+  }
+}
