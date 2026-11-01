@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Search, RefreshCw, AlertCircle, PhoneOff, FileText, ArrowRight, X, Filter } from 'lucide-react';
+import { 
+  Users, Search, RefreshCw, AlertCircle, PhoneOff, FileText, 
+  ArrowRight, X, Filter, Phone, MessageSquare, PhoneCall, 
+  Edit3, ShieldAlert, Wrench, Calendar, CheckCircle2, Download 
+} from 'lucide-react';
 import { crmApi } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import HoaDonKhachHang from './HoaDonKhachHang';
 import DonChuaXacDinh from './DonChuaXacDinh';
+import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
 
 const SORT_OPTIONS = [
   { value: 'lastOrderAt:desc', label: 'Mua gần đây nhất' },
@@ -24,9 +29,11 @@ export default function TrangKhachHang() {
 
   const [tab, setTab] = useState('customers'); // 'customers' | 'unlinked' | 'customer-detail'
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
 
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [filterType, setFilterType] = useState(''); // '' (ALL) | 'WARRANTY_EXPIRING' | 'MAINTENANCE_DUE'
   const [sort, setSort] = useState(SORT_OPTIONS[0].value);
   const [page, setPage] = useState(0);
   const [customers, setCustomers] = useState([]);
@@ -34,9 +41,42 @@ export default function TrangKhachHang() {
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [summary, setSummary] = useState({ totalCustomers: 0, unlinkedOrders: 0 });
+  const [summary, setSummary] = useState({ 
+    totalCustomers: 0, 
+    unlinkedOrders: 0,
+    warrantyExpiringCount: 0,
+    maintenanceDueCount: 0 
+  });
   const [rebuilding, setRebuilding] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const requestSeq = useRef(0);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const [sortBy, sortDir] = sort.split(':');
+      const res = await crmApi.exportExcel({
+        keyword: debouncedKeyword,
+        filterType,
+        sortBy,
+        direction: sortDir,
+      });
+      const url = window.URL.createObjectURL(new Blob([res]));
+      const link = document.createElement('a');
+      link.href = url;
+      const filterSuffix = filterType === 'WARRANTY_EXPIRING' ? '_SapHetBaoHanh' : (filterType === 'MAINTENANCE_DUE' ? '_DenHanBaoDuong' : '');
+      link.setAttribute('download', `Danh_Sach_Khach_Hang_CRM${filterSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast?.showSuccess?.('Xuất file Excel danh sách khách hàng thành công!');
+    } catch (err) {
+      console.error('Lỗi xuất Excel:', err);
+      toast?.showError?.('Không thể xuất file Excel. Vui lòng thử lại.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Debounce ô tìm kiếm để tránh gọi API mỗi lần gõ phím
   useEffect(() => {
@@ -63,9 +103,14 @@ export default function TrangKhachHang() {
       setError('');
       const [sortBy, direction] = sort.split(':');
       const res = await crmApi.searchCustomers({
-        keyword: debouncedKeyword, sortBy, direction, page, size: PAGE_SIZE,
+        keyword: debouncedKeyword, 
+        filterType,
+        sortBy, 
+        direction, 
+        page, 
+        size: PAGE_SIZE,
       });
-      if (seq !== requestSeq.current) return; // bỏ kết quả của request cũ
+      if (seq !== requestSeq.current) return;
       if (!res.success) {
         setError(res.userMessage || 'Không thể tải danh sách khách hàng.');
         return;
@@ -79,7 +124,7 @@ export default function TrangKhachHang() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [debouncedKeyword, sort, page]);
+  }, [debouncedKeyword, filterType, sort, page]);
 
   useEffect(() => {
     loadCustomers();
@@ -120,8 +165,17 @@ export default function TrangKhachHang() {
     }
   };
 
+  const handleCustomerUpdated = (updated) => {
+    setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    if (selectedCustomer?.id === updated.id) {
+      setSelectedCustomer(updated);
+    }
+    loadSummary();
+  };
+
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
+      
       {/* --- HEADER SECTION --- */}
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
@@ -129,10 +183,10 @@ export default function TrangKhachHang() {
             <div className="bg-primary text-white p-2 rounded-3 shadow-sm d-flex align-items-center justify-content-center">
               <Users size={20} />
             </div>
-            Quản trị Khách hàng (CRM)
+            Quản trị Khách hàng & Hậu mãi (CRM)
           </h1>
           <p className="text-secondary mb-0 mt-2">
-            Tra cứu khách đã giao dịch, phân tích chi tiêu và quản lý toàn bộ hóa đơn.
+            Tra cứu lịch sử mua hàng, chăm sóc khách định kỳ và quản lý toàn bộ hóa đơn.
           </p>
         </div>
         {canManage && (
@@ -148,8 +202,94 @@ export default function TrangKhachHang() {
         )}
       </div>
 
+      {/* --- QUICK STATS / FILTER WIDGETS --- */}
+      <div className="row g-3 mb-4">
+        
+        {/* Widget 1: Tất cả khách */}
+        <div className="col-12 col-sm-6 col-xl-3">
+          <div 
+            role="button"
+            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === '' ? 'border-primary border-2 bg-primary bg-opacity-10' : 'bg-white hover-card'}`}
+            onClick={() => { setFilterType(''); setTab('customers'); setPage(0); }}
+          >
+            <div className="card-body p-3 d-flex align-items-center justify-content-between">
+              <div>
+                <div className="text-muted small fw-medium">Tất cả khách hàng</div>
+                <div className="fs-4 fw-bolder text-dark mt-1">{summary.totalCustomers}</div>
+                <div className="text-primary small" style={{ fontSize: '0.75rem' }}>Bấm để xem tất cả</div>
+              </div>
+              <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-circle">
+                <Users size={22} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Widget 2: Sắp hết bảo hành trong 30 ngày */}
+        <div className="col-12 col-sm-6 col-xl-3">
+          <div 
+            role="button"
+            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === 'WARRANTY_EXPIRING' ? 'border-warning border-2 bg-warning bg-opacity-10' : 'bg-white hover-card'}`}
+            onClick={() => { setFilterType('WARRANTY_EXPIRING'); setTab('customers'); setPage(0); }}
+          >
+            <div className="card-body p-3 d-flex align-items-center justify-content-between">
+              <div>
+                <div className="text-warning-emphasis small fw-medium">Sắp hết bảo hành</div>
+                <div className="fs-4 fw-bolder text-warning-emphasis mt-1">{summary.warrantyExpiringCount || 0}</div>
+                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Trong vòng 30 ngày tới</div>
+              </div>
+              <div className="bg-warning bg-opacity-10 text-warning-emphasis p-3 rounded-circle">
+                <ShieldAlert size={22} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Widget 3: Đến hạn bảo dưỡng máy */}
+        <div className="col-12 col-sm-6 col-xl-3">
+          <div 
+            role="button"
+            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === 'MAINTENANCE_DUE' ? 'border-info border-2 bg-info bg-opacity-10' : 'bg-white hover-card'}`}
+            onClick={() => { setFilterType('MAINTENANCE_DUE'); setTab('customers'); setPage(0); }}
+          >
+            <div className="card-body p-3 d-flex align-items-center justify-content-between">
+              <div>
+                <div className="text-info small fw-medium">Đến hạn bảo dưỡng máy</div>
+                <div className="fs-4 fw-bolder text-info mt-1">{summary.maintenanceDueCount || 0}</div>
+                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Văn phòng: 12th • Khác: 6th</div>
+              </div>
+              <div className="bg-info bg-opacity-10 text-info p-3 rounded-circle">
+                <Wrench size={22} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Widget 4: Đơn chưa xác định khách */}
+        <div className="col-12 col-sm-6 col-xl-3">
+          <div 
+            role="button"
+            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'unlinked' ? 'border-danger border-2 bg-danger bg-opacity-10' : 'bg-white hover-card'}`}
+            onClick={() => setTab('unlinked')}
+          >
+            <div className="card-body p-3 d-flex align-items-center justify-content-between">
+              <div>
+                <div className="text-danger small fw-medium">Đơn chưa gán khách</div>
+                <div className="fs-4 fw-bolder text-danger mt-1">{summary.unlinkedOrders || 0}</div>
+                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Thiếu hoặc sai số điện thoại</div>
+              </div>
+              <div className="bg-danger bg-opacity-10 text-danger p-3 rounded-circle">
+                <PhoneOff size={22} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       {/* --- MAIN CARD --- */}
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+        
         {/* Tab Navigation */}
         <div className="card-header bg-white border-bottom-0 pt-3 pb-0 px-4">
           <ul className="nav nav-tabs border-bottom fw-medium">
@@ -206,7 +346,11 @@ export default function TrangKhachHang() {
         <div className="card-body p-0">
           {tab === 'customer-detail' && selectedCustomer ? (
             <div className="p-4">
-              <HoaDonKhachHang customer={selectedCustomer} onBack={() => setTab('customers')} />
+              <HoaDonKhachHang 
+                customer={selectedCustomer} 
+                onBack={() => setTab('customers')} 
+                onCustomerUpdated={handleCustomerUpdated}
+              />
             </div>
           ) : tab === 'unlinked' ? (
             <div className="p-4">
@@ -215,10 +359,12 @@ export default function TrangKhachHang() {
           ) : (
             <div className="d-flex flex-column h-100">
               
-              {/* Toolbar: Search & Sort */}
+              {/* Toolbar: Search, Filter Buttons & Sort */}
               <div className="bg-white p-4 border-bottom">
                 <div className="row g-3 align-items-center justify-content-between">
-                  <div className="col-12 col-md-6 col-lg-5">
+                  
+                  {/* Ô tìm kiếm */}
+                  <div className="col-12 col-md-5">
                     <div className="input-group input-group-lg shadow-sm">
                       <span className="input-group-text bg-white border-end-0 text-secondary">
                         <Search size={20} />
@@ -232,13 +378,50 @@ export default function TrangKhachHang() {
                       />
                     </div>
                   </div>
+
+                  {/* Nhóm nút lọc nhanh (Bộ lọc CSKH) */}
+                  <div className="col-12 col-md-auto d-flex flex-wrap align-items-center gap-2">
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all ${filterType === '' ? 'btn-primary shadow-sm' : 'btn-light border text-secondary'}`}
+                      onClick={() => { setFilterType(''); setPage(0); }}
+                    >
+                      Tất cả
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all d-flex align-items-center gap-1 ${filterType === 'WARRANTY_EXPIRING' ? 'btn-warning text-dark shadow-sm' : 'btn-light border text-secondary'}`}
+                      onClick={() => { setFilterType('WARRANTY_EXPIRING'); setPage(0); }}
+                    >
+                      <ShieldAlert size={14} /> Sắp hết bảo hành
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all d-flex align-items-center gap-1 ${filterType === 'MAINTENANCE_DUE' ? 'btn-info text-dark shadow-sm' : 'btn-light border text-secondary'}`}
+                      onClick={() => { setFilterType('MAINTENANCE_DUE'); setPage(0); }}
+                    >
+                      <Wrench size={14} /> Cần bảo dưỡng
+                    </button>
+
+                    {/* Nút Xuất Excel */}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-success rounded-pill px-3 py-2 fw-medium d-inline-flex align-items-center gap-1 shadow-sm ms-lg-1"
+                      onClick={handleExportExcel}
+                      disabled={exporting}
+                      title="Xuất danh sách khách hàng ra file Excel theo bộ lọc"
+                    >
+                      <Download size={14} />
+                      <span>{exporting ? 'Đang xuất...' : 'Xuất Excel'}</span>
+                    </button>
+                  </div>
                   
+                  {/* Dropdown Sắp xếp */}
                   <div className="col-12 col-md-auto d-flex align-items-center gap-2">
-                    <Filter size={18} className="text-secondary d-none d-md-block" />
-                    <span className="text-secondary fw-medium d-none d-md-block text-nowrap">Sắp xếp:</span>
+                    <Filter size={18} className="text-secondary d-none d-lg-block" />
                     <select
-                      className="form-select form-select-lg shadow-sm"
-                      style={{ minWidth: '220px' }}
+                      className="form-select shadow-sm"
+                      style={{ minWidth: '190px' }}
                       value={sort}
                       onChange={(e) => { setSort(e.target.value); setPage(0); }}
                     >
@@ -247,6 +430,7 @@ export default function TrangKhachHang() {
                       ))}
                     </select>
                   </div>
+
                 </div>
 
                 {error && (
@@ -265,71 +449,122 @@ export default function TrangKhachHang() {
                       <th className="py-3 text-secondary fw-semibold">Khách hàng</th>
                       <th className="py-3 text-secondary fw-semibold">Số điện thoại</th>
                       <th className="py-3 text-secondary fw-semibold text-center">Phân loại</th>
-                      <th className="py-3 text-secondary fw-semibold text-center">Tổng giao dịch</th>
+                      <th className="py-3 text-secondary fw-semibold text-center">Tổng đơn</th>
                       <th className="py-3 text-secondary fw-semibold text-end">Tổng chi tiêu</th>
-                      <th className="py-3 text-secondary fw-semibold text-end">Mua gần nhất</th>
-                      <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '120px' }}>Thao tác</th>
+                      <th className="py-3 text-secondary fw-semibold text-end">Giao dịch gần nhất</th>
+                      <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '160px' }}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="border-top-0">
-                    {customers.map((c, index) => (
-                      <tr
-                        key={c.id}
-                        role="button"
-                        className={`border-bottom ${selectedCustomer?.id === c.id ? 'bg-primary bg-opacity-10' : ''}`}
-                        onClick={() => handleSelectCustomer(c)}
-                      >
-                        {/* CỘT STT MỚI THÊM */}
-                        <td className="text-center text-secondary fw-medium">
-                          {page * PAGE_SIZE + index + 1}
-                        </td>
-                        
-                        <td>
-                          <div className="fw-bold text-dark">
-                            {c.fullName || <span className="text-muted fw-normal fst-italic">(Chưa cập nhật)</span>}
-                          </div>
-                        </td>
-                        
-                        <td>
-                          <span className="badge bg-light text-dark border font-monospace px-2 py-1 fs-6">
-                            {c.phone}
-                          </span>
-                        </td>
-                        
-                        <td className="text-center">
-                          {c.customerType ? (
-                            <span className="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1">
-                              {c.customerType}
+                    {customers.map((c, index) => {
+                      const cleanPhone = (c.phone || '').replace(/\D/g, '');
+                      return (
+                        <tr
+                          key={c.id}
+                          role="button"
+                          className={`border-bottom cursor-pointer hover-table-row ${selectedCustomer?.id === c.id ? 'bg-primary bg-opacity-10' : ''}`}
+                          onClick={() => handleSelectCustomer(c)}
+                        >
+                          {/* STT */}
+                          <td className="text-center text-secondary fw-medium">
+                            {page * PAGE_SIZE + index + 1}
+                          </td>
+                          
+                          {/* Họ tên */}
+                          <td>
+                            <div className="fw-bold text-dark">
+                              {c.fullName || <span className="text-muted fw-normal fst-italic">(Chưa cập nhật)</span>}
+                            </div>
+                            {c.address && (
+                              <div className="text-muted small text-truncate" style={{ maxWidth: '240px' }} title={c.address}>
+                                {c.address}
+                              </div>
+                            )}
+                          </td>
+                          
+                          {/* SĐT + Quick Action: Zalo + Call */}
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="badge bg-light text-dark border font-monospace px-2 py-1 fs-6">
+                                {c.phone}
+                              </span>
+                              {cleanPhone && (
+                                <div className="d-flex align-items-center gap-1">
+                                  {/* Mở Zalo */}
+                                  <a
+                                    href={`https://zalo.me/${cleanPhone}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-sm btn-light border text-primary p-1 rounded-circle hover-primary transition-all"
+                                    title="Mở chat Zalo với khách"
+                                  >
+                                    <MessageSquare size={14} />
+                                  </a>
+                                  {/* Gọi điện */}
+                                  <a
+                                    href={`tel:${cleanPhone}`}
+                                    className="btn btn-sm btn-light border text-success p-1 rounded-circle hover-bg-light transition-all"
+                                    title="Gọi điện cho khách"
+                                  >
+                                    <PhoneCall size={14} />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          
+                          {/* Phân loại */}
+                          <td className="text-center">
+                            {c.customerType ? (
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1">
+                                {c.customerType}
+                              </span>
+                            ) : <span className="text-muted">—</span>}
+                          </td>
+                          
+                          {/* Tổng đơn */}
+                          <td className="text-center">
+                            <span className="badge rounded-circle bg-primary bg-opacity-10 text-primary p-2" style={{ width: '32px', height: '32px' }}>
+                              {c.totalOrders}
                             </span>
-                          ) : <span className="text-muted">—</span>}
-                        </td>
-                        
-                        <td className="text-center">
-                          <span className="badge rounded-circle bg-primary bg-opacity-10 text-primary p-2" style={{ width: '32px', height: '32px' }}>
-                            {c.totalOrders}
-                          </span>
-                        </td>
-                        
-                        <td className="text-end fw-bolder text-success">
-                          {dinhDangTien(c.totalSpent || 0)} đ
-                        </td>
-                        
-                        <td className="text-end text-secondary small">
-                          {formatDate(c.lastOrderAt)}
-                        </td>
-                        
-                        <td className="text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-light text-primary border d-inline-flex align-items-center justify-content-center gap-1 hover-primary"
-                            onClick={() => handleSelectCustomer(c)}
-                          >
-                            <FileText size={16} />
-                            <span className="d-none d-xl-inline">Xem</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          
+                          {/* Tổng chi tiêu */}
+                          <td className="text-end fw-bolder text-success">
+                            {dinhDangTien(c.totalSpent || 0)} đ
+                          </td>
+                          
+                          {/* Gần nhất */}
+                          <td className="text-end text-secondary small">
+                            {formatDate(c.lastOrderAt)}
+                          </td>
+                          
+                          {/* Thao tác */}
+                          <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="d-flex align-items-center justify-content-center gap-1">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary rounded-pill d-inline-flex align-items-center justify-content-center gap-1 px-2 py-1"
+                                onClick={() => handleSelectCustomer(c)}
+                                title="Xem hóa đơn của khách"
+                              >
+                                <FileText size={14} />
+                                <span>Hóa đơn</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-light border text-secondary rounded-pill d-inline-flex align-items-center justify-content-center gap-1 px-2 py-1 hover-primary"
+                                onClick={() => setEditingCustomer(c)}
+                                title="Chỉnh sửa hồ sơ khách"
+                              >
+                                <Edit3 size={14} />
+                                <span>Sửa</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
                     {/* Empty State */}
                     {!loading && customers.length === 0 && !error && (
@@ -338,7 +573,7 @@ export default function TrangKhachHang() {
                           <div className="d-flex flex-column align-items-center justify-content-center text-muted">
                             <Search size={48} className="mb-3 opacity-25" />
                             <h5 className="fw-normal">
-                              {debouncedKeyword ? 'Không tìm thấy khách hàng nào.' : 'Chưa có dữ liệu khách hàng.'}
+                              {debouncedKeyword ? 'Không tìm thấy khách hàng nào.' : 'Chưa có dữ liệu khách hàng theo bộ lọc này.'}
                             </h5>
                           </div>
                         </td>
@@ -393,10 +628,21 @@ export default function TrangKhachHang() {
           )}
         </div>
       </div>
+
+      {/* Modal Chỉnh Sửa Hồ Sơ Khách Hàng */}
+      {editingCustomer && (
+        <ModalChinhSuaKhachHang 
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onUpdated={handleCustomerUpdated}
+        />
+      )}
       
-      {/* Thêm một chút CSS inline cho các hover effect tùy chỉnh (hoặc bạn có thể cho vào file CSS riêng) */}
       <style dangerouslySetInnerHTML={{__html: `
+        .hover-card:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.08)!important; }
         .hover-bg-light:hover { background-color: #f8f9fa !important; }
+        .hover-table-row:hover { background-color: #f8fafc !important; }
+        .cursor-pointer { cursor: pointer; }
         .hover-primary:hover { background-color: #0d6efd !important; color: white !important; border-color: #0d6efd !important; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }

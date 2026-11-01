@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, RotateCcw, Monitor, FileText, CheckCircle, AlertTriangle, PackagePlus, User, Gift, Trash2, Plus, Minus, Info, Settings, RefreshCw, X, DollarSign, ShieldCheck, Cpu, HardDrive } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { apiBanHang, apiPhuKien, apiLinhKien } from '../../api';
+import { apiBanHang, apiPhuKien, apiLinhKien, crmApi } from '../../api';
 import { formatCurrency, parseCurrency, formatDate, getTodayDateString, tinhNgayHetHanBaoHanh } from '../../utils/dinh_dang';
 
 // ==========================================
@@ -312,6 +312,41 @@ export default function TrangBanHang() {
   const [upgradeSsdSku, setUpgradeSsdSku] = useState('');
   const [upgradeSsdPrice, setUpgradeSsdPrice] = useState('');
 
+  // State: Khách hàng nhận diện từ CRM
+  const [matchedCrmCustomer, setMatchedCrmCustomer] = useState(null);
+
+  // Tự động nhận diện khách hàng cũ khi nhập SĐT tại quầy
+  useEffect(() => {
+    const rawPhone = (formData.customerPhone || '').replace(/\D/g, '');
+    if (rawPhone.length >= 10) {
+      const timer = setTimeout(() => {
+        crmApi.searchCustomers({ keyword: rawPhone, size: 1 })
+          .then(res => {
+            if (res?.success && res?.data?.items?.length > 0) {
+              const found = res.data.items[0];
+              setMatchedCrmCustomer(found);
+              setFormData(prev => {
+                const updates = {};
+                if (!prev.customer.trim() && found.fullName) {
+                  updates.customer = found.fullName;
+                }
+                if (prev.customerType === 'Khách mua lần đầu') {
+                  updates.customerType = 'Khách cũ quay lại';
+                }
+                return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
+              });
+            } else {
+              setMatchedCrmCustomer(null);
+            }
+          })
+          .catch(() => setMatchedCrmCustomer(null));
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      setMatchedCrmCustomer(null);
+    }
+  }, [formData.customerPhone]);
+
   // Computed Values (Tính toán)
   const isReady = scannedMachine?.state === 'READY';
   const giftAccessories = selectedAccessories.filter(a => a.isGift);
@@ -556,6 +591,7 @@ export default function TrangBanHang() {
     setUpgradeSsdPrice('');
     setSelectedAccessories([]);
     setDefaultGiftDeduction(0);
+    setMatchedCrmCustomer(null);
     setFormData({
       saleDate: getTodayDateString(), salesperson: '', discount: '', finalPrice: '', saleRam: '', saleSsd: '',
       customer: '', customerPhone: '', warrantyOption: 'BH phần cứng 6 tháng', warrantyExpiry: '', customWarranty: '', saleNote: '',
@@ -719,6 +755,23 @@ export default function TrangBanHang() {
                   <div className="col-md-6">
                     <label className="form-label text-secondary fw-semibold small mb-1">Số điện thoại <span className="text-danger">*</span></label>
                     <input className="form-control form-control-lg pos-input fs-6" value={formData.customerPhone} onChange={e => handleFormChange('customerPhone', e.target.value)} placeholder="Nhập SĐT..." />
+                    {matchedCrmCustomer && (
+                      <div className="mt-2 p-2 px-3 bg-success bg-opacity-10 rounded-3 border border-success-subtle small text-success d-flex align-items-center justify-content-between">
+                        <span>
+                          <strong>Khách cũ:</strong> {matchedCrmCustomer.fullName} ({matchedCrmCustomer.totalOrders} đơn cũ)
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-link p-0 text-success fw-bold text-decoration-none"
+                          onClick={() => {
+                            handleFormChange('customer', matchedCrmCustomer.fullName);
+                            handleFormChange('customerType', 'Khách cũ quay lại');
+                          }}
+                        >
+                          Áp dụng thông tin
+                        </button>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Dòng 2: Nguồn & Loại khách */}

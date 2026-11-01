@@ -42,6 +42,22 @@ public class CrmCustomer {
     @Column(name = "customer_type", length = 100)
     private String customerType;
 
+    /** Địa chỉ khách hàng. */
+    @Column(name = "address", length = 255)
+    private String address;
+
+    /** Ngày sinh của khách. */
+    @Column(name = "birth_date")
+    private java.time.LocalDate birthDate;
+
+    /** Email liên hệ. */
+    @Column(name = "email", length = 100)
+    private String email;
+
+    /** Ghi chú sở thích, nhu cầu đặc thù của khách. */
+    @Column(name = "preference_note", columnDefinition = "TEXT")
+    private String preferenceNote;
+
     /** Số giao dịch hợp lệ (không tính đơn Hủy / Trả hàng). */
     @Column(name = "total_orders", nullable = false)
     @Builder.Default

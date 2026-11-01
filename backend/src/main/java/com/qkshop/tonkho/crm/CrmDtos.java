@@ -19,6 +19,10 @@ public final class CrmDtos {
             String phone,
             String fullName,
             String customerType,
+            String address,
+            LocalDate birthDate,
+            String email,
+            String preferenceNote,
             int totalOrders,
             BigDecimal totalSpent,
             LocalDateTime firstOrderAt,
@@ -30,6 +34,10 @@ public final class CrmDtos {
                     c.getPhoneNormalized(),
                     c.getFullName(),
                     c.getCustomerType(),
+                    c.getAddress(),
+                    c.getBirthDate(),
+                    c.getEmail(),
+                    c.getPreferenceNote(),
                     c.getTotalOrders() == null ? 0 : c.getTotalOrders(),
                     c.getTotalSpent() == null ? BigDecimal.ZERO : c.getTotalSpent(),
                     c.getFirstOrderAt(),
@@ -119,7 +127,11 @@ public final class CrmDtos {
             int size) {
     }
 
-    public record CrmSummary(long totalCustomers, long unlinkedOrders) {
+    public record CrmSummary(
+            long totalCustomers, 
+            long unlinkedOrders,
+            long warrantyExpiringCount,
+            long maintenanceDueCount) {
     }
 
     public record AssignOrderRequest(
@@ -128,5 +140,43 @@ public final class CrmDtos {
             @NotBlank(message = "Vui lòng nhập số điện thoại khách hàng")
             String phone,
             String customerName) {
+    }
+
+    public record UpdateCustomerRequest(
+            @NotBlank(message = "Tên khách hàng không được để trống")
+            String fullName,
+            String address,
+            LocalDate birthDate,
+            String email,
+            String preferenceNote) {
+    }
+
+    public record CareNoteItem(
+            Long id,
+            Long customerId,
+            String interactionType,
+            String content,
+            LocalDate followUpDate,
+            String createdBy,
+            LocalDateTime createdAt) {
+
+        public static CareNoteItem from(CrmCareNote n) {
+            return new CareNoteItem(
+                    n.getId(),
+                    n.getCustomer() != null ? n.getCustomer().getId() : null,
+                    n.getInteractionType(),
+                    n.getContent(),
+                    n.getFollowUpDate(),
+                    n.getCreatedBy(),
+                    n.getCreatedAt());
+        }
+    }
+
+    public record CreateCareNoteRequest(
+            @NotBlank(message = "Loại tương tác không được để trống")
+            String interactionType,
+            @NotBlank(message = "Nội dung ghi chú không được để trống")
+            String content,
+            LocalDate followUpDate) {
     }
 }

@@ -23,16 +23,27 @@ public class CrmQueryService {
     private final CrmCustomerRepository customerRepo;
     private final CrmOrderRepository orderRepo;
     private final CrmCustomerLinkService linkService;
+    private final CrmCareNoteRepository careNoteRepo;
 
     @Transactional(readOnly = true)
     public PageResult<CustomerItem> searchCustomers(String keyword, String sortBy, String direction, int page, int size) {
+        return searchCustomers(keyword, "", sortBy, direction, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<CustomerItem> searchCustomers(String keyword, String filterType, String sortBy, String direction, int page, int size) {
         String kw = normalizeKeyword(keyword);
+        String ft = filterType == null ? "" : filterType.trim().toUpperCase(Locale.ROOT);
         String sortProp = SORTABLE.contains(sortBy) ? sortBy : "lastOrderAt";
         Sort.Direction dir = "asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
         PageRequest pageable = PageRequest.of(Math.max(page, 0), clampSize(size),
                 Sort.by(dir, sortProp).and(Sort.by(Sort.Direction.DESC, "id")));
 
-        Page<CrmCustomer> result = customerRepo.search(kw, pageable);
+        java.time.LocalDate expiringBefore = java.time.LocalDate.now().plusDays(30);
+        java.time.LocalDateTime sixMonthsAgo = java.time.LocalDateTime.now().minusMonths(6);
+        java.time.LocalDateTime twelveMonthsAgo = java.time.LocalDateTime.now().minusMonths(12);
+
+        Page<CrmCustomer> result = customerRepo.searchWithFilter(kw, ft, expiringBefore, sixMonthsAgo, twelveMonthsAgo, pageable);
         return new PageResult<>(
                 result.getContent().stream().map(CustomerItem::from).toList(),
                 result.getTotalElements(), result.getTotalPages(), result.getNumber(), result.getSize());
@@ -181,7 +192,34 @@ public class CrmQueryService {
 
     @Transactional(readOnly = true)
     public CrmSummary getSummary() {
-        return new CrmSummary(customerRepo.count(), orderRepo.countByCrmCustomerIdIsNull());
+        java.time.LocalDate expiringBefore = java.time.LocalDate.now().plusDays(30);
+        java.time.LocalDateTime sixMonthsAgo = java.time.LocalDateTime.now().minusMonths(6);
+        java.time.LocalDateTime twelveMonthsAgo = java.time.LocalDateTime.now().minusMonths(12);
+        long total = customerRepo.count();
+        long unlinked = orderRepo.countByCrmCustomerIdIsNull();
+        long expiring = customerRepo.countWarrantyExpiring(expiringBefore);
+        long maintenance = customerRepo.countMaintenanceDue(sixMonthsAgo, twelveMonthsAgo);
+        return new CrmSummary(total, unlinked, expiring, maintenance);
+    }
+
+    /**
+     * Cập nhật thông tin hồ sơ khách hàng.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CustomerItem updateCustomer(Long id, UpdateCustomerRequest req) {
+        CrmCustomer c = customerRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khách hàng với mã " + id));
+
+        if (req.fullName() != null && !req.fullName().isBlank()) {
+            c.setFullName(req.fullName().trim());
+        }
+        c.setAddress(req.address() != null ? req.address().trim() : null);
+        c.setBirthDate(req.birthDate());
+        c.setEmail(req.email() != null ? req.email().trim() : null);
+        c.setPreferenceNote(req.preferenceNote() != null ? req.preferenceNote().trim() : null);
+
+        customerRepo.save(c);
+        return CustomerItem.from(c);
     }
 
     /**
@@ -203,6 +241,102 @@ public class CrmQueryService {
             order.setCustomerName(name);
         }
         orderRepo.save(order);
+    }
+
+    /**
+     * Lấy danh sách lịch sử tương tác chăm sóc khách hàng.
+     */
+    @Transactional(readOnly = true)
+    public List<CareNoteItem> getCareNotes(Long customerId) {
+        if (!customerRepo.existsById(customerId)) {
+            throw new ResourceNotFoundException("Không tìm thấy khách hàng với mã " + customerId);
+        }
+        return careNoteRepo.findByCustomer_IdOrderByCreatedAtDesc(customerId)
+                .stream()
+                .map(CareNoteItem::from)
+                .toList();
+    }
+
+    /**
+     * Thêm một ghi chú chăm sóc khách hàng mới.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CareNoteItem addCareNote(Long customerId, CreateCareNoteRequest req, String username) {
+        CrmCustomer c = customerRepo.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khách hàng với mã " + customerId));
+
+        CrmCareNote note = CrmCareNote.builder()
+                .customer(c)
+                .interactionType(req.interactionType().trim())
+                .content(req.content().trim())
+                .followUpDate(req.followUpDate())
+                .createdBy(username != null && !username.isBlank() ? username : "Hệ thống")
+                .build();
+
+        CrmCareNote saved = careNoteRepo.save(note);
+        return CareNoteItem.from(saved);
+    }
+
+    /**
+     * Xuất danh sách khách hàng ra file Excel theo bộ lọc hiện tại.
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.core.io.ByteArrayResource generateCustomersExcel(String keyword, String filterType, String sortBy, String direction) {
+        PageResult<CustomerItem> page = searchCustomers(keyword, filterType, sortBy, direction, 0, 3000);
+        List<CustomerItem> list = page.items();
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("KhachHang_CRM");
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+
+            String[] headers = {
+                    "STT", "Số điện thoại", "Họ tên", "Phân loại", "Địa chỉ",
+                    "Email", "Ngày sinh", "Tổng đơn", "Tổng chi tiêu (VNĐ)",
+                    "Đơn đầu tiên", "Đơn gần nhất", "Ghi chú sở thích / nhu cầu"
+            };
+
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font font = workbook.createFont();
+            font.setBold(true);
+            headerStyle.setFont(font);
+
+            for (int i = 0; i < headers.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            java.time.format.DateTimeFormatter df = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+            int rowIdx = 1;
+            for (CustomerItem c : list) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(rowIdx - 1);
+                row.createCell(1).setCellValue(c.phone() != null ? c.phone() : "");
+                row.createCell(2).setCellValue(c.fullName() != null ? c.fullName() : "");
+                row.createCell(3).setCellValue(c.customerType() != null ? c.customerType() : "");
+                row.createCell(4).setCellValue(c.address() != null ? c.address() : "");
+                row.createCell(5).setCellValue(c.email() != null ? c.email() : "");
+                row.createCell(6).setCellValue(c.birthDate() != null ? c.birthDate().format(df) : "");
+                row.createCell(7).setCellValue(c.totalOrders());
+                row.createCell(8).setCellValue(c.totalSpent() != null ? c.totalSpent().doubleValue() : 0.0);
+                row.createCell(9).setCellValue(c.firstOrderAt() != null ? c.firstOrderAt().format(dtf) : "");
+                row.createCell(10).setCellValue(c.lastOrderAt() != null ? c.lastOrderAt().format(dtf) : "");
+                row.createCell(11).setCellValue(c.preferenceNote() != null ? c.preferenceNote() : "");
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return new org.springframework.core.io.ByteArrayResource(out.toByteArray());
+        } catch (Exception e) {
+            throw new RuntimeException("Lỗi khi xuất danh sách khách hàng ra Excel: " + e.getMessage(), e);
+        }
     }
 
     private static String normalizeKeyword(String keyword) {

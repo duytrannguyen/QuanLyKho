@@ -2,11 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   AlertCircle, Monitor, Headphones, Wrench, ShieldCheck, 
   ArrowLeft, Phone, Calendar, ShoppingBag, 
-  CheckCircle2, FileText, Package, User, Eye
+  CheckCircle2, FileText, Package, User, Eye,
+  MessageSquare, PhoneCall, Edit3, MapPin, Mail,
+  Sparkles, Clock
 } from 'lucide-react';
 import { crmApi } from '../../api';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
+import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
+import ModalTinNhanMau from './ModalTinNhanMau';
+import TabNhatKyChamSoc from './TabNhatKyChamSoc';
 
 const CATEGORY_META = {
   MACHINE: { label: 'Máy móc', icon: Monitor, className: 'bg-primary text-white' },
@@ -46,8 +51,12 @@ export const CategoryBadge = ({ category }) => {
   );
 };
 
-export default function HoaDonKhachHang({ customer, onBack }) {
-  const customerId = customer?.id;
+export default function HoaDonKhachHang({ customer, onBack, onCustomerUpdated }) {
+  const [currentCustomer, setCurrentCustomer] = useState(customer);
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState('orders'); // 'orders' | 'careNotes'
+  const customerId = currentCustomer?.id;
   const [category, setCategory] = useState('');
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -88,10 +97,10 @@ export default function HoaDonKhachHang({ customer, onBack }) {
       
       {/* --- HEADER: Thông tin khách hàng & Thống kê --- */}
       <div className="bg-white rounded-4 shadow-sm border p-4">
-        <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-4">
+        <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-4">
           
           {/* Cột trái: Nút Back + Info Khách */}
-          <div className="d-flex flex-column align-items-start gap-3">
+          <div className="d-flex flex-column align-items-start gap-3 flex-grow-1">
             {onBack && (
               <button
                 type="button"
@@ -102,55 +111,154 @@ export default function HoaDonKhachHang({ customer, onBack }) {
               </button>
             )}
             
-            <div className="d-flex align-items-center gap-3">
-              <div className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center" style={{ width: '56px', height: '56px' }}>
+            <div className="d-flex align-items-start gap-3 w-100">
+              <div className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: '56px', height: '56px' }}>
                 <User size={28} />
               </div>
-              <div>
-                <div className="d-flex align-items-center gap-2 mb-1">
+              <div className="flex-grow-1">
+                <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
                   <h4 className="fw-bold mb-0 text-dark">
-                    {customer?.fullName || <span className="fst-italic text-muted">(Khách hàng chưa cập nhật tên)</span>}
+                    {currentCustomer?.fullName || <span className="fst-italic text-muted">(Khách hàng chưa cập nhật tên)</span>}
                   </h4>
-                  {customer?.customerType && (
+                  {currentCustomer?.customerType && (
                     <span className="badge bg-info bg-opacity-10 text-info border border-info rounded-pill px-2 py-1">
-                      {customer.customerType}
+                      {currentCustomer.customerType}
                     </span>
                   )}
+                  <button 
+                    type="button" 
+                    className="btn btn-sm btn-light border text-primary rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1 ms-1 hover-primary transition-all"
+                    onClick={() => setIsEditingCustomer(true)}
+                    title="Chỉnh sửa thông tin khách hàng"
+                  >
+                    <Edit3 size={13} /> Sửa hồ sơ
+                  </button>
                 </div>
-                <div className="text-secondary small d-flex flex-wrap align-items-center gap-3 mt-2">
-                  <span className="d-flex align-items-center gap-1 bg-light px-2 py-1 rounded">
-                    <Phone size={14} className="text-primary" /> {customer?.phone}
+
+                {/* SĐT & Các nút liên hệ nhanh */}
+                <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+                  <span className="d-flex align-items-center gap-1 bg-light px-2 py-1 rounded font-monospace fw-bold text-dark border">
+                    <Phone size={14} className="text-primary" /> {currentCustomer?.phone}
                   </span>
-                  {customer?.firstOrderAt && (
-                    <span className="d-flex align-items-center gap-1">
-                      <Calendar size={14} className="text-muted" /> Đầu tiên: <strong className="text-dark">{formatDate(customer.firstOrderAt)}</strong>
+                  
+                  {/* Nút Chat Zalo */}
+                  {currentCustomer?.phone && (
+                    <a
+                      href={`https://zalo.me/${currentCustomer.phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-sm btn-outline-primary rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1 shadow-sm"
+                      title="Mở chat Zalo với khách"
+                    >
+                      <MessageSquare size={14} />
+                      <span>Chat Zalo</span>
+                    </a>
+                  )}
+
+                  {/* Nút Gọi điện */}
+                  {currentCustomer?.phone && (
+                    <a
+                      href={`tel:${currentCustomer.phone.replace(/\D/g, '')}`}
+                      className="btn btn-sm btn-outline-success rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1 shadow-sm"
+                      title="Gọi điện cho khách"
+                    >
+                      <PhoneCall size={14} />
+                      <span>Gọi điện</span>
+                    </a>
+                  )}
+
+                  {/* Nút Tin nhắn mẫu */}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-warning text-dark rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1 shadow-sm"
+                    onClick={() => setShowTemplatesModal(true)}
+                    title="Mở bộ tin nhắn mẫu chăm sóc khách hàng"
+                  >
+                    <Sparkles size={14} className="text-warning" />
+                    <span>Tin nhắn mẫu</span>
+                  </button>
+                </div>
+
+                {/* Thông tin phụ: Địa chỉ, Email, Lịch sử đơn */}
+                <div className="text-secondary small d-flex flex-wrap align-items-center gap-3 mt-3">
+                  {currentCustomer?.address && (
+                    <span className="d-flex align-items-center gap-1 text-dark">
+                      <MapPin size={14} className="text-danger" /> {currentCustomer.address}
                     </span>
                   )}
-                  {customer?.lastOrderAt && (
+                  {currentCustomer?.email && (
                     <span className="d-flex align-items-center gap-1">
-                      <CheckCircle2 size={14} className="text-success" /> Gần nhất: <strong className="text-dark">{formatDate(customer.lastOrderAt)}</strong>
+                      <Mail size={14} className="text-secondary" /> {currentCustomer.email}
+                    </span>
+                  )}
+                  {currentCustomer?.firstOrderAt && (
+                    <span className="d-flex align-items-center gap-1">
+                      <Calendar size={14} className="text-muted" /> Đầu tiên: <strong className="text-dark">{formatDate(currentCustomer.firstOrderAt)}</strong>
+                    </span>
+                  )}
+                  {currentCustomer?.lastOrderAt && (
+                    <span className="d-flex align-items-center gap-1">
+                      <CheckCircle2 size={14} className="text-success" /> Gần nhất: <strong className="text-dark">{formatDate(currentCustomer.lastOrderAt)}</strong>
                     </span>
                   )}
                 </div>
+
+                {/* Ghi chú nhu cầu khách */}
+                {currentCustomer?.preferenceNote && (
+                  <div className="mt-2 p-2 bg-light rounded-3 border text-dark small fst-italic">
+                    <FileText size={13} className="me-1 text-muted d-inline" /> {currentCustomer.preferenceNote}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Cột phải: Widget Thống kê */}
-          <div className="d-flex align-items-center gap-3">
+          <div className="d-flex align-items-center gap-3 flex-shrink-0">
             <div className="bg-primary bg-opacity-10 border border-primary-subtle rounded-4 px-4 py-3 text-center min-w-120">
               <div className="text-primary fw-medium small mb-1">Tổng hóa đơn</div>
-              <div className="fw-bolder text-primary fs-4">{customer?.totalOrders ?? totalElements}</div>
+              <div className="fw-bolder text-primary fs-4">{currentCustomer?.totalOrders ?? totalElements}</div>
             </div>
             <div className="bg-success bg-opacity-10 border border-success-subtle rounded-4 px-4 py-3 text-center min-w-150">
               <div className="text-success fw-medium small mb-1">Tổng chi tiêu</div>
-              <div className="fw-bolder text-success fs-5">{dinhDangTien(customer?.totalSpent || 0)} đ</div>
+              <div className="fw-bolder text-success fs-5">{dinhDangTien(currentCustomer?.totalSpent || 0)} đ</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* --- DANH SÁCH HÓA ĐƠN --- */}
+      {/* --- ĐIỀU HƯỚNG SUB-TAB: HÓA ĐƠN vs NHẬT KÝ CSKH --- */}
+      <div className="d-flex align-items-center gap-2 border-bottom pb-2">
+        <button
+          type="button"
+          className={`btn rounded-pill px-4 py-2 d-inline-flex align-items-center gap-2 fw-medium transition-all ${
+            activeSubTab === 'orders' ? 'btn-primary shadow-sm text-white' : 'btn-light text-secondary border'
+          }`}
+          onClick={() => setActiveSubTab('orders')}
+        >
+          <ShoppingBag size={16} />
+          <span>Hóa đơn & Giao dịch</span>
+          <span className="badge rounded-pill bg-white bg-opacity-25 ms-1">
+            {currentCustomer?.totalOrders ?? totalElements}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`btn rounded-pill px-4 py-2 d-inline-flex align-items-center gap-2 fw-medium transition-all ${
+            activeSubTab === 'careNotes' ? 'btn-primary shadow-sm text-white' : 'btn-light text-secondary border'
+          }`}
+          onClick={() => setActiveSubTab('careNotes')}
+        >
+          <Clock size={16} />
+          <span>Nhật ký chăm sóc (CSKH)</span>
+        </button>
+      </div>
+
+      {/* --- NỘI DUNG SUB-TAB --- */}
+      {activeSubTab === 'careNotes' ? (
+        <TabNhatKyChamSoc customerId={customerId} customerName={currentCustomer?.fullName} />
+      ) : (
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
         
         {/* Toolbar: Tiêu đề & Bộ lọc */}
@@ -382,12 +490,34 @@ export default function HoaDonKhachHang({ customer, onBack }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Modal Chi tiết Hóa đơn */}
       {selectedOrder && (
         <ModalChiTietHoaDonCRM 
           order={selectedOrder} 
           onClose={() => setSelectedOrder(null)} 
+        />
+      )}
+
+      {/* Modal Chỉnh sửa Khách hàng */}
+      {isEditingCustomer && (
+        <ModalChinhSuaKhachHang 
+          customer={currentCustomer}
+          onClose={() => setIsEditingCustomer(false)}
+          onUpdated={(updated) => {
+            setCurrentCustomer(updated);
+            if (onCustomerUpdated) onCustomerUpdated(updated);
+          }}
+        />
+      )}
+
+      {/* Modal Bộ Mẫu Tin Nhắn */}
+      {showTemplatesModal && (
+        <ModalTinNhanMau
+          customer={currentCustomer}
+          orders={orders}
+          onClose={() => setShowTemplatesModal(false)}
         />
       )}
 

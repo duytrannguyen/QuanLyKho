@@ -34,9 +34,9 @@ echo.
 echo [3/4] Cập nhật các file vào thư mục deploy...
 if not exist "%DEPLOY_DIR%\backend\target" mkdir "%DEPLOY_DIR%\backend\target"
 copy /y "%ROOT_DIR%\backend\target\tonkho-2.0.0.jar" "%DEPLOY_DIR%\backend\target\tonkho-2.0.0.jar" >nul
+if exist "%DEPLOY_DIR%\frontend\dist" rmdir /s /q "%DEPLOY_DIR%\frontend\dist"
+mkdir "%DEPLOY_DIR%\frontend\dist"
 xcopy /e /y /q "%ROOT_DIR%\frontend\dist\*" "%DEPLOY_DIR%\frontend\dist\" >nul
-copy /y "%ROOT_DIR%\database\schema\01_init_schema.sql" "%DEPLOY_DIR%\database\init\01_init_schema.sql" >nul
-copy /y "%ROOT_DIR%\database\seed\02_initial_data.sql" "%DEPLOY_DIR%\database\init\02_initial_data.sql" >nul
 
 echo.
 echo [4/4] Đang nén các thành phần deploy thành file ZIP (%ZIP_FILE%)...

@@ -33,18 +33,28 @@ public class CrmController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
     public ResponseEntity<ApiResponse<PageResult<CustomerItem>>> searchCustomers(
             @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String filterType,
             @RequestParam(defaultValue = "lastOrderAt") String sortBy,
             @RequestParam(defaultValue = "desc") String direction,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.ok(
-                queryService.searchCustomers(keyword, sortBy, direction, page, size)));
+                queryService.searchCustomers(keyword, filterType, sortBy, direction, page, size)));
     }
 
     @GetMapping("/customers/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
     public ResponseEntity<ApiResponse<CustomerItem>> getCustomer(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getCustomer(id)));
+    }
+
+    @PutMapping("/customers/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_MANAGE')")
+    public ResponseEntity<ApiResponse<CustomerItem>> updateCustomer(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateCustomerRequest request) {
+        CustomerItem updated = queryService.updateCustomer(id, request);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thông tin khách hàng thành công.", updated));
     }
 
     @GetMapping("/customers/{id}/orders")
@@ -81,6 +91,38 @@ public class CrmController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error("INVALID_PHONE", e.getMessage()));
         }
+    }
+
+    @GetMapping("/customers/{id}/care-notes")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<ApiResponse<java.util.List<CareNoteItem>>> getCareNotes(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(queryService.getCareNotes(id)));
+    }
+
+    @PostMapping("/customers/{id}/care-notes")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_MANAGE')")
+    public ResponseEntity<ApiResponse<CareNoteItem>> addCareNote(
+            @PathVariable Long id,
+            @Valid @RequestBody CreateCareNoteRequest request,
+            java.security.Principal principal) {
+        String username = principal != null ? principal.getName() : "Nhân viên";
+        CareNoteItem item = queryService.addCareNote(id, request, username);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Thêm ghi chú chăm sóc khách hàng thành công.", item));
+    }
+
+    @GetMapping("/customers/export-excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<org.springframework.core.io.Resource> exportCustomersExcel(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String filterType,
+            @RequestParam(defaultValue = "lastOrderAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
+        org.springframework.core.io.ByteArrayResource resource =
+                queryService.generateCustomersExcel(keyword, filterType, sortBy, direction);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Danh_Sach_Khach_Hang_CRM.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
     }
 
     @PostMapping("/rebuild")

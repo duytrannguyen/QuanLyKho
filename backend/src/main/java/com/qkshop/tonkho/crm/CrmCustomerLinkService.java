@@ -80,11 +80,13 @@ public class CrmCustomerLinkService {
         customer.setFirstOrderAt(agg.getFirstOrderAt());
         customer.setLastOrderAt(agg.getLastOrderAt());
 
-        orderRepo.findFirstByCrmCustomerIdAndCustomerNameIsNotNullAndCustomerNameNotOrderBySaleDateDescIdDesc(customerId, "")
-                .map(SalesOrder::getCustomerName)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .ifPresent(customer::setFullName);
+        if (customer.getFullName() == null || customer.getFullName().isBlank()) {
+            orderRepo.findFirstByCrmCustomerIdAndCustomerNameIsNotNullAndCustomerNameNotOrderBySaleDateDescIdDesc(customerId, "")
+                    .map(SalesOrder::getCustomerName)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .ifPresent(customer::setFullName);
+        }
 
         orderRepo.findFirstByCrmCustomerIdAndCustomerTypeIsNotNullAndCustomerTypeNotOrderBySaleDateDescIdDesc(customerId, "")
                 .map(SalesOrder::getCustomerType)
