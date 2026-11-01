@@ -25,11 +25,14 @@ const TrangBangGia = React.lazy(() => import('./pages/BangGia/TrangBangGia'));
 const TrangKiemTraBaoHanh = React.lazy(() => import('./pages/KiemTraBaoHanh/TrangKiemTraBaoHanh'));
 const TrangNhapPhuKien = React.lazy(() => import('./pages/NhapPhuKien/TrangNhapPhuKien'));
 const TrangTonKhoPhuKien = React.lazy(() => import('./pages/TonKhoPhuKien/TrangTonKhoPhuKien'));
+const TrangNhapLinhKien = React.lazy(() => import('./pages/NhapLinhKien/TrangNhapLinhKien'));
+const TrangTonKhoLinhKien = React.lazy(() => import('./pages/TonKhoLinhKien/TrangTonKhoLinhKien'));
 const TrangBanPhuKien = React.lazy(() => import('./pages/BanPhuKien/TrangBanPhuKien'));
 const TrangLichSuBanPhuKien = React.lazy(() => import('./pages/LichSuBanPhuKien/TrangLichSuBanPhuKien'));
 const TrangSuaChua = React.lazy(() => import('./pages/SuaChua/TrangSuaChua'));
 const TrangTraCuuSuaChua = React.lazy(() => import('./pages/SuaChua/TrangTraCuuSuaChua'));
 const TrangBaoCaoBanHang = React.lazy(() => import('./pages/BaoCaoBanHang/TrangBaoCaoBanHang'));
+const TrangKhachHang = React.lazy(() => import('./pages/KhachHang/TrangKhachHang'));
 
 function ProtectedRoute({ children, permission }) {
   const { user, loading, hasPermission } = useAuth();
@@ -95,15 +98,18 @@ function AppRoutes() {
           <Route path="bao-cao-ban-hang" element={<ProtectedRoute permission="SALES_REPORT_VIEW"><TrangBaoCaoBanHang /></ProtectedRoute>} />
           <Route path="nhap-may" element={<ProtectedRoute permission="IMPORT_MACHINE"><TrangNhapMayMoc /></ProtectedRoute>} />
           <Route path="nhap-phu-kien" element={<ProtectedRoute permission="IMPORT_ACCESSORY"><TrangNhapPhuKien /></ProtectedRoute>} />
+          <Route path="ton-kho-phu-kien" element={<ProtectedRoute permission="INVENTORY_ACCESSORY"><TrangTonKhoPhuKien /></ProtectedRoute>} />
+          <Route path="nhap-linh-kien" element={<ProtectedRoute permission="IMPORT_PART"><TrangNhapLinhKien /></ProtectedRoute>} />
+          <Route path="ton-kho-linh-kien" element={<ProtectedRoute permission="INVENTORY_PART"><TrangTonKhoLinhKien /></ProtectedRoute>} />
           <Route path="kiem-tra" element={<ProtectedRoute permission="INSPECTION"><TrangKiemDinh /></ProtectedRoute>} />
           <Route path="tra-cuu" element={<ProtectedRoute permission="SEARCH_INVENTORY"><TrangTimKiemTonKho /></ProtectedRoute>} />
           <Route path="quan-ly-ma-may" element={<ProtectedRoute permission="MANAGE_MACHINE_CODES"><TrangQuanLyMaMay /></ProtectedRoute>} />
-          <Route path="ton-kho-phu-kien" element={<ProtectedRoute permission="INVENTORY_ACCESSORY"><TrangTonKhoPhuKien /></ProtectedRoute>} />
           <Route path="ban-may" element={<ProtectedRoute permission="SALE_MACHINE"><TrangBanHang /></ProtectedRoute>} />
           <Route path="ban-phu-kien" element={<ProtectedRoute permission="SALE_ACCESSORY"><TrangBanPhuKien /></ProtectedRoute>} />
           <Route path="lich-su-ban-phu-kien" element={<ProtectedRoute permission="ACCESSORY_HISTORY"><TrangLichSuBanPhuKien /></ProtectedRoute>} />
           <Route path="dich-vu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangSuaChua /></ProtectedRoute>} />
           <Route path="tra-cuu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangTraCuuSuaChua /></ProtectedRoute>} />
+          <Route path="khach-hang" element={<ProtectedRoute permission="CRM_VIEW"><TrangKhachHang /></ProtectedRoute>} />
           <Route path="phan-tich" element={<ProtectedRoute permission="ANALYTICS_VIEW"><TrangThongKe /></ProtectedRoute>} />
           <Route path="doi-soat" element={<ProtectedRoute permission="SYNC_MANAGE"><TrangDoiSoat /></ProtectedRoute>} />
           <Route path="nhat-ky" element={<ProtectedRoute permission="LOGS_VIEW"><TrangNhatKyHoatDong /></ProtectedRoute>} />

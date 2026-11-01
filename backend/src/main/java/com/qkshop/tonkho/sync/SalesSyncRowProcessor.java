@@ -475,44 +475,72 @@ public class SalesSyncRowProcessor {
     /**
      * Lưu hoặc cập nhật đầy đủ 31 trường dữ liệu vào bảng sales_orders
      * phục vụ trực tiếp cho Sales Dashboard.
+     * Đảm bảo Single Source of Truth: Nếu máy đã bán từ WEB_APP thì cập nhật thông tin đối soát,
+     * tuyệt đối không tạo bản ghi mới làm nhân đôi doanh thu.
      */
     private void upsertSalesOrder(SheetSaleRow row, String matchedCycleId) {
         try {
             if (row.transactionId().isBlank()) return;
-            SalesOrder order = salesOrderRepo.findByTransactionId(row.transactionId())
-                    .orElseGet(() -> SalesOrder.builder()
-                            .transactionId(row.transactionId())
-                            .build());
 
-            order.setCustomerId(emptyToNull(row.customerId()));
-            order.setLeadId(emptyToNull(row.leadId()));
-            order.setCustomerName(emptyToNull(row.customerName()));
-            order.setCustomerPhone(emptyToNull(row.customerPhone()));
-            order.setCustomerType(emptyToNull(row.customerType()));
-            order.setFirstSource(emptyToNull(row.firstSource()));
-            order.setSecondSource(emptyToNull(row.secondSource()));
-            order.setLastSource(emptyToNull(row.lastSource()));
+            SalesOrder order = salesOrderRepo.findByTransactionId(row.transactionId()).orElse(null);
+
+            // Nếu không tìm thấy theo transactionId của Sheet, kiểm tra xem đã có đơn từ WEB_APP cho serial này chưa
+            if (order == null && !row.serial().isBlank()) {
+                for (String s : row.getParsedSerials()) {
+                    List<SalesOrder> existingList = salesOrderRepo.findBySerialKeysContaining(s);
+                    for (SalesOrder existing : existingList) {
+                        if ("WEB_APP".equalsIgnoreCase(existing.getOrigin()) || (matchedCycleId != null && matchedCycleId.equals(existing.getMatchedCycleId()))) {
+                            order = existing;
+                            log.info("[GSHEET] Tìm thấy đơn hàng đã bán từ WEB_APP cho serial {} (Transaction cũ: {}, Khớp mã Sheet: {})",
+                                    s, existing.getTransactionId(), row.transactionId());
+                            break;
+                        }
+                    }
+                    if (order != null) break;
+                }
+            }
+
+            if (order == null && matchedCycleId != null) {
+                order = salesOrderRepo.findByMatchedCycleId(matchedCycleId).orElse(null);
+            }
+
+            boolean isNew = (order == null);
+            if (isNew) {
+                order = SalesOrder.builder()
+                        .transactionId(row.transactionId())
+                        .origin("GSHEET")
+                        .build();
+            }
+
+            if (emptyToNull(row.customerId()) != null) order.setCustomerId(emptyToNull(row.customerId()));
+            if (emptyToNull(row.leadId()) != null) order.setLeadId(emptyToNull(row.leadId()));
+            if (emptyToNull(row.customerName()) != null) order.setCustomerName(emptyToNull(row.customerName()));
+            if (emptyToNull(row.customerPhone()) != null) order.setCustomerPhone(emptyToNull(row.customerPhone()));
+            if (emptyToNull(row.customerType()) != null) order.setCustomerType(emptyToNull(row.customerType()));
+            if (emptyToNull(row.firstSource()) != null) order.setFirstSource(emptyToNull(row.firstSource()));
+            if (emptyToNull(row.secondSource()) != null) order.setSecondSource(emptyToNull(row.secondSource()));
+            if (emptyToNull(row.lastSource()) != null) order.setLastSource(emptyToNull(row.lastSource()));
 
             if (row.isStudent() != null && !row.isStudent().isBlank()) {
                 String is = row.isStudent().trim().toLowerCase(Locale.ROOT);
                 order.setIsStudent(is.equals("1") || is.equals("true") || is.contains("sinh viên") || is.contains("học sinh"));
             }
 
-            order.setOrderStatus(emptyToNull(row.orderStatus()));
-            order.setPaymentStatus(emptyToNull(row.paymentStatus()));
-            order.setProductName(emptyToNull(row.productFullName()));
-            order.setBrand(emptyToNull(row.brand()));
-            order.setSeries(emptyToNull(row.series()));
-            order.setSegment(emptyToNull(row.segment()));
-            order.setModelName(emptyToNull(row.modelName()));
-            order.setConfigSummary(emptyToNull(row.productSummary()));
-            order.setWarrantyPeriod(emptyToNull(row.warrantyPeriod()));
-            order.setNote(emptyToNull(row.note()));
-            order.setCrmSyncStatus(emptyToNull(row.syncStatus()));
-            order.setMessageSyncStatus(emptyToNull(row.messageSyncStatus()));
-            order.setDataQualityStatus(emptyToNull(row.dataQualityStatus()));
-            order.setSalesperson(emptyToNull(row.salesperson()));
-            order.setOrigin("GSHEET");
+            if (emptyToNull(row.orderStatus()) != null) order.setOrderStatus(emptyToNull(row.orderStatus()));
+            if (emptyToNull(row.paymentStatus()) != null) order.setPaymentStatus(emptyToNull(row.paymentStatus()));
+            if (emptyToNull(row.productFullName()) != null) order.setProductName(emptyToNull(row.productFullName()));
+            if (emptyToNull(row.brand()) != null) order.setBrand(emptyToNull(row.brand()));
+            if (emptyToNull(row.series()) != null) order.setSeries(emptyToNull(row.series()));
+            if (emptyToNull(row.segment()) != null) order.setSegment(emptyToNull(row.segment()));
+            if (emptyToNull(row.modelName()) != null) order.setModelName(emptyToNull(row.modelName()));
+            if (emptyToNull(row.productSummary()) != null) order.setConfigSummary(emptyToNull(row.productSummary()));
+            if (emptyToNull(row.warrantyPeriod()) != null) order.setWarrantyPeriod(emptyToNull(row.warrantyPeriod()));
+            if (emptyToNull(row.note()) != null) order.setNote(emptyToNull(row.note()));
+            order.setCrmSyncStatus(emptyToNull(row.syncStatus()) != null ? emptyToNull(row.syncStatus()) : getDoneMarker());
+            if (emptyToNull(row.messageSyncStatus()) != null) order.setMessageSyncStatus(emptyToNull(row.messageSyncStatus()));
+            if (emptyToNull(row.dataQualityStatus()) != null) order.setDataQualityStatus(emptyToNull(row.dataQualityStatus()));
+            if (emptyToNull(row.salesperson()) != null) order.setSalesperson(emptyToNull(row.salesperson()));
+            
             if (matchedCycleId != null) {
                 order.setMatchedCycleId(matchedCycleId);
             }
@@ -542,9 +570,11 @@ public class SalesSyncRowProcessor {
                 net = disc != null ? gross.subtract(disc) : gross;
             }
 
-            order.setGrossRevenue(gross != null ? gross : BigDecimal.ZERO);
-            order.setDiscount(disc != null ? disc : BigDecimal.ZERO);
-            order.setNetRevenue(net != null ? net : BigDecimal.ZERO);
+            if (isNew || order.getNetRevenue() == null || order.getNetRevenue().compareTo(BigDecimal.ZERO) == 0) {
+                order.setGrossRevenue(gross != null ? gross : BigDecimal.ZERO);
+                order.setDiscount(disc != null ? disc : BigDecimal.ZERO);
+                order.setNetRevenue(net != null ? net : BigDecimal.ZERO);
+            }
 
             if (order.getSeries() == null || order.getSeries().isBlank()) {
                 order.setSeries(SourceNormalizer.extractSeries(order.getProductName(), order.getModelName()));

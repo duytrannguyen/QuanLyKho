@@ -108,6 +108,8 @@ class OrderSyncIntegrationTest {
         AccessoryOrder order = accessoryService.createAccessoryOrder(payload);
         assertNotNull(order);
         assertNotNull(order.getOrderCode());
+        assertEquals(10, order.getOrderCode().length(), "Mã hóa đơn phụ kiện phải đúng 10 ký tự");
+        assertTrue(order.getOrderCode().startsWith("PK"), "Mã hóa đơn phụ kiện phải bắt đầu bằng PK");
 
         // Kiểm tra tồn kho phụ kiện đã giảm
         Accessory updatedAcc = accessoryRepo.findBySku(testSku).orElseThrow();
@@ -166,6 +168,8 @@ class OrderSyncIntegrationTest {
         RepairOrder repairOrder = repairOrderService.createRepairOrder(payload);
         assertNotNull(repairOrder);
         assertNotNull(repairOrder.getOrderCode());
+        assertEquals(10, repairOrder.getOrderCode().length(), "Mã hóa đơn sửa chữa phải đúng 10 ký tự");
+        assertTrue(repairOrder.getOrderCode().startsWith("SC"), "Mã hóa đơn sửa chữa phải bắt đầu bằng SC");
 
         // Kiểm tra linh kiện trong kho đã được trừ
         Accessory updatedPart = accessoryRepo.findBySku(testSku).orElseThrow();

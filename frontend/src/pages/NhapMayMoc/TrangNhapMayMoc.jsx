@@ -51,7 +51,7 @@ export default function TrangNhapMayMoc() {
       }));
     }).catch(console.error);
 
-    // Fetch brands, modelLines, platforms for autocomplete suggestions
+    // Fetch brands, modelLines, platforms
     Promise.all([
       apiCatalog.getBrands().catch(() => ({ data: [] })),
       apiCatalog.getModelLines().catch(() => ({ data: [] })),
@@ -68,27 +68,20 @@ export default function TrangNhapMayMoc() {
 
   const detectSegment = (brand, line, model) => {
     const combined = `${brand || ''} ${line || ''} ${model || ''}`.toLowerCase();
-    
     if (combined.includes('macbook') || combined.includes('apple')) return 'MACBOOK';
-    
     const gamingKeywords = ['gaming', 'nitro', 'predator', 'legion', 'rog', 'tuf', 'alienware', 'omen', 'victus', 'loq', 'g15', 'g16', 'cyborg', 'katana', 'bravo', 'stealth', 'raider', 'titan'];
     if (gamingKeywords.some(k => combined.includes(k))) return 'GAMING';
-
     const workstationKeywords = ['precision', 'zbook', 'thinkpad p', 'proart', 'studiobook', 'conceptd'];
     if (workstationKeywords.some(k => combined.includes(k))) return 'WORKSTATION';
-
-    return 'OFFICE'; // Default
+    return 'OFFICE';
   };
 
   const handleChange = (field, value) => {
     setForm(prev => {
       const nextForm = { ...prev, [field]: value };
-      
-      // Auto-detect segment if typing brand, line, or model
       if (['brand', 'productLine', 'modelFull'].includes(field)) {
         nextForm.segment = detectSegment(nextForm.brand, nextForm.productLine, nextForm.modelFull);
       }
-      
       return nextForm;
     });
   };
@@ -104,7 +97,6 @@ export default function TrangNhapMayMoc() {
       if (res && res.data) {
         setIsExisting(true);
         const m = res.data;
-        
         let rawModel = m.platformCode || m.platform || m.sourceModelText || '';
         let cleanModel = rawModel;
         const lowerModel = cleanModel.toLowerCase();
@@ -122,8 +114,7 @@ export default function TrangNhapMayMoc() {
                    m.segment === 'GAMING' ? 'Gaming' :
                    m.segment === 'WORKSTATION' ? 'Máy trạm (Workstation)' :
                    m.segment === 'MACBOOK' ? 'MacBook' : '',
-          importType: m.state === 'CLOSED' ? 'CUSTOMER_RETURN' :
-                      (m.intakeType || 'PURCHASE'),
+          importType: m.state === 'CLOSED' ? 'CUSTOMER_RETURN' : (m.intakeType || 'PURCHASE'),
           initialStatus: m.state === 'READY' ? 'READY' : 'NEEDS_INSPECTION',
           importDate: getTodayDateString(),
           warrantyOption: (m.warrantyExpiry || (m.warrantyPeriod && m.warrantyPeriod.toLowerCase().includes('hãng')))
@@ -163,7 +154,6 @@ export default function TrangNhapMayMoc() {
     e.preventDefault();
     if (isSubmitting || isPreviewing) return;
     
-    // Validate
     if (!form.serial.trim()) {
       showToast('Vui lòng nhập Serial', 'danger');
       return;
@@ -317,58 +307,77 @@ export default function TrangNhapMayMoc() {
     }
   };
 
+  // --- COMPONENT STYLES ---
+  // Style tái sử dụng cho nhãn (label) để giữ tính nhất quán
+  const labelClass = "form-label fw-bold text-secondary small text-uppercase mb-1";
+
   return (
     <div className="container-fluid p-0">
       
-      <div className="mb-4">
-        <ul className="nav nav-pills gap-2">
+      {/* KHU VỰC CHỌN TAB */}
+      <div className="mb-4 d-inline-block p-1 bg-light rounded-4 shadow-sm border">
+        <ul className="nav nav-pills" style={{ gap: '4px' }}>
           <li className="nav-item">
-            <button className={`nav-link fw-medium border ${tab === 'single' ? 'active bg-primary border-primary' : 'bg-white text-secondary border-secondary'}`} onClick={() => setTab('single')}>Nhập một máy</button>
+            <button 
+              className={`nav-link px-4 py-2 fw-medium rounded-pill transition-all ${tab === 'single' ? 'active shadow-sm' : 'text-secondary'}`} 
+              onClick={() => setTab('single')}
+            >
+              Nhập một máy
+            </button>
           </li>
           <li className="nav-item">
-            <button className={`nav-link fw-medium border ${tab === 'bulk' ? 'active bg-primary border-primary' : 'bg-white text-secondary border-secondary'}`} onClick={() => setTab('bulk')}>Nhập nhiều máy</button>
+            <button 
+              className={`nav-link px-4 py-2 fw-medium rounded-pill transition-all ${tab === 'bulk' ? 'active shadow-sm' : 'text-secondary'}`} 
+              onClick={() => setTab('bulk')}
+            >
+              Nhập nhiều máy
+            </button>
           </li>
         </ul>
       </div>
 
       <div className="row g-4">
-        {/* CARD TRÁI: THÔNG TIN MÁY & CẤU HÌNH */}
+        {/* ================= CARD TRÁI: THÔNG TIN MÁY & CẤU HÌNH ================= */}
         <div className="col-xl-8 col-lg-7 col-md-12 mb-4 mb-lg-0">
-          <form className="card shadow-sm border-0 p-4 h-100" onSubmit={tab === 'single' ? handleSubmit : (e) => e.preventDefault()}>
-            <h5 className="fw-bold mb-4 text-dark">Thông tin máy</h5>
+          <form className="card shadow-sm border-0 rounded-4 p-4 p-xl-5 h-100 bg-white" onSubmit={tab === 'single' ? handleSubmit : (e) => e.preventDefault()}>
+            
+            {/* --- SECTION 1: THÔNG TIN CƠ BẢN --- */}
+            <div className="d-flex align-items-center mb-4 pb-2 border-bottom">
+              <h5 className="fw-bolder text-primary mb-0">Thông tin nhập kho</h5>
+            </div>
 
-            <div className="row g-3">
-              {/* Hàng 1 */}
+            <div className="row g-4 mb-4">
               <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Serial <span className="text-danger">*</span></label>
-                <input className="form-control" placeholder="Nhập hoặc quét serial thật"
-                  value={form.serial} onChange={e => handleChange('serial', e.target.value)} onBlur={handleSerialBlur} />
+                <label className={labelClass}>Serial <span className="text-danger">*</span></label>
+                <div className="input-group">
+                  <input className="form-control bg-light" placeholder="Nhập hoặc quét mã vạch..."
+                    value={form.serial} onChange={e => handleChange('serial', e.target.value)} onBlur={handleSerialBlur} />
+                  {isLoadingSerial && <span className="input-group-text bg-light"><div className="spinner-border spinner-border-sm text-primary"></div></span>}
+                </div>
               </div>
               <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Hãng <span className="text-danger">*</span></label>
-                <input className="form-control" placeholder="Ví dụ: Dell" list="brand-options"
+                <label className={labelClass}>Hãng <span className="text-danger">*</span></label>
+                <input className="form-control" placeholder="Ví dụ: Dell, HP..." list="brand-options"
                   value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
                 <datalist id="brand-options">{filterOptions.brands.map(b => <option key={b} value={b} />)}</datalist>
               </div>
 
-              {/* Hàng 2 */}
               <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Dòng máy <span className="text-danger">*</span></label>
-                <input className="form-control" placeholder="Ví dụ: Latitude, Nitro 5" list="line-options"
+                <label className={labelClass}>Dòng máy <span className="text-danger">*</span></label>
+                <input className="form-control" placeholder="Ví dụ: Latitude, Nitro 5..." list="line-options"
                   value={form.productLine} onChange={e => handleChange('productLine', e.target.value)} />
                 <datalist id="line-options">{filterOptions.productLines.map(l => <option key={l} value={l} />)}</datalist>
               </div>
               <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Model đầy đủ của hãng <span className="text-danger">*</span></label>
-                <input className="form-control" placeholder="Ví dụ: Dell Latitude 7430 hoặc AN515-58-51R3" list="model-options"
+                <label className={labelClass}>Model đầy đủ <span className="text-danger">*</span></label>
+                <input className="form-control" placeholder="Ví dụ: Dell Latitude 7430..." list="model-options"
                   value={form.modelFull} onChange={e => handleChange('modelFull', e.target.value)} />
                 <datalist id="model-options">{filterOptions.models.map(m => <option key={m} value={m} />)}</datalist>
               </div>
 
-              {/* Hàng 3 */}
-              <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Phân khúc</label>
-                <select className="form-select" value={form.segment} onChange={e => handleChange('segment', e.target.value)}>
+              <div className="col-md-4">
+                <label className={labelClass}>Phân khúc</label>
+                <select className="form-select text-dark" value={form.segment} onChange={e => handleChange('segment', e.target.value)}>
                   <option value="">Tự đề xuất theo dòng máy</option>
                   <option value="Văn phòng (Office)">Văn phòng (Office)</option>
                   <option value="Gaming">Gaming</option>
@@ -376,171 +385,173 @@ export default function TrangNhapMayMoc() {
                   <option value="MacBook">MacBook</option>
                 </select>
               </div>
-              <div className="col-md-6">
-                <label className="form-label fw-semibold text-dark">Nghiệp vụ nhập <span className="text-danger">*</span></label>
-                <select className="form-select" value={form.importType} onChange={e => handleChange('importType', e.target.value)}>
+              <div className="col-md-4">
+                <label className={labelClass}>Nghiệp vụ <span className="text-danger">*</span></label>
+                <select className="form-select text-dark" value={form.importType} onChange={e => handleChange('importType', e.target.value)}>
                   <option value="PURCHASE">{INTAKE_TYPE_MAP['PURCHASE']}</option>
                   <option value="CUSTOMER_BUYBACK">{INTAKE_TYPE_MAP['CUSTOMER_BUYBACK']}</option>
                   <option value="CUSTOMER_RETURN">{INTAKE_TYPE_MAP['CUSTOMER_RETURN']}</option>
                   <option value="OPENING_BALANCE">{INTAKE_TYPE_MAP['OPENING_BALANCE']}</option>
                 </select>
               </div>
-
-              {/* Hàng 4 */}
               <div className="col-md-4">
-                <label className="form-label fw-semibold text-dark">Trạng thái ban đầu <span className="text-danger">*</span></label>
-                <select className="form-select" value={form.initialStatus} onChange={e => handleChange('initialStatus', e.target.value)}>
+                <label className={labelClass}>Trạng thái <span className="text-danger">*</span></label>
+                <select className="form-select text-dark" value={form.initialStatus} onChange={e => handleChange('initialStatus', e.target.value)}>
                   <option value="READY">{CYCLE_STATE_MAP['READY']}</option>
                   <option value="NEEDS_INSPECTION">{CYCLE_STATE_MAP['NEEDS_INSPECTION']}</option>
                 </select>
               </div>
-              <div className="col-md-4">
-                <label className="form-label fw-semibold text-dark">Ngày nhập <span className="text-danger">*</span></label>
-                <input type="date" className="form-control"
-                  value={form.importDate} onChange={e => handleChange('importDate', e.target.value)} />
-              </div>
-              <div className="col-md-4">
-                <div className="d-flex justify-content-between align-items-center mb-1">
-                  <label className="form-label fw-semibold text-dark mb-0">Gói bảo hành gán cho máy</label>
-                  {form.warrantyOption && form.warrantyOption !== 'Bảo hành hãng' && (
-                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle" style={{ fontSize: '0.70rem' }}>
-                      Kích hoạt khi bán
-                    </span>
-                  )}
+            </div>
+
+            {/* --- SECTION 2: GÓI BẢO HÀNH (Được đưa vào khối xám riêng biệt) --- */}
+            <div className="bg-light p-3 p-md-4 rounded-4 mb-5 border border-light-subtle">
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className={labelClass}>Ngày nhập <span className="text-danger">*</span></label>
+                  <input type="date" className="form-control"
+                    value={form.importDate} onChange={e => handleChange('importDate', e.target.value)} />
                 </div>
-                <select 
-                  className="form-select" 
-                  value={form.warrantyOption || ''} 
-                  onChange={e => handleChange('warrantyOption', e.target.value)}
-                >
-                  <option value="">-- Chưa gán (Cập nhật sau) --</option>
-                  <option value="BH phần cứng 3 tháng">BH phần cứng 3 tháng</option>
-                  <option value="BH phần cứng 6 tháng">BH phần cứng 6 tháng</option>
-                  <option value="BH phần cứng 9 tháng">BH phần cứng 9 tháng</option>
-                  <option value="BH phần cứng 12 tháng">BH phần cứng 12 tháng</option>
-                  <option value="Bảo hành hãng">Bảo hành hãng</option>
-                  <option value="Không BH">Không BH</option>
-                  <option value="Khác">Khác (Tự nhập)</option>
-                </select>
+                <div className="col-md-6">
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <label className={labelClass}>Gói bảo hành</label>
+                    {form.warrantyOption && form.warrantyOption !== 'Bảo hành hãng' && (
+                      <span className="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill">
+                        Kích hoạt khi bán
+                      </span>
+                    )}
+                  </div>
+                  <select 
+                    className="form-select" 
+                    value={form.warrantyOption || ''} 
+                    onChange={e => handleChange('warrantyOption', e.target.value)}
+                  >
+                    <option value="">-- Chưa gán (Cập nhật sau) --</option>
+                    <option value="BH phần cứng 3 tháng">BH phần cứng 3 tháng</option>
+                    <option value="BH phần cứng 6 tháng">BH phần cứng 6 tháng</option>
+                    <option value="BH phần cứng 9 tháng">BH phần cứng 9 tháng</option>
+                    <option value="BH phần cứng 12 tháng">BH phần cứng 12 tháng</option>
+                    <option value="Bảo hành hãng">Bảo hành hãng</option>
+                    <option value="Không BH">Không BH</option>
+                    <option value="Khác">Khác (Tự nhập)</option>
+                  </select>
+                </div>
+
+                {form.warrantyOption === 'Bảo hành hãng' && (
+                  <div className="col-md-12 mt-2">
+                    <div className="p-3 bg-white rounded-3 border border-primary border-opacity-25 shadow-sm">
+                      <label className="form-label fw-bold text-primary mb-2 small">
+                        <i className="bi bi-calendar-check me-1"></i> Ngày kết thúc bảo hành hãng (Không bắt buộc)
+                      </label>
+                      <input 
+                        type="date" 
+                        className="form-control border-primary-subtle" 
+                        value={form.warrantyExpiry || ''} 
+                        onChange={e => handleChange('warrantyExpiry', e.target.value)} 
+                      />
+                      <div className="text-muted mt-2 fst-italic" style={{ fontSize: '0.8rem' }}>
+                        * Có thể để trống và cập nhật sau khi tra cứu được trên trang web của hãng.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {form.warrantyOption === 'Khác' && (
+                  <div className="col-md-12 mt-2">
+                    <div className="p-3 bg-white rounded-3 border shadow-sm">
+                      <label className="form-label fw-bold text-dark mb-2 small">Nhập nội dung gói bảo hành (Tùy chọn)</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="VD: Bảo hành 1 đổi 1 trong 30 ngày..." 
+                        value={form.customWarranty || ''} 
+                        onChange={e => handleChange('customWarranty', e.target.value)} 
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Text hint nhỏ nằm dưới cùng khối */}
                 {!form.warrantyOption ? (
-                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
-                    * Không bắt buộc, có thể cập nhật sau khi máy trong kho hoặc khi bán
+                  <div className="col-12 text-muted" style={{ fontSize: '0.8rem' }}>
+                    <i className="bi bi-info-circle me-1"></i> Không bắt buộc, có thể cập nhật sau khi máy đã lưu kho.
                   </div>
                 ) : form.warrantyOption !== 'Bảo hành hãng' ? (
-                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
-                    * Thời gian bảo hành được tính từ ngày xuất bán máy cho khách
+                  <div className="col-12 text-muted" style={{ fontSize: '0.8rem' }}>
+                    <i className="bi bi-info-circle me-1"></i> Thời gian bảo hành bắt đầu tính từ ngày xuất bán máy cho khách.
                   </div>
                 ) : null}
               </div>
-
-              {/* Nếu chọn Bảo hành hãng -> Xuất hiện ô nhập ngày kết thúc bảo hành hãng */}
-              {form.warrantyOption === 'Bảo hành hãng' && (
-                <div className="col-md-12 mt-3">
-                  <div className="p-3 bg-primary bg-opacity-10 rounded-3 border border-primary border-opacity-25">
-                    <label className="form-label fw-bold text-primary mb-1">
-                      Ngày kết thúc bảo hành hãng (Không bắt buộc)
-                    </label>
-                    <input 
-                      type="date" 
-                      className="form-control border-primary" 
-                      value={form.warrantyExpiry || ''} 
-                      onChange={e => handleChange('warrantyExpiry', e.target.value)} 
-                    />
-                    <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>
-                      * Có thể để trống và cập nhật sau khi tra cứu được trên trang web của hãng (Dell, HP, Lenovo, Asus...)
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Nếu chọn Khác (Tự nhập) -> Xuất hiện ô nhập text */}
-              {form.warrantyOption === 'Khác' && (
-                <div className="col-md-12 mt-3">
-                  <label className="form-label fw-semibold text-dark mb-1">
-                    Nhập nội dung gói bảo hành (Không bắt buộc)
-                  </label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="VD: Bảo hành 1 đổi 1 trong 30 ngày..." 
-                    value={form.customWarranty || ''} 
-                    onChange={e => handleChange('customWarranty', e.target.value)} 
-                  />
-                  <div className="text-muted mt-1" style={{ fontSize: '0.72rem' }}>
-                    * Thời gian bảo hành được tính từ ngày xuất bán máy cho khách
-                  </div>
-                </div>
-              )}
             </div>
 
-            <hr className="my-4 text-secondary" />
+            {/* --- SECTION 3: CẤU HÌNH --- */}
+            <div className="d-flex align-items-center mb-4 pb-2 border-bottom">
+              <h5 className="fw-bolder text-dark mb-0">Cấu hình chi tiết</h5>
+            </div>
 
-            <h5 className="fw-bold mb-4 text-dark">Cấu hình</h5>
-
-            <div className="row g-3">
-              {/* Hàng 1 (4 cột) */}
+            <div className="row g-4 mb-4">
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">CPU <span className="text-danger">*</span></label>
-                <input className="form-control" placeholder="Intel Core i5..." list="cpu-options"
+                <label className={labelClass}>CPU <span className="text-danger">*</span></label>
+                <input className="form-control" placeholder="Core i5..." list="cpu-options"
                   value={form.cpu} onChange={e => handleChange('cpu', e.target.value)} />
                 <datalist id="cpu-options">{filterOptions.cpus.map(cpu => <option key={cpu} value={cpu} />)}</datalist>
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">GPU <span className="text-danger">*</span></label>
+                <label className={labelClass}>GPU <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Intel Iris Xe..." list="gpu-options"
                   value={form.gpu} onChange={e => handleChange('gpu', e.target.value)} />
                 <datalist id="gpu-options">{filterOptions.gpus.map(gpu => <option key={gpu} value={gpu} />)}</datalist>
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">RAM <span className="text-danger">*</span></label>
+                <label className={labelClass}>RAM <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.ram} onChange={e => handleChange('ram', e.target.value)}>
                   <option>4GB</option><option>8GB</option><option>16GB</option><option>32GB</option><option>64GB</option>
                 </select>
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">SSD <span className="text-danger">*</span></label>
+                <label className={labelClass}>SSD <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.ssd} onChange={e => handleChange('ssd', e.target.value)}>
                   <option>128GB</option><option>256GB</option><option>512GB</option><option>1TB</option><option>2TB</option>
                 </select>
               </div>
 
-              {/* Hàng 2 (4 cột) */}
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">Cảm ứng <span className="text-danger">*</span></label>
+                <label className={labelClass}>Cảm ứng <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.touchscreen} onChange={e => handleChange('touchscreen', e.target.value)}>
                   <option>Không cảm ứng</option><option>Cảm ứng</option>
                 </select>
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">K.thước màn</label>
-                <input className="form-control" placeholder="VD: 14 in" list="screen-options"
+                <label className={labelClass}>Màn hình</label>
+                <input className="form-control" placeholder="VD: 14 inch" list="screen-options"
                   value={form.screenSize} onChange={e => handleChange('screenSize', e.target.value)} />
                 <datalist id="screen-options">
                   {filterOptions.screenSizes.map(size => <option key={size} value={size} />)}
                 </datalist>
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">Giá bán</label>
-                <input className="form-control" placeholder="Bổ sung sau..."
+                <label className={labelClass}>Giá bán (VND)</label>
+                <input className="form-control text-success fw-bold" placeholder="Bổ sung sau..."
                   value={formatCurrency(form.price)} onChange={e => handleChange('price', parseCurrency(e.target.value))} />
               </div>
               <div className="col-12 col-sm-6 col-xl-3">
-                <label className="form-label fw-semibold text-dark">Ghi chú</label>
+                <label className={labelClass}>Ghi chú</label>
                 <input className="form-control" placeholder="Nếu có..."
                   value={form.notes} onChange={e => handleChange('notes', e.target.value)} />
               </div>
             </div>
 
-            {/* Footer Form Nhập lẻ */}
+            {/* --- FOOTER FORM (SINGLE) --- */}
             {tab === 'single' && (
-              <div className="d-flex align-items-center justify-content-between border-top pt-4 mt-4">
-                <span className="text-secondary small">Hệ thống sẽ phân loại trước; chưa ghi dữ liệu ở bước này.</span>
+              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between border-top pt-4 mt-auto gap-3">
+                <span className="text-secondary small fst-italic">Hệ thống sẽ phân loại trước; chưa ghi dữ liệu ở bước này.</span>
                 <div className="d-flex gap-2">
-                  <button type="button" className="btn btn-outline-secondary fw-medium" onClick={() => setForm({ ...form, serial: '' })}>
+                  <button type="button" className="btn btn-light border fw-medium px-4" onClick={() => setForm({ ...form, serial: '' })}>
                     Làm lại
                   </button>
-                  <button type="submit" className="btn btn-primary fw-medium" disabled={isSubmitting}>
-                    {isPreviewing ? 'Đang phân loại...' : (isExisting ? 'Phân loại trước (Cập nhật)' : 'Phân loại trước')}
+                  <button type="submit" className="btn btn-primary fw-medium px-4 shadow-sm" disabled={isSubmitting}>
+                    {isPreviewing ? (
+                      <><span className="spinner-border spinner-border-sm me-2"></span> Đang xử lý...</>
+                    ) : (isExisting ? 'Phân loại trước (Cập nhật)' : 'Phân loại trước')}
                   </button>
                 </div>
               </div>
@@ -548,99 +559,145 @@ export default function TrangNhapMayMoc() {
           </form>
         </div>
 
-        {/* CARD PHẢI */}
+        {/* ================= CARD PHẢI: TRẠNG THÁI / PREVIEW ================= */}
         <div className="col-xl-4 col-lg-5 col-md-12">
           {previewGroups ? (
-            <div className="card shadow-sm border-0 p-4 h-100">
-              <h5 className="fw-bold mb-4 text-dark">Xem trước danh sách ({previewGroups.reduce((a, b) => a + b.count, 0)} máy)</h5>
-              <div className="d-flex flex-column gap-3 mb-4" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <div className="card shadow-sm border-0 rounded-4 p-4 h-100 bg-white">
+              <h5 className="fw-bolder mb-4 text-dark border-bottom pb-2">
+                Danh sách xác nhận <span className="badge bg-primary rounded-pill ms-2">{previewGroups.reduce((a, b) => a + b.count, 0)} máy</span>
+              </h5>
+              
+              <div className="d-flex flex-column gap-3 mb-4 pe-2" style={{ maxHeight: '550px', overflowY: 'auto' }}>
                 {previewGroups.map((group, idx) => (
-                  <div key={idx} className="p-3 border rounded bg-light">
-                    <div className="fw-bold mb-2 text-dark">
-                      {group.brand} {group.productLine} {group.modelFull} - {group.cpu} / {group.ram} / {group.ssd}
+                  <div key={idx} className={`p-3 border rounded-3 bg-light shadow-sm position-relative ${group.isUpdate ? 'border-info' : 'border-success'}`}>
+                    <div className="fw-bold text-dark fs-6 mb-1">
+                      {group.brand} {group.productLine} {group.modelFull}
                     </div>
-                    <div className="d-flex flex-wrap gap-3 mb-2 small text-secondary">
-                      <span>Giá: <strong className={group.isUpdate ? 'text-info' : 'text-success'}>{group.price ? formatCurrency(group.price) + 'đ' : 'Chưa có'}</strong></span>
-                      <span>T.Thái ban đầu: <strong className="text-dark">{CYCLE_STATE_MAP[group.initialStatus] || group.initialStatus}</strong></span>
-                      <span>
-                        Gói bảo hành: <strong className="text-primary">{group.warrantyPeriod || 'Không BH'}</strong>
-                        {group.warrantyExpiry ? (
-                          <span className="text-success ms-1" style={{ fontSize: '11px' }}>(Hạn hãng: {formatDate(group.warrantyExpiry)})</span>
-                        ) : group.warrantyPeriod && group.warrantyPeriod !== 'Không BH' ? (
-                          <span className="text-muted ms-1" style={{ fontSize: '11px' }}>(Kích hoạt khi bán)</span>
-                        ) : null}
-                      </span>
-                      <span>SL: <strong className="text-dark">{group.count}</strong> máy</span>
+                    <div className="text-secondary small mb-2 pb-2 border-bottom">
+                      {group.cpu} • {group.ram} • {group.ssd}
                     </div>
-                    <div className="small text-secondary text-break">
-                      Serials: {group.serials.join(', ')}
+
+                    <div className="d-flex flex-column gap-1 small text-dark">
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">Giá:</span>
+                        <strong className={group.isUpdate ? 'text-info' : 'text-success'}>{group.price ? formatCurrency(group.price) + 'đ' : 'Chưa có'}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">T.Thái:</span>
+                        <strong>{CYCLE_STATE_MAP[group.initialStatus] || group.initialStatus}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">Bảo hành:</span>
+                        <strong className="text-primary text-end">
+                          {group.warrantyPeriod || 'Không BH'}
+                          {group.warrantyExpiry ? (
+                            <div className="text-success" style={{ fontSize: '10px' }}>(Hạn hãng: {formatDate(group.warrantyExpiry)})</div>
+                          ) : group.warrantyPeriod && group.warrantyPeriod !== 'Không BH' ? (
+                            <div className="text-muted" style={{ fontSize: '10px' }}>(Kích hoạt khi bán)</div>
+                          ) : null}
+                        </strong>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">Số lượng:</span>
+                        <strong className="fs-6">{group.count} máy</strong>
+                      </div>
                     </div>
+                    
+                    <div className="mt-2 pt-2 border-top small text-secondary text-break fst-italic" style={{ fontSize: '0.75rem' }}>
+                      <span className="fw-medium">SN:</span> {group.serials.join(', ')}
+                    </div>
+                    
+                    {/* Badge góc */}
+                    <span className={`position-absolute top-0 end-0 badge rounded-bottom-0 rounded-start-3 ${group.isUpdate ? 'bg-info' : 'bg-success'}`} style={{ borderTopRightRadius: '0.5rem'}}>
+                      {group.isUpdate ? 'Cập nhật' : 'Thêm mới'}
+                    </span>
                   </div>
                 ))}
               </div>
+
               <div className="d-flex gap-2 mt-auto pt-3 border-top justify-content-end">
-                <button type="button" className="btn btn-outline-secondary fw-medium" onClick={() => setPreviewGroups(null)}>Hủy</button>
-                <button type="button" className="btn btn-primary fw-medium" onClick={handleConfirmSubmit} disabled={isSubmitting}>
-                  {isSubmitting ? 'Đang lưu...' : 'Xác nhận nhập kho'}
+                <button type="button" className="btn btn-light border fw-medium" onClick={() => setPreviewGroups(null)}>Hủy bỏ</button>
+                <button type="button" className="btn btn-success fw-bold px-4 shadow-sm" onClick={handleConfirmSubmit} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <><span className="spinner-border spinner-border-sm me-2"></span> Đang lưu...</>
+                  ) : 'Xác nhận nhập kho'}
                 </button>
               </div>
             </div>
+
           ) : tab === 'single' ? (
-            <div className="card shadow-sm border-0 p-4 h-100">
-              <h5 className="fw-bold mb-4 text-dark">Hệ thống nhận diện</h5>
+            
+            <div className="card shadow-sm border-0 rounded-4 p-4 h-100 bg-light border">
+              <h5 className="fw-bolder mb-4 text-dark border-bottom pb-2">Hệ thống nhận diện</h5>
 
-              <div className="alert alert-info border-info d-flex flex-column gap-1 mb-4 p-3">
-                <strong className="d-flex align-items-center gap-2 text-info-emphasis">
-                  <span className="badge rounded-circle bg-info text-white d-flex align-items-center justify-content-center p-0" style={{width: '20px', height: '20px'}}>i</span>
-                  Nhập dữ liệu theo máy thực tế
-                </strong>
-                <span className="small text-info-emphasis ms-4">Không cần biết mã dòng máy hoặc mã biến thể.</span>
-              </div>
-
-              <div className="d-flex flex-column gap-3 mb-4 ps-2">
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="fs-5 text-secondary">1</span>
-                  <span className="fw-medium text-dark text-end">Chuẩn hóa model và cấu hình</span>
-                </div>
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="fs-5 text-secondary">2</span>
-                  <span className="fw-medium text-dark text-end">Khớp danh mục hoặc tạo biến thể mới</span>
-                </div>
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="fs-5 text-secondary">3</span>
-                  <span className="fw-medium text-dark text-end">Hiển thị kết quả để xác nhận</span>
+              <div className="alert alert-primary border-0 bg-primary bg-opacity-10 d-flex gap-3 align-items-start mb-4 p-3 rounded-3">
+                <i className="bi bi-lightbulb-fill text-primary fs-4"></i>
+                <div>
+                  <strong className="d-block text-primary mb-1">Nhập dữ liệu theo máy thực tế</strong>
+                  <span className="small text-dark opacity-75">Hệ thống tự động đồng bộ, bạn không cần phải biết chính xác mã dòng máy hoặc mã biến thể trên web.</span>
                 </div>
               </div>
 
-              <div className="alert alert-secondary border-secondary mt-auto mb-0 p-3 small text-secondary">
-                Dòng máy đã có sẽ tự kế thừa phân khúc. Dòng hoàn toàn mới sẽ lưu lựa chọn phân khúc một lần cho các máy sau.
+              <div className="d-flex flex-column gap-3 mb-4 mt-2">
+                <div className="d-flex align-items-center bg-white p-2 rounded-3 shadow-sm border">
+                  <span className="badge bg-secondary rounded-circle d-flex align-items-center justify-content-center me-3" style={{width: '28px', height: '28px'}}>1</span>
+                  <span className="fw-medium text-dark small">Chuẩn hóa model và cấu hình</span>
+                </div>
+                <div className="d-flex align-items-center bg-white p-2 rounded-3 shadow-sm border">
+                  <span className="badge bg-secondary rounded-circle d-flex align-items-center justify-content-center me-3" style={{width: '28px', height: '28px'}}>2</span>
+                  <span className="fw-medium text-dark small">Khớp danh mục hoặc tạo biến thể mới</span>
+                </div>
+                <div className="d-flex align-items-center bg-white p-2 rounded-3 shadow-sm border">
+                  <span className="badge bg-secondary rounded-circle d-flex align-items-center justify-content-center me-3" style={{width: '28px', height: '28px'}}>3</span>
+                  <span className="fw-medium text-dark small">Hiển thị kết quả để bạn xác nhận</span>
+                </div>
+              </div>
+
+              <div className="alert alert-secondary border-0 mt-auto mb-0 p-3 small text-secondary rounded-3">
+                <i className="bi bi-info-circle me-1"></i> Dòng máy đã có sẽ tự kế thừa phân khúc. Dòng hoàn toàn mới sẽ tự ghi nhớ phân khúc cho các lần sau.
               </div>
             </div>
+
           ) : (
-            /* Nhập Lô */
-            <div className="card shadow-sm border-0 p-4 h-100">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="fw-bold text-dark mb-0">Nhập nhiều máy (Excel/Serial)</h5>
-                <div className="d-flex gap-2">
-                  <button className="btn btn-outline-primary btn-sm fw-medium" type="button" onClick={() => handleDownloadTemplate(false)}>
+            
+            /* NHẬP LÔ */
+            <div className="card shadow-sm border-0 rounded-4 p-4 h-100 bg-white">
+              <div className="d-flex flex-column mb-4 pb-2 border-bottom">
+                <h5 className="fw-bolder text-dark mb-3">Nhập nhiều máy (Lô)</h5>
+                <div className="d-flex gap-2 w-100">
+                  <button className="btn btn-outline-primary btn-sm fw-medium flex-fill" type="button" onClick={() => handleDownloadTemplate(false)}>
                     Tải mẫu trống
                   </button>
-                  <button className="btn btn-outline-secondary btn-sm fw-medium" type="button" onClick={() => handleDownloadTemplate(true)}>
+                  <button className="btn btn-outline-secondary btn-sm fw-medium flex-fill" type="button" onClick={() => handleDownloadTemplate(true)}>
                     Tải mẫu có dữ liệu
                   </button>
                 </div>
               </div>
-              <div className="mb-3">
-                <label className="form-label fw-semibold text-dark">Tải file Excel</label>
-                <input type="file" className="form-control" accept=".xlsx, .xls" onChange={e => { setExcelFile(e.target.files[0]); if (e.target.files[0]) setSerialsText(''); }} />
+
+              <div className="mb-4 bg-light p-3 rounded-3 border">
+                <label className={labelClass}>Upload file Excel</label>
+                <input type="file" className="form-control form-control-sm" accept=".xlsx, .xls" 
+                  onChange={e => { setExcelFile(e.target.files[0]); if (e.target.files[0]) setSerialsText(''); }} 
+                />
               </div>
+
               <div className="mb-4 flex-grow-1 d-flex flex-column">
-                <label className="form-label fw-semibold text-dark">Hoặc nhập tay danh sách serial</label>
-                <textarea className="form-control flex-grow-1" style={{minHeight: '200px'}} value={serialsText} placeholder="Mỗi serial một dòng" disabled={!!excelFile} onChange={e => setSerialsText(e.target.value)} />
+                <label className={labelClass}>Hoặc dán danh sách Serial <span className="text-lowercase fw-normal">(Mỗi dòng 1 serial)</span></label>
+                <textarea 
+                  className="form-control flex-grow-1 bg-light border-light-subtle" 
+                  style={{minHeight: '200px', resize: 'none'}} 
+                  value={serialsText} 
+                  placeholder="SN_001&#10;SN_002&#10;SN_003..." 
+                  disabled={!!excelFile} 
+                  onChange={e => setSerialsText(e.target.value)} 
+                />
               </div>
-              <div className="d-flex gap-2 justify-content-end pt-3 border-top">
-                <button type="button" className="btn btn-outline-secondary fw-medium" onClick={() => { setSerialsText(''); setExcelFile(null); }}>Xóa</button>
-                <button type="button" className="btn btn-primary fw-medium" onClick={handleBulkSubmit} disabled={isPreviewing || (!excelFile && !serialsText.trim())}>{isPreviewing ? 'Đang xử lý...' : 'Phân loại trước'}</button>
+
+              <div className="d-flex gap-2 justify-content-end pt-3 border-top mt-auto">
+                <button type="button" className="btn btn-light border fw-medium px-4" onClick={() => { setSerialsText(''); setExcelFile(null); }}>Xóa</button>
+                <button type="button" className="btn btn-primary fw-medium px-4 shadow-sm" onClick={handleBulkSubmit} disabled={isPreviewing || (!excelFile && !serialsText.trim())}>
+                  {isPreviewing ? <><span className="spinner-border spinner-border-sm me-2"></span> Đang xử lý</> : 'Phân loại trước'}
+                </button>
               </div>
             </div>
           )}

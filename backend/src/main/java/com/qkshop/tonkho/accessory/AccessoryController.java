@@ -17,6 +17,7 @@ public class AccessoryController {
     private final AccessoryService accessoryService;
     private final AccessoryHistoryRepository accessoryHistoryRepository;
     private final AccessoryOrderRepository accessoryOrderRepository;
+    private final com.qkshop.tonkho.system.SystemConfigService systemConfigService;
 
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<List<AccessoryHistory>>> getAccessoryHistory() {
@@ -51,6 +52,19 @@ public class AccessoryController {
     public ResponseEntity<ApiResponse<AccessoryOrder>> sellStandalone(@RequestBody Map<String, Object> payload) {
         AccessoryOrder order = accessoryService.createAccessoryOrder(payload);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Xuất phụ kiện thành công", order));
+    }
+
+    @GetMapping("/default-gifts")
+    public ResponseEntity<ApiResponse<String>> getDefaultGifts() {
+        String giftsJson = systemConfigService.getConfig("DEFAULT_GIFT_BUNDLE", "[]");
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Lấy danh sách bộ quà tặng mặc định thành công", giftsJson));
+    }
+
+    @PostMapping("/default-gifts/save")
+    public ResponseEntity<ApiResponse<String>> saveDefaultGifts(@RequestBody Map<String, String> payload) {
+        String giftsJson = payload.getOrDefault("bundleJson", "[]");
+        systemConfigService.upsertConfig("DEFAULT_GIFT_BUNDLE", giftsJson, "Bộ quà tặng mặc định khi bán máy");
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật bộ quà tặng mặc định thành công", giftsJson));
     }
 
     @GetMapping("/orders")

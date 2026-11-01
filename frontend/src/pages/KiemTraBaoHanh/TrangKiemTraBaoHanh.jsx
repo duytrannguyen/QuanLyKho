@@ -494,6 +494,11 @@ export default function TrangKiemTraBaoHanh() {
                                 </td>
                                 <td className="py-3">
                                   <div className="fw-semibold text-primary mb-1">{item.salePrice ? formatCurrency(item.salePrice) + ' đ' : '—'}</div>
+                                  {Number(item.discount) > 0 && (
+                                    <div className="small text-danger fw-medium" style={{ fontSize: '11px' }}>
+                                      (Giảm: -{formatCurrency(item.discount)} đ)
+                                    </div>
+                                  )}
                                   <div className="small text-secondary">{item.saleDate ? new Date(item.saleDate).toLocaleDateString('vi-VN') : '—'}</div>
                                 </td>
                                 <td className="py-3 text-center">

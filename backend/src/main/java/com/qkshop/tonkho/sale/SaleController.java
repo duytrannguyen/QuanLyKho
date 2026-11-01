@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 
 @RestController
@@ -36,13 +37,33 @@ public class SaleController {
 
     @PostMapping("/lookup")
     public ResponseEntity<ApiResponse<Map<String, Object>>> lookupSaleCandidate(@RequestBody Map<String, String> payload) {
-        String serialKey = payload.get("serial");
-        if (serialKey == null || serialKey.trim().isEmpty()) {
-            throw new IllegalArgumentException("Vui lòng nhập số Serial.");
+        String query = payload.get("keyword");
+        if (query == null || query.trim().isEmpty()) {
+            query = payload.get("serial");
+        }
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên máy hoặc số Serial.");
         }
         
-        ActiveInventory ai = inventoryCycleService.lookupSaleCandidate(serialKey);
+        ActiveInventory ai = inventoryCycleService.lookupSaleCandidate(query);
+        Map<String, Object> result = mapActiveInventoryToSaleDTO(ai);
         
+        ApiResponse<Map<String, Object>> response = new ApiResponse<>();
+        response.setSuccess(true);
+        response.setData(result);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/search-candidates")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> searchCandidates(@RequestParam String query) {
+        List<ActiveInventory> list = inventoryCycleService.searchSaleCandidates(query);
+        List<Map<String, Object>> results = list.stream()
+                .map(this::mapActiveInventoryToSaleDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.ok(results));
+    }
+
+    private Map<String, Object> mapActiveInventoryToSaleDTO(ActiveInventory ai) {
         Map<String, Object> result = new java.util.HashMap<>();
         result.put("id", ai.getId());
         result.put("cycleId", ai.getCycleId());
@@ -56,14 +77,37 @@ public class SaleController {
         result.put("warrantyExpiry", ai.getWarrantyExpiry());
         
         if (ai.getConfig() != null) {
-            result.put("ram", ai.getConfig().getRamCode());
-            result.put("ssd", ai.getConfig().getSsdCode());
+            com.qkshop.tonkho.sale.SalesConfig cfg = ai.getConfig();
+            result.put("ram", cfg.getRamCode());
+            result.put("ssd", cfg.getSsdCode());
+            result.put("configDisplayName", cfg.getDisplayName());
+            
+            if (cfg.getVariant() != null) {
+                com.qkshop.tonkho.catalog.VariantV2 var = cfg.getVariant();
+                result.put("cpuCode", var.getCpuCode());
+                result.put("gpuCode", var.getGpuCode());
+                result.put("screenSize", var.getScreenSize());
+                result.put("touchFlag", var.getTouchFlag());
+                result.put("variantName", var.getVariantName());
+
+                if (var.getPlatform() != null) {
+                    com.qkshop.tonkho.catalog.Platform pf = var.getPlatform();
+                    result.put("platformCode", pf.getPlatformCode());
+                    result.put("platformDisplayName", pf.getDisplayName());
+
+                    if (pf.getModelLine() != null) {
+                        com.qkshop.tonkho.catalog.ModelLine ml = pf.getModelLine();
+                        result.put("modelLineName", ml.getModelLineName());
+                        result.put("segmentCode", ml.getSegmentCode() != null ? ml.getSegmentCode().name() : null);
+
+                        if (ml.getBrand() != null) {
+                            result.put("brandName", ml.getBrand().getBrandName());
+                        }
+                    }
+                }
+            }
         }
-        
-        ApiResponse<Map<String, Object>> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData(result);
-        return ResponseEntity.ok(response);
+        return result;
     }
 
     @PostMapping("/submit")
@@ -381,34 +425,7 @@ public class SaleController {
 
     private java.time.LocalDate calculateExpiryFromPeriod(java.time.LocalDate baseDate, String period) {
         if (baseDate == null) baseDate = java.time.LocalDate.now();
-        if (period == null || period.trim().isEmpty()) return null;
-        String text = period.trim().toLowerCase();
-        if (text.contains("không bh") || text.contains("không bảo hành") || text.equals("0") || text.equals("0t")) {
-            return null;
-        }
-
-        // Kiểm tra định dạng ngày cụ thể (DD/MM/YYYY)
-        java.util.regex.Matcher dmyMatcher = java.util.regex.Pattern.compile("(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})").matcher(period);
-        if (dmyMatcher.find()) {
-            int d = Integer.parseInt(dmyMatcher.group(1));
-            int m = Integer.parseInt(dmyMatcher.group(2));
-            int y = Integer.parseInt(dmyMatcher.group(3));
-            return java.time.LocalDate.of(y, m, d);
-        }
-
-        java.util.regex.Matcher numMatcher = java.util.regex.Pattern.compile("(\\d+)").matcher(text);
-        if (numMatcher.find()) {
-            int val = Integer.parseInt(numMatcher.group(1));
-            if (val <= 0) return null;
-            if (text.contains("ngày") || text.contains("ngay") || text.contains("day")) {
-                return baseDate.plusDays(val);
-            } else if (text.contains("năm") || text.contains("nam") || text.contains("year")) {
-                return baseDate.plusYears(val);
-            } else {
-                return baseDate.plusMonths(val);
-            }
-        }
-        return null;
+        return com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, period);
     }
 
 
@@ -566,6 +583,7 @@ public class SaleController {
         map.put("productFullName", cc.getProductFullName());
         map.put("productSummary", cc.getProductSummary());
         map.put("sourceReference", cc.getSourceReference());
+        map.put("orderCode", cc.getSourceReference());
         map.put("closeReason", cc.getCloseReason());
         map.put("upgradeNote", cc.getUpgradeNote());
         map.put("saleNote", cc.getSaleNote());

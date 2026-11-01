@@ -13,10 +13,19 @@ import java.util.Optional;
 public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory, Long> {
     Optional<ActiveInventory> findByCycleId(String cycleId);
     Optional<ActiveInventory> findBySerialKey(String serialKey);
+    Optional<ActiveInventory> findBySerialKeyIgnoreCaseOrCycleId(String serialKey, String cycleId);
     boolean existsBySerialKey(String serialKey);
     List<ActiveInventory> findByState(CycleState state);
     long countByState(CycleState state);
     long count();
+
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN ai.config c " +
+           "WHERE (LOWER(ai.serialKey) LIKE LOWER(CONCAT('%', :kw, '%')) " +
+           "   OR LOWER(ai.sourceModelText) LIKE LOWER(CONCAT('%', :kw, '%')) " +
+           "   OR LOWER(c.configId) LIKE LOWER(CONCAT('%', :kw, '%')) " +
+           "   OR LOWER(c.displayName) LIKE LOWER(CONCAT('%', :kw, '%')))")
+    List<ActiveInventory> searchSaleCandidates(@Param("kw") String keyword);
 
     @Query("SELECT ai FROM ActiveInventory ai WHERE ai.config.configId = :configId AND ai.state = :state")
     List<ActiveInventory> findByConfigIdAndState(@Param("configId") String configId, @Param("state") CycleState state);

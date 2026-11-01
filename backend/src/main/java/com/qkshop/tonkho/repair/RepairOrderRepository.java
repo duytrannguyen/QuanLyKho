@@ -15,6 +15,11 @@ public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> 
 
     List<RepairOrder> findAllByOrderByCreatedDateDesc();
 
+    boolean existsByOrderCode(String orderCode);
+
+    @Query("SELECT r.orderCode FROM RepairOrder r WHERE r.createdDate >= :startOfMonth AND r.createdDate < :endOfMonth AND r.orderCode LIKE 'SC%'")
+    List<String> findOrderCodesInMonth(@Param("startOfMonth") java.time.LocalDateTime startOfMonth, @Param("endOfMonth") java.time.LocalDateTime endOfMonth);
+
     @Query("SELECT r FROM RepairOrder r WHERE LOWER(r.customerPhone) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(r.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(r.orderCode) LIKE LOWER(CONCAT('%', :keyword, '%')) " +

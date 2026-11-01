@@ -22,6 +22,9 @@ public class RepairOrderService {
     private final com.qkshop.tonkho.accessory.AccessoryRepository accessoryRepository;
     private final com.qkshop.tonkho.accessory.AccessoryHistoryRepository accessoryHistoryRepository;
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
+    private final com.qkshop.tonkho.part.PartService partService;
+    private final com.qkshop.tonkho.part.PartRepository partRepository;
+    private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     public List<RepairOrder> getAllOrders(String keyword) {
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -69,10 +72,8 @@ public class RepairOrderService {
             } catch (Exception ignored) {}
         }
 
-        // Sinh mã SC-yyyyMMdd-XXXX
-        String datePrefix = createdDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long countToday = repairOrderRepository.count();
-        String orderCode = String.format("SC-%s-%04d", datePrefix, (countToday % 10000) + 1);
+        // Sinh mã hóa đơn chuẩn 10 ký tự: SC + STT 4 số trong tháng + ddMM 4 số (Ví dụ: SC00010111)
+        String orderCode = invoiceCodeService.generateRepairInvoiceCode(createdDate);
 
         RepairOrder order = RepairOrder.builder()
                 .orderCode(orderCode)
@@ -120,8 +121,16 @@ public class RepairOrderService {
             String sku = (String) itemReq.get("sku");
             if (sku != null && !sku.trim().isEmpty()) {
                 String cleanSku = sku.trim();
-                accessoryRepository.findBySku(cleanSku).ifPresent(acc -> {
-                    if (acc.getQuantity() >= quantity) {
+                boolean deductedInParts = partService.deductForRepair(
+                        cleanSku, quantity, price, orderCode, customerName, customerPhone, deviceModel, order.getTechnicianName());
+                if (!deductedInParts) {
+                    var accOpt = accessoryRepository.findBySku(cleanSku);
+                    if (accOpt.isPresent()) {
+                        var acc = accOpt.get();
+                        if (acc.getQuantity() < quantity) {
+                            throw new IllegalStateException("Linh kiện/phụ kiện " + acc.getName() + " (SKU: " + cleanSku 
+                                    + ") không đủ số lượng tồn kho (Còn: " + acc.getQuantity() + ", Yêu cầu: " + quantity + ")");
+                        }
                         acc.setQuantity(acc.getQuantity() - quantity);
                         accessoryRepository.save(acc);
 
@@ -136,9 +145,9 @@ public class RepairOrderService {
                         hist.setCustomerPhone(customerPhone);
                         accessoryHistoryRepository.save(hist);
                     } else {
-                        log.warn("Tồn kho không đủ cho linh kiện {} khi tạo đơn sửa chữa", cleanSku);
+                        log.warn("Không tìm thấy linh kiện/phụ kiện với SKU {} khi tạo đơn sửa chữa", cleanSku);
                     }
-                });
+                }
             }
 
             RepairOrderItem item = RepairOrderItem.builder()
@@ -237,8 +246,11 @@ public class RepairOrderService {
                     }
                 }
 
+                String itemSku = (String) itemReq.get("sku");
+
                 RepairOrderItem item = RepairOrderItem.builder()
                         .serviceName(serviceName.trim())
+                        .sku(itemSku != null && !itemSku.trim().isEmpty() ? itemSku.trim() : null)
                         .quantity(quantity)
                         .price(price)
                         .warrantyMonths(warrantyMonths)
@@ -309,33 +321,7 @@ public class RepairOrderService {
 
     public static LocalDate calculateExpiryFromPeriod(LocalDate baseDate, String period) {
         if (baseDate == null) baseDate = LocalDate.now();
-        if (period == null || period.trim().isEmpty()) return null;
-        String text = period.trim().toLowerCase();
-        if (text.contains("không bh") || text.contains("không bảo hành") || text.equals("0") || text.equals("0t")) {
-            return null;
-        }
-
-        java.util.regex.Matcher dmyMatcher = java.util.regex.Pattern.compile("(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})").matcher(period);
-        if (dmyMatcher.find()) {
-            int d = Integer.parseInt(dmyMatcher.group(1));
-            int m = Integer.parseInt(dmyMatcher.group(2));
-            int y = Integer.parseInt(dmyMatcher.group(3));
-            return LocalDate.of(y, m, d);
-        }
-
-        java.util.regex.Matcher numMatcher = java.util.regex.Pattern.compile("(\\d+)").matcher(text);
-        if (numMatcher.find()) {
-            int val = Integer.parseInt(numMatcher.group(1));
-            if (val <= 0) return null;
-            if (text.contains("ngày") || text.contains("ngay") || text.contains("day")) {
-                return baseDate.plusDays(val);
-            } else if (text.contains("năm") || text.contains("nam") || text.contains("year")) {
-                return baseDate.plusYears(val);
-            } else {
-                return baseDate.plusMonths(val);
-            }
-        }
-        return null;
+        return com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, period);
     }
 
 

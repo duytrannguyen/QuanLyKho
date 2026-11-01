@@ -53,22 +53,71 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
     return num.toLocaleString('vi-VN') + ' đ';
   };
 
-  // Trích xuất phụ kiện từ saleNote nếu có
+  // Trích xuất phụ kiện và quà tặng từ saleNote
   const extractAccessoriesAndNote = (note) => {
     if (!note) return { accessories: [], cleanNote: '' };
-    const marker = 'Phụ kiện bán kèm: ';
-    const idx = note.indexOf(marker);
-    if (idx !== -1) {
-      const accPart = note.substring(idx + marker.length);
-      const cleanNote = note.substring(0, idx).replace(/\|\s*$/, '').trim();
-      const items = accPart.split(',').map(s => s.trim()).filter(Boolean);
-      return { accessories: items, cleanNote };
+    let cleanNote = note;
+    const items = [];
+
+    // Tìm quà tặng mặc định
+    const giftMarker = 'Quà tặng mặc định: ';
+    const giftIdx = cleanNote.indexOf(giftMarker);
+    if (giftIdx !== -1) {
+      const part = cleanNote.substring(giftIdx + giftMarker.length);
+      const splitIdx = part.indexOf(' | ');
+      const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
+      content.split(',').forEach(s => {
+        const t = s.trim();
+        if (t) items.push(t + ' (Quà tặng)');
+      });
+      cleanNote = cleanNote.substring(0, giftIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
     }
-    return { accessories: [], cleanNote: note };
+
+    // Tìm phụ kiện bán kèm / bán thêm
+    const extraMarkers = ['Phụ kiện bán thêm: ', 'Phụ kiện bán kèm: '];
+    for (const marker of extraMarkers) {
+      const extraIdx = cleanNote.indexOf(marker);
+      if (extraIdx !== -1) {
+        const part = cleanNote.substring(extraIdx + marker.length);
+        const splitIdx = part.indexOf(' | ');
+        const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
+        content.split(',').forEach(s => {
+          const t = s.trim();
+          if (t) items.push(t);
+        });
+        cleanNote = cleanNote.substring(0, extraIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
+      }
+    }
+
+    cleanNote = cleanNote.replace(/^\|\s*|\s*\|\s*$/g, '').trim();
+    return { accessories: items, cleanNote };
   };
 
   const { accessories, cleanNote } = extractAccessoriesAndNote(order.saleNote);
   const StatusIcon = statusInfo?.icon || ShieldCheck;
+
+  const extractUpgradeTotal = (note) => {
+    if (!note) return 0;
+    const regex = /[(\[]\+([0-9.,]+)[^)]*[)\]]/g;
+    let total = 0;
+    let match;
+    while ((match = regex.exec(note)) !== null) {
+      const val = Number(match[1].replace(/[^0-9]/g, '')) || 0;
+      total += val;
+    }
+    return total;
+  };
+
+  const upgradeTotal = extractUpgradeTotal(order.upgradeNote);
+
+  const rawSalePrice = Number(order.salePrice) || 0;
+  const discAmt = Number(order.discount) || 0;
+  const originalAmt = Number(order.grossRevenue) || (Number(order.defaultSalePrice) > 0 ? Number(order.defaultSalePrice) : 0) || rawSalePrice;
+
+  // Nếu salePrice trong DB là giá máy gốc (chưa cộng phí nâng cấp), tự động tính đúng tổng thực thu
+  const finalAmt = (upgradeTotal > 0 && rawSalePrice <= originalAmt)
+    ? (Math.max(0, originalAmt - discAmt) + upgradeTotal)
+    : rawSalePrice;
 
   // In phiếu bảo hành kiêm xuất kho
   const handlePrint = () => {
@@ -123,8 +172,8 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
             <div class="subtitle">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 12px; color: #64748b;">Mã đơn: <strong>${order.cycleId || '—'}</strong></div>
-            <div style="font-size: 12px; color: #64748b;">Mã phiếu: <strong>${order.sourceReference || '—'}</strong></div>
+            <div style="font-size: 12px; color: #64748b;">Mã hóa đơn: <strong style="color: #2563eb;">${order.orderCode || order.sourceReference || '—'}</strong></div>
+            <div style="font-size: 12px; color: #64748b;">Mã chu kỳ: <strong>${order.cycleId || '—'}</strong></div>
             <div style="font-size: 12px; color: #64748b;">Ngày in: ${new Date().toLocaleDateString('vi-VN')}</div>
           </div>
         </div>
@@ -181,7 +230,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                   ${order.upgradeNote && order.upgradeNote !== order.productSummary ? `<br><span style="color:#0284c7; font-weight: 600;">Nâng cấp: ${order.upgradeNote}</span>` : ''}
                 </td>
                 <td style="text-align: right; font-weight: bold;">
-                  ${formatMoney(order.salePrice)}
+                  ${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
                 </td>
               </tr>
               ${accessories.length > 0 ? `
@@ -196,8 +245,10 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
           </table>
 
           <div class="total-box">
-            ${order.discount ? `<div>Giảm giá / Ưu đãi: <strong>${formatMoney(order.discount)}</strong></div>` : ''}
-            <div>Tổng số tiền thanh toán: <span class="total-price">${formatMoney(order.salePrice)}</span></div>
+            <div style="color: #64748b; font-size: 13px;">Giá gốc / Niêm yết máy: <span style="${discAmt > 0 ? 'text-decoration: line-through;' : 'font-weight: 600; color: #0f172a;'}">${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}</span></div>
+            ${upgradeTotal > 0 ? `<div style="color: #b45309; font-size: 13px; font-weight: 600;">Phí nâng cấp linh kiện: +${formatMoney(upgradeTotal)}</div>` : ''}
+            ${discAmt > 0 ? `<div style="color: #dc2626; font-size: 13px; font-weight: 600;">Giảm giá / Ưu đãi: -${formatMoney(discAmt)}</div>` : ''}
+            <div style="margin-top: 6px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">Tổng thanh toán thực tế: <span class="total-price">${formatMoney(finalAmt)}</span></div>
           </div>
         </div>
 
@@ -270,8 +321,8 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                 </div>
                 <div className="small text-muted mt-1 d-flex align-items-center gap-3">
                   <span>Ngày bán: <strong className="text-dark">{formatDate(order.saleDate)}</strong></span>
-                  {order.sourceReference && (
-                    <span>Mã tham chiếu: <strong className="text-dark">{order.sourceReference}</strong></span>
+                  {(order.orderCode || order.sourceReference) && (
+                    <span>Mã hóa đơn: <strong className="text-primary font-monospace">{order.orderCode || order.sourceReference}</strong></span>
                   )}
                 </div>
               </div>
@@ -435,24 +486,35 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                   <div className="card-body p-4">
                     <div className="d-flex flex-column gap-3">
                       
-                      {order.grossRevenue && (
+                      <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                        <span className="text-muted small">Giá gốc / Niêm yết máy:</span>
+                        <span className={`fw-semibold ${discAmt > 0 ? 'text-secondary text-decoration-line-through' : 'text-dark'}`}>
+                          {formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
+                        </span>
+                      </div>
+
+                      {order.upgradeNote && (
                         <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
-                          <span className="text-muted small">Doanh thu gộp:</span>
-                          <span className="text-secondary fw-semibold">{formatMoney(order.grossRevenue)}</span>
+                          <span className="text-muted small">Cấu hình nâng cấp:</span>
+                          <span className="badge bg-warning bg-opacity-25 text-dark border border-warning small text-truncate" style={{maxWidth: '180px'}} title={order.upgradeNote}>
+                            {order.upgradeNote}
+                          </span>
                         </div>
                       )}
 
-                      {order.defaultSalePrice && !order.grossRevenue && (
+                      {upgradeTotal > 0 && (
                         <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
-                          <span className="text-muted small">Giá niêm yết ban đầu:</span>
-                          <span className="text-secondary">{formatMoney(order.defaultSalePrice)}</span>
+                          <span className="text-muted small">Phí nâng cấp linh kiện:</span>
+                          <span className="fw-bold text-warning">
+                            + {formatMoney(upgradeTotal)}
+                          </span>
                         </div>
                       )}
 
                       <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
                         <span className="text-muted small">Chiết khấu / Giảm giá:</span>
-                        <span className="fw-semibold text-success">
-                          {order.discount ? `- ${formatMoney(order.discount)}` : '0 đ'}
+                        <span className={`fw-semibold ${discAmt > 0 ? 'text-danger' : 'text-muted'}`}>
+                          {discAmt > 0 ? `- ${formatMoney(discAmt)}` : '0 đ'}
                         </span>
                       </div>
 
@@ -465,10 +527,13 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                         </div>
                       )}
 
-                      <div className="d-flex justify-content-between align-items-center pt-1">
-                        <span className="fw-bold text-dark">Giá chốt giao dịch:</span>
+                      <div className="d-flex justify-content-between align-items-center pt-2 bg-light p-3 rounded-3">
+                        <div>
+                          <span className="fw-bold text-dark d-block">Tổng hóa đơn thực thu:</span>
+                          <small className="text-muted" style={{ fontSize: '11px' }}>(Đã tính nâng cấp & giảm giá)</small>
+                        </div>
                         <span className="h4 m-0 fw-bold text-primary">
-                          {formatMoney(order.salePrice)}
+                          {formatMoney(finalAmt)}
                         </span>
                       </div>
 
@@ -499,11 +564,16 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                           <h5 className="fw-bold text-dark mt-1 mb-0">
                             {order.productFullName || order.sourceModelText || order.platformDisplayName || 'Laptop'}
                           </h5>
-                          {order.brandName && (
-                            <span className="badge bg-secondary-subtle text-secondary border mt-1">
-                              {order.brandName} {order.modelLineName ? `• ${order.modelLineName}` : ''}
+                          <div className="d-flex flex-wrap gap-2 align-items-center mt-2">
+                            {order.brandName && (
+                              <span className="badge bg-secondary-subtle text-secondary border">
+                                {order.brandName} {order.modelLineName ? `• ${order.modelLineName}` : ''}
+                              </span>
+                            )}
+                            <span className="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle py-1 px-2 fw-semibold">
+                              Giá gốc máy: {formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
                             </span>
-                          )}
+                          </div>
                         </div>
 
                         {/* Serial Box */}
@@ -577,9 +647,14 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                     {/* Khung nâng cấp cấu hình nếu có */}
                     {order.upgradeNote && (
                       <div className="p-3 rounded-3 bg-warning bg-opacity-10 border border-warning-subtle mb-3">
-                        <div className="fw-bold text-dark d-flex align-items-center gap-2 mb-1">
-                          <span className="badge bg-warning text-dark">Nâng cấp cấu hình</span>
-                          <span>Cấu hình bàn giao cho khách:</span>
+                        <div className="fw-bold text-dark d-flex align-items-center justify-content-between mb-1">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-warning text-dark">Nâng cấp cấu hình</span>
+                            <span>Cấu hình bàn giao cho khách:</span>
+                          </div>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle small">
+                            <ShieldCheck size={12} className="me-1 d-inline" /> Bảo hành đồng bộ theo máy
+                          </span>
                         </div>
                         <div className="fw-semibold text-dark fs-6 mt-1">
                           {order.upgradeNote}

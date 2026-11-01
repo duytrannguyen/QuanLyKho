@@ -7,11 +7,11 @@ export const formatCurrency = (value) => {
   }
   const str = value.toString().trim();
   if (!str) return '';
-  // Nếu là chuỗi số thực dạng "11445907.82"
-  if (!isNaN(str) && str.includes('.')) {
+  // Nếu là chuỗi số thực chưa định dạng kiểu API trả về: ví dụ "11445907.82"
+  if (/^\d+\.\d{1,2}$/.test(str)) {
     return Math.round(parseFloat(str)).toLocaleString('vi-VN');
   }
-  // Nếu là chuỗi số nhập liệu từ form người dùng
+  // Chuỗi số nhập liệu từ form người dùng (kể cả có chứa dấu chấm phân cách)
   const cleaned = str.replace(/\D/g, '');
   if (!cleaned) return '';
   return parseInt(cleaned, 10).toLocaleString('vi-VN');

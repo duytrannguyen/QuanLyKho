@@ -18,13 +18,14 @@ public final class SourceNormalizer {
     private static final Pattern PATTERN_FACEBOOK = Pattern.compile("facebook|\\bfb\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_ZALO = Pattern.compile("zalo", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_GOOGLE = Pattern.compile("google|maps", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PATTERN_DIRECT = Pattern.compile("trực tiếp|truc tiep|vãng lai|vang lai|cửa hàng|cua hang|tại shop|tai shop|tại chỗ", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_REFERRAL = Pattern.compile("giới thiệu|gioi thieu|người quen|nguoi quen|nhân viên|nhan vien|referral", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_UNKNOWN = Pattern.compile("chưa|chua|không rõ|khong ro|không xác định|khong xac dinh|^unknown$", Pattern.CASE_INSENSITIVE);
 
     /**
      * Chuẩn hoá nguồn chốt đơn:
      * - Ưu tiên nguồn chốt cuối cùng (lastSource), nếu không rõ hoặc trống thì lấy nguồn đầu tiên (firstSource).
-     * - Áp dụng các quy tắc map nguồn chuẩn: TikTok, Facebook, Zalo, Google, Người quen giới thiệu, Chưa rõ, Khác.
+     * - Áp dụng các quy tắc map nguồn chuẩn: TikTok, Facebook, Zalo, Google, Người quen giới thiệu, Trực tiếp / Vãng lai, Chưa rõ, Khác.
      */
     public static String normalizeSource(String firstSource, String lastSource) {
         String raw = (lastSource != null && !lastSource.isBlank()) ? lastSource.trim() : "";
@@ -44,6 +45,7 @@ public final class SourceNormalizer {
         if (PATTERN_ZALO.matcher(lower).find()) return "Zalo";
         if (PATTERN_GOOGLE.matcher(lower).find()) return "Google";
         if (PATTERN_REFERRAL.matcher(lower).find()) return "Người quen giới thiệu";
+        if (PATTERN_DIRECT.matcher(lower).find()) return "Trực tiếp / Vãng lai";
 
         return "Khác";
     }

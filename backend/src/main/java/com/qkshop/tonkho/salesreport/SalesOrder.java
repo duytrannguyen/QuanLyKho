@@ -14,11 +14,13 @@ import java.time.LocalDateTime;
  * ánh xạ 1:1 với 31 cột của sheet DATABASE_BÁN HÀNG.
  */
 @Entity
+@EntityListeners(com.qkshop.tonkho.crm.SalesOrderCrmListener.class)
 @Table(name = "sales_orders", indexes = {
         @Index(name = "idx_so_date", columnList = "sale_date"),
         @Index(name = "idx_so_source", columnList = "normalized_source"),
         @Index(name = "idx_so_brand", columnList = "brand"),
-        @Index(name = "idx_so_status", columnList = "order_status, payment_status")
+        @Index(name = "idx_so_status", columnList = "order_status, payment_status"),
+        @Index(name = "idx_so_crm_customer", columnList = "crm_customer_id, sale_date")
 })
 @Getter
 @Setter
@@ -179,6 +181,10 @@ public class SalesOrder {
     @Column(name = "order_category", length = 50)
     @Builder.Default
     private String orderCategory = "MACHINE";
+
+    /** Khách hàng CRM sở hữu đơn này (chỉ được gán qua CrmCustomerLinkService, không ghi từ entity). */
+    @Column(name = "crm_customer_id", insertable = false, updatable = false)
+    private Long crmCustomerId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

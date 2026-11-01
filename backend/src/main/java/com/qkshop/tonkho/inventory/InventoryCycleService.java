@@ -34,12 +34,15 @@ import java.time.LocalDateTime;
 public class InventoryCycleService {
 
     private final ActiveInventoryRepository activeInventoryRepo;
+    private final ClosedCycleRepository closedCycleRepo;
     private final SerialRegistryRepository serialRegistryRepo;
     private final VariantV2Repository variantRepo;
     private final StateTransitionService stateTransitionService;
     private final CommandLedgerRepository commandLedgerRepo;
     private final AccessoryService accessoryService;
+    private final com.qkshop.tonkho.part.PartService partService;
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     /**
      * Tra cứu theo VariantV2.
@@ -135,11 +138,40 @@ public class InventoryCycleService {
         return new PageImpl<>(pageContent, PageRequest.of(page, size), results.size());
     }
 
-    public ActiveInventory lookupSaleCandidate(String serialKey) {
-        String key = serialKey.trim().toUpperCase();
-        ActiveInventory ai = activeInventoryRepo.findBySerialKey(key)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy máy trong kho với serial: " + serialKey));
-        return ai;
+    public ActiveInventory lookupSaleCandidate(String keyword) {
+        String clean = keyword.trim();
+        String upper = clean.toUpperCase();
+        
+        // 1. Tìm chính xác theo serial (viết hoa chuẩn)
+        Optional<ActiveInventory> aiOpt = activeInventoryRepo.findBySerialKey(upper);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        // 2. Tìm theo cycleId hoặc serial nguyên bản
+        aiOpt = activeInventoryRepo.findBySerialKeyIgnoreCaseOrCycleId(clean, clean);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        // 3. Tìm theo từ khóa (serial chứa từ khóa hoặc tên model chứa từ khóa)
+        List<ActiveInventory> matches = activeInventoryRepo.searchSaleCandidates(clean);
+        if (!matches.isEmpty()) {
+            // Ưu tiên máy READY nếu có
+            return matches.stream()
+                    .filter(m -> m.getState() == CycleState.READY)
+                    .findFirst()
+                    .orElse(matches.get(0));
+        }
+
+        throw new IllegalArgumentException("Không tìm thấy máy trong kho với từ khóa/serial: " + keyword);
+    }
+
+    public List<ActiveInventory> searchSaleCandidates(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return List.of();
+        }
+        return activeInventoryRepo.searchSaleCandidates(keyword.trim());
     }
 
     @Transactional
@@ -181,10 +213,36 @@ public class InventoryCycleService {
             throw new IllegalStateException("Máy không ở trạng thái Sẵn sàng bán (READY). Trạng thái hiện tại: " + ai.getState());
         }
         
+        BigDecimal originalListedPrice = ai.getSalePrice();
         ai.setSalePrice(finalPrice);
         activeInventoryRepo.save(ai); // Save the price before closing to have it in the snapshot
 
-        ClosedCycle closed = stateTransitionService.transitionToClosed(ai.getCycleId(), CloseType.SALE, "SALE-" + requestId, salesperson, "Bán máy");
+        LocalDateTime sDate = LocalDateTime.now();
+        if (saleDetails != null && saleDetails.containsKey("saleDate") && saleDetails.get("saleDate") != null) {
+            String strDate = saleDetails.get("saleDate").toString().trim();
+            try {
+                if (strDate.length() == 10) {
+                    sDate = java.time.LocalDate.parse(strDate).atStartOfDay();
+                } else {
+                    sDate = LocalDateTime.parse(strDate);
+                }
+            } catch (Exception e) {
+                log.warn("Invalid saleDate format: {}", saleDetails.get("saleDate"));
+            }
+        }
+
+        // Sinh mã hóa đơn chuẩn 10 ký tự: BM + STT 4 số trong tháng + ddMM 4 số (Ví dụ: BM00010111)
+        String rawTxnId = saleDetails != null ? (String) saleDetails.get("transactionId") : null;
+        if (rawTxnId == null || rawTxnId.isBlank()) {
+            rawTxnId = saleDetails != null ? (String) saleDetails.get("orderCode") : null;
+        }
+        final String txnId = (rawTxnId != null && !rawTxnId.isBlank())
+                ? rawTxnId
+                : invoiceCodeService.generateMachineInvoiceCode(sDate);
+
+        ClosedCycle closed = stateTransitionService.transitionToClosed(ai.getCycleId(), CloseType.SALE, txnId, salesperson, "Bán máy");
+        closed.setSourceReference(txnId);
+        closed.setSaleDate(sDate);
         
         // Enrich ClosedCycle with new sale fields
         if (saleDetails != null) {
@@ -192,10 +250,12 @@ public class InventoryCycleService {
             closed.setCustomerPhone((String) saleDetails.get("customerPhone"));
             String saleRam = (String) saleDetails.get("saleRam");
             String saleSsd = (String) saleDetails.get("saleSsd");
-            if (saleRam != null || saleSsd != null) {
+            String customUpgradeNote = (String) saleDetails.get("upgradeNote");
+
+            if (customUpgradeNote != null && !customUpgradeNote.isBlank()) {
+                closed.setUpgradeNote(customUpgradeNote.trim());
+            } else if (saleRam != null || saleSsd != null) {
                 closed.setUpgradeNote("RAM: " + (saleRam != null ? saleRam : "Gốc") + " | SSD: " + (saleSsd != null ? saleSsd : "Gốc"));
-            } else {
-                closed.setUpgradeNote((String) saleDetails.get("upgradeNote"));
             }
             closed.setSaleNote((String) saleDetails.get("saleNote"));
             String wp = (String) saleDetails.get("warrantyPeriod");
@@ -216,6 +276,8 @@ public class InventoryCycleService {
                 } catch (Exception e) {
                     log.warn("Invalid grossRevenue format: {}", grossRevenueObj);
                 }
+            } else if (originalListedPrice != null) {
+                closed.setGrossRevenue(originalListedPrice);
             }
 
             if (saleDetails.containsKey("paymentStatus")) {
@@ -265,28 +327,64 @@ public class InventoryCycleService {
                 }
             }
             
-            // Deduct accessories
+            // Deduct accessories & upgrade parts
             List<Map<String, Object>> accessories = (List<Map<String, Object>>) saleDetails.get("accessories");
+            BigDecimal totalPaidAccessoriesAmount = BigDecimal.ZERO;
+
             if (accessories != null && !accessories.isEmpty()) {
-                accessoryService.deductAccessories(accessories, closed.getCustomerName(), closed.getCustomerPhone(), closed.getCycleId(), salesperson, closed.getSaleDate());
-                
-                // Phân loại quà tặng mặc định (0đ) vs phụ kiện bán kèm ngoài mặc định để ghi chú đầy đủ
+                List<Map<String, Object>> generalAccessories = new java.util.ArrayList<>();
                 List<String> giftItems = new java.util.ArrayList<>();
                 List<String> paidItems = new java.util.ArrayList<>();
+                List<String> upgradeItems = new java.util.ArrayList<>();
+
                 for (Map<String, Object> a : accessories) {
                     boolean isGift = Boolean.TRUE.equals(a.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(a.get("isGift")));
+                    boolean isUpgrade = Boolean.TRUE.equals(a.get("isUpgrade")) || "true".equalsIgnoreCase(String.valueOf(a.get("isUpgrade")));
                     String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
-                    if (isGift) {
+                    String sku = (String) a.get("sku");
+                    int qty = a.get("quantity") != null ? Integer.parseInt(a.get("quantity").toString()) : 1;
+                    BigDecimal price = BigDecimal.ZERO;
+                    Object p = a.get("price");
+                    if (p != null && !p.toString().isEmpty()) {
+                        try {
+                            price = new BigDecimal(p.toString().replaceAll("[^0-9.]", ""));
+                        } catch (Exception ignored) {}
+                    }
+
+                    if (isUpgrade) {
+                        String priceStr = price.compareTo(BigDecimal.ZERO) > 0 ? " [+" + price + "đ]" : "";
+                        upgradeItems.add(nameWithQty + priceStr);
+                        // Trừ trực tiếp trong kho linh kiện chuyên dụng nếu có trong bảng Part
+                        boolean deducted = (sku != null && !sku.trim().isEmpty()) 
+                                && partService.deductForUpgrade(sku.trim(), qty, price, closed.getCycleId(),
+                                closed.getCustomerName(), closed.getCustomerPhone(), salesperson, closed.getWarrantyPeriod());
+                        if (!deducted) {
+                            // Fallback nếu người dùng chọn SKU linh kiện cũ từ kho phụ kiện
+                            generalAccessories.add(a);
+                        }
+                    } else if (isGift) {
                         giftItems.add(nameWithQty);
+                        generalAccessories.add(a);
                     } else {
-                        Object p = a.get("price");
-                        String priceStr = (p != null && !p.toString().isEmpty()) ? " [" + p + "đ]" : "";
+                        // Phụ kiện mua thêm có tính phí
+                        BigDecimal itemTotal = price.multiply(BigDecimal.valueOf(qty));
+                        totalPaidAccessoriesAmount = totalPaidAccessoriesAmount.add(itemTotal);
+                        String priceStr = price.compareTo(BigDecimal.ZERO) > 0 ? " [" + price + "đ]" : "";
                         paidItems.add(nameWithQty + priceStr);
+                        generalAccessories.add(a);
                     }
                 }
 
+                if (!generalAccessories.isEmpty()) {
+                    accessoryService.deductAccessories(generalAccessories, closed.getCustomerName(), closed.getCustomerPhone(), closed.getCycleId(), salesperson, closed.getSaleDate());
+                }
+
                 StringBuilder accNote = new StringBuilder();
+                if (!upgradeItems.isEmpty()) {
+                    accNote.append("Linh kiện nâng cấp: ").append(String.join(", ", upgradeItems));
+                }
                 if (!giftItems.isEmpty()) {
+                    if (accNote.length() > 0) accNote.append(" | ");
                     accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
                 }
                 if (!paidItems.isEmpty()) {
@@ -299,17 +397,23 @@ public class InventoryCycleService {
                                                        : currentNote + " | " + accNote.toString();
                 closed.setSaleNote(newNote);
             }
+
+            // Doanh thu thuần của máy = Tổng thanh toán - Doanh thu phụ kiện bán thêm
+            // Đảm bảo không bị tính trùng (double counting) giữa máy và phụ kiện trên báo cáo doanh số
+            BigDecimal machineNetRevenue = finalPrice.subtract(totalPaidAccessoriesAmount);
+            if (machineNetRevenue.compareTo(BigDecimal.ZERO) < 0) {
+                machineNetRevenue = BigDecimal.ZERO;
+            }
+            closed.setSalePriceSnapshot(machineNetRevenue);
+
+            // Lưu tường minh ClosedCycle vào CSDL
+            closed = closedCycleRepo.save(closed);
             
-            // Save the updated closed cycle
-            // Usually stateTransitionService.transitionToClosed saves it, but we modified it after.
-            // However, ClosedCycle might be managed in this transaction. 
-            // Wait, stateTransitionService might save and return it, let's assume it's managed or we need to save it.
-            // If there's no closedCycleRepo here, since it's returned by stateTransitionService, it might be persisted.
-            // But let's verify if JPA auto-commits changes to `closed` since it's within @Transactional. Yes, it will.
             // Lưu hoặc cập nhật vào bảng sales_orders để Dashboard có số liệu bán ngay lập tức
             try {
-                String rawTxnId = (String) saleDetails.get("transactionId");
-                final String txnId = (rawTxnId != null && !rawTxnId.isBlank()) ? rawTxnId : ("WEB-" + requestId);
+                final String finalTxnId = (closed.getSourceReference() != null && !closed.getSourceReference().isBlank())
+                        ? closed.getSourceReference()
+                        : txnId;
 
                 String firstSrc = (String) saleDetails.get("firstSource");
                 String lastSrc = (String) saleDetails.get("lastSource");
@@ -344,15 +448,15 @@ public class InventoryCycleService {
                 String normSource = com.qkshop.tonkho.salesreport.SourceNormalizer.normalizeSource(firstSrc, lastSrc);
                 String inboxType = com.qkshop.tonkho.salesreport.SourceNormalizer.determineInboxType(normSource);
 
-                LocalDateTime sDate = closed.getSaleDate() != null ? closed.getSaleDate() : LocalDateTime.now();
+                LocalDateTime actualSaleDate = closed.getSaleDate() != null ? closed.getSaleDate() : sDate;
 
-                com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(txnId)
+                com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(finalTxnId)
                         .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
-                                .transactionId(txnId)
+                                .transactionId(finalTxnId)
                                 .build());
 
-                so.setSaleDate(sDate);
-                so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
+                so.setSaleDate(actualSaleDate);
+                so.setMonthDate(actualSaleDate.toLocalDate().withDayOfMonth(1));
                 so.setCustomerName(closed.getCustomerName());
                 so.setCustomerPhone(closed.getCustomerPhone());
                 so.setCustomerType(custType != null ? custType : "Khách mua lần đầu");
@@ -371,14 +475,15 @@ public class InventoryCycleService {
                 so.setConfigSummary(closed.getProductSummary());
                 so.setWarrantyPeriod(closed.getWarrantyPeriod());
                 so.setWarrantyExpiry(closed.getWarrantyExpiry());
-                so.setGrossRevenue(closed.getGrossRevenue() != null ? closed.getGrossRevenue() : finalPrice);
+                so.setGrossRevenue(closed.getGrossRevenue() != null ? closed.getGrossRevenue() : machineNetRevenue);
                 so.setDiscount(closed.getDiscount() != null ? closed.getDiscount() : BigDecimal.ZERO);
-                so.setNetRevenue(finalPrice);
+                so.setNetRevenue(machineNetRevenue);
                 so.setNote(closed.getSaleNote());
                 so.setSerialKeys(serialKey);
                 so.setSalesperson(salesperson);
                 so.setMatchedCycleId(closed.getCycleId());
                 so.setOrigin("WEB_APP");
+                so.setOrderCategory("MACHINE");
 
                 salesOrderRepo.save(so);
             } catch (Exception e) {

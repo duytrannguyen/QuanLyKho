@@ -89,59 +89,88 @@ public class MachineService {
                 .filter(b -> b.getBrandId() != null && b.getBrandName() != null)
                 .collect(Collectors.toMap(com.qkshop.tonkho.catalog.Brand::getBrandId, com.qkshop.tonkho.catalog.Brand::getBrandName, (a, b) -> a));
 
-        // 1. Máy đang trong kho (Active)
-        List<ActiveInventory> actives = activeInventoryRepository.findAll();
-        for (ActiveInventory ai : actives) {
-            String brandId = serialRegistryRepository.findBySerialKey(ai.getSerialKey())
-                    .map(sr -> sr.getBrandId()).orElse(null);
-            
-            String brandName = brandId != null ? brandMap.get(brandId) : null;
-            if (brandName == null && ai.getConfig() != null && ai.getConfig().getVariant() != null
-                    && ai.getConfig().getVariant().getPlatform() != null
-                    && ai.getConfig().getVariant().getPlatform().getModelLine() != null
-                    && ai.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
-                brandName = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
-                if (brandId == null) {
-                    brandId = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
-                }
-            }
-            
-            String configName = null;
-            if (ai.getConfig() != null) {
-                configName = ai.getConfig().getDisplayName();
-            }
-            
-            long days = 0;
-            if (ai.getIntakeAt() != null) {
-                days = ChronoUnit.DAYS.between(ai.getIntakeAt(), LocalDateTime.now());
-                long paused = ai.getPausedDays() != null ? ai.getPausedDays() : 0;
-                if (ai.getLastPausedAt() != null) {
-                    paused += ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
-                }
-                days = Math.max(0, days - paused);
-            }
+        // Quyết định tập dữ liệu cần truy vấn dựa trên bộ lọc trạng thái để tối ưu RAM
+        boolean includeActive = true;
+        boolean includeClosed = true;
+        CycleState targetState = null;
+        CloseType targetCloseType = null;
 
-            combined.add(ClosedCycleDTO.builder()
-                    .cycleId(ai.getCycleId())
-                    .serialKey(ai.getSerialKey())
-                    .sourceModelText(ai.getSourceModelText())
-                    .configId(ai.getConfig() != null ? ai.getConfig().getConfigId() : null)
-                    .configDisplayName(configName)
-                    .intakeType(ai.getIntakeType() != null ? ai.getIntakeType().name() : null)
-                    .state(ai.getState() != null ? ai.getState().name() : null)
-                    .intakeAt(ai.getIntakeAt())
-                    .salePriceSnapshot(ai.getSalePrice())
-                    .note(ai.getNote())
-                    .warrantyPeriod(ai.getWarrantyPeriod())
-                    .warrantyExpiry(ai.getWarrantyExpiry())
-                    .brandId(brandId)
-                    .brandName(brandName)
-                    .storageDays(days)
-                    .build());
+        if (StringUtils.hasText(status) && !"Tất cả".equalsIgnoreCase(status)) {
+            try {
+                targetState = CycleState.valueOf(status.toUpperCase());
+            } catch (Exception ignored) {}
+
+            try {
+                targetCloseType = CloseType.valueOf(status.toUpperCase());
+            } catch (Exception ignored) {}
+
+            if (status.equalsIgnoreCase("ACTIVE_ONLY") || targetState != null) {
+                includeClosed = false;
+            } else if (status.equalsIgnoreCase("CLOSED_ONLY") || targetCloseType != null) {
+                includeActive = false;
+            }
+        }
+
+        // 1. Máy đang trong kho (Active)
+        if (includeActive) {
+            List<ActiveInventory> actives = targetState != null 
+                    ? activeInventoryRepository.findByState(targetState)
+                    : activeInventoryRepository.findAll();
+            for (ActiveInventory ai : actives) {
+                String brandId = serialRegistryRepository.findBySerialKey(ai.getSerialKey())
+                        .map(sr -> sr.getBrandId()).orElse(null);
+                
+                String brandName = brandId != null ? brandMap.get(brandId) : null;
+                if (brandName == null && ai.getConfig() != null && ai.getConfig().getVariant() != null
+                        && ai.getConfig().getVariant().getPlatform() != null
+                        && ai.getConfig().getVariant().getPlatform().getModelLine() != null
+                        && ai.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
+                    brandName = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
+                    if (brandId == null) {
+                        brandId = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
+                    }
+                }
+                
+                String configName = null;
+                if (ai.getConfig() != null) {
+                    configName = ai.getConfig().getDisplayName();
+                }
+                
+                long days = 0;
+                if (ai.getIntakeAt() != null) {
+                    days = ChronoUnit.DAYS.between(ai.getIntakeAt(), LocalDateTime.now());
+                    long paused = ai.getPausedDays() != null ? ai.getPausedDays() : 0;
+                    if (ai.getLastPausedAt() != null) {
+                        paused += ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
+                    }
+                    days = Math.max(0, days - paused);
+                }
+
+                combined.add(ClosedCycleDTO.builder()
+                        .cycleId(ai.getCycleId())
+                        .serialKey(ai.getSerialKey())
+                        .sourceModelText(ai.getSourceModelText())
+                        .configId(ai.getConfig() != null ? ai.getConfig().getConfigId() : null)
+                        .configDisplayName(configName)
+                        .intakeType(ai.getIntakeType() != null ? ai.getIntakeType().name() : null)
+                        .state(ai.getState() != null ? ai.getState().name() : null)
+                        .intakeAt(ai.getIntakeAt())
+                        .salePriceSnapshot(ai.getSalePrice())
+                        .note(ai.getNote())
+                        .warrantyPeriod(ai.getWarrantyPeriod())
+                        .warrantyExpiry(ai.getWarrantyExpiry())
+                        .brandId(brandId)
+                        .brandName(brandName)
+                        .storageDays(days)
+                        .build());
+            }
         }
 
         // 2. Máy đã đóng (Closed)
-        List<ClosedCycle> closeds = closedCycleRepository.findAll();
+        if (includeClosed) {
+            List<ClosedCycle> closeds = targetCloseType != null
+                    ? closedCycleRepository.findByCloseType(targetCloseType)
+                    : closedCycleRepository.findAll();
         for (ClosedCycle cc : closeds) {
             String brandId = serialRegistryRepository.findBySerialKey(cc.getSerialKey())
                     .map(sr -> sr.getBrandId()).orElse(null);
@@ -189,6 +218,7 @@ public class MachineService {
                     .brandName(brandName)
                     .storageDays(days)
                     .build());
+            }
         }
 
         // 3. Sắp xếp: Ưu tiên closedAt (nếu có) giảm dần, sau đó đến intakeAt giảm dần
@@ -327,6 +357,11 @@ public class MachineService {
                     }
                     // Đóng các InspectionRequest đang mở
                     closeOpenInspectionRequests(ai.getCycleId(), username);
+                    // Đồng bộ SerialRegistry
+                    serialRegistryRepository.findBySerialKey(key).ifPresent(sr -> {
+                        sr.setCurrentState(CycleState.READY);
+                        serialRegistryRepository.save(sr);
+                    });
                 }
                 case "CAN_KIEM_TRA", "NEEDS_INSPECTION", "DANG_KIEM_TRA" -> {
                     ai.setState(CycleState.NEEDS_INSPECTION);
@@ -335,6 +370,11 @@ public class MachineService {
                     }
                     String notes = updates.get("notes") != null ? updates.get("notes").toString() : null;
                     ensureOpenInspectionRequest(ai, notes);
+                    // Đồng bộ SerialRegistry
+                    serialRegistryRepository.findBySerialKey(key).ifPresent(sr -> {
+                        sr.setCurrentState(CycleState.NEEDS_INSPECTION);
+                        serialRegistryRepository.save(sr);
+                    });
                 }
                 case "DA_BAN", "HUY_TRA", "CLOSED" -> {
                     CloseType type = CloseType.CANCEL;
@@ -370,36 +410,21 @@ public class MachineService {
                 }
             }
             
-            if (ai.getConfig() != null) {
-                SalesConfig updatedCfg = catalogService.updateExistingConfig(ai.getConfig(), brandName, productLine, segmentCode, modelFull, cpu, gpu, touch, screenSize, ram, ssd);
-                if (updatedCfg != null && !updatedCfg.getConfigId().equals(ai.getConfig().getConfigId())) {
-                    ai.setConfig(updatedCfg);
-                }
-                ai.setSourceModelText(modelFull);
-                
-                // Đồng bộ tên Brand xuống SerialRegistry nếu brand thay đổi
-                serialRegistryRepository.findBySerialKey(key).ifPresent(sr -> {
-                    if (ai.getConfig().getVariant() != null && ai.getConfig().getVariant().getPlatform() != null 
-                        && ai.getConfig().getVariant().getPlatform().getModelLine() != null 
-                        && ai.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
-                        sr.setBrandId(ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId());
-                        serialRegistryRepository.save(sr);
-                    }
-                });
-            } else {
-                com.qkshop.tonkho.catalog.ModelLine mlObj = catalogService.findOrCreateModelLine(brandObj, productLine, segmentCode);
-                com.qkshop.tonkho.catalog.Platform platObj = catalogService.findOrCreatePlatform(mlObj, modelFull);
-                com.qkshop.tonkho.catalog.VariantV2 varObj = catalogService.findOrCreateVariant(platObj, cpu, gpu, touch, screenSize);
-                com.qkshop.tonkho.sale.SalesConfig cfgObj = catalogService.findOrCreateConfig(varObj, ram, ssd);
-                ai.setConfig(cfgObj);
-                ai.setSourceModelText(modelFull);
-                
-                serialRegistryRepository.findBySerialKey(key).ifPresent(sr -> {
-                    sr.setCurrentConfig(cfgObj);
-                    sr.setBrandId(brandObj.getBrandId());
-                    serialRegistryRepository.save(sr);
-                });
-            }
+            // Re-link Pattern: Tìm hoặc tạo cấu hình chuẩn mục tiêu, chuyển con trỏ config của máy
+            // Tuyệt đối không sửa Entity Brand / ModelLine dùng chung để không làm biến dạng các máy khác
+            com.qkshop.tonkho.catalog.ModelLine mlObj = catalogService.findOrCreateModelLine(brandObj, productLine, segmentCode);
+            com.qkshop.tonkho.catalog.Platform platObj = catalogService.findOrCreatePlatform(mlObj, modelFull);
+            com.qkshop.tonkho.catalog.VariantV2 varObj = catalogService.findOrCreateVariant(platObj, cpu, gpu, touch, screenSize);
+            com.qkshop.tonkho.sale.SalesConfig cfgObj = catalogService.findOrCreateConfig(varObj, ram, ssd);
+
+            ai.setConfig(cfgObj);
+            ai.setSourceModelText(modelFull);
+
+            serialRegistryRepository.findBySerialKey(key).ifPresent(sr -> {
+                sr.setCurrentConfig(cfgObj);
+                sr.setBrandId(brandObj.getBrandId());
+                serialRegistryRepository.save(sr);
+            });
         }
 
         activeInventoryRepository.save(ai);
@@ -441,12 +466,18 @@ public class MachineService {
     // ==================== DELETE ====================
 
     /**
-     * Xóa máy — xóa ActiveInventory + SerialRegistry.
+     * Xóa máy — chỉ cho phép khi máy chưa từng phát sinh giao dịch lịch sử.
      * Chỉ ADMIN mới được xóa (kiểm soát tại Controller).
      */
     @Transactional
     public void deleteMachine(String serial, String username) {
         String key = SerialRegistry.normalizeSerialKey(serial);
+
+        // Bảo vệ tính toàn vẹn dữ liệu: Không cho xóa máy đã có chu kỳ đóng (đã bán / trả)
+        boolean hasClosedCycles = !closedCycleRepository.findBySerialKeyOrderByClosedAtDesc(key).isEmpty();
+        if (hasClosedCycles) {
+            throw new IllegalStateException("Máy có serial '" + serial + "' đã có lịch sử chu kỳ trong hệ thống. Không thể xóa cứng để bảo vệ tính toàn vẹn dữ liệu.");
+        }
 
         // Xóa InspectionRequest liên quan
         List<InspectionRequest> requests = inspectionRequestRepository.findByCycleId(

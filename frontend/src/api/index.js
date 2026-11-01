@@ -150,6 +150,8 @@ export const apiPhuKien = {
   sellStandalone: (payload) => axiosClient.post('/accessory/sell-standalone', payload),
   getOrders: () => axiosClient.get('/accessory/orders'),
   getOrderById: (id) => axiosClient.get(`/accessory/order/${id}`),
+  getDefaultGifts: () => axiosClient.get('/accessory/default-gifts'),
+  saveDefaultGifts: (bundleJson) => axiosClient.post('/accessory/default-gifts/save', { bundleJson }),
 };
 
 export const apiSuaChua = {
@@ -171,4 +173,38 @@ export const salesReportApi = {
   getDashboard: (params) => axiosClient.get('/sales-report/dashboard', { params }),
   rebuild: () => axiosClient.post('/sales-report/rebuild'),
 };
+
+export const crmApi = {
+  getSummary: () => axiosClient.get('/crm/summary', { silent: true }),
+  searchCustomers: (params) => axiosClient.get('/crm/customers', { params }),
+  getCustomer: (id) => axiosClient.get(`/crm/customers/${id}`),
+  getCustomerOrders: (id, params) => axiosClient.get(`/crm/customers/${id}/orders`, { params }),
+  getOrder: (id) => axiosClient.get(`/crm/orders/${id}`),
+  getUnlinkedOrders: (params) => axiosClient.get('/crm/unlinked-orders', { params }),
+  assignOrder: (payload) => axiosClient.post('/crm/orders/assign', payload),
+  rebuild: () => axiosClient.post('/crm/rebuild', null, { timeout: 300000 }),
+};
+
+export const apiBanHang = {
+  lookup: (keyword) => axiosClient.post('/sale/lookup', { keyword, serial: keyword }),
+  searchCandidates: (query) => axiosClient.get('/sale/search-candidates', { params: { query } }),
+  submitSale: (payload, requestId) => axiosClient.post('/sale/submit', payload, {
+    headers: requestId ? { 'X-Request-Id': requestId } : {}
+  }),
+};
+
+export const apiLinhKien = {
+  getAll: (params) => axiosClient.get('/part/all', { params }),
+  getAvailable: (params) => axiosClient.get('/part/available', { params }),
+  getById: (id) => axiosClient.get(`/part/${id}`),
+  getNextSku: (category) => axiosClient.get('/part/next-sku', { params: { category } }),
+  getCategories: () => axiosClient.get('/part/categories'),
+  importPart: (payload) => axiosClient.post('/part/import', payload),
+  updatePart: (id, payload) => axiosClient.put(`/part/${id}`, payload),
+  deletePart: (id) => axiosClient.delete(`/part/${id}`),
+  getHistory: (params) => axiosClient.get('/part/history', { params }),
+};
+
+
+
 

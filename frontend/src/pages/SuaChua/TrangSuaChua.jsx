@@ -3,10 +3,10 @@ import { useLocation } from 'react-router-dom';
 import { 
   Wrench, Plus, Search, CheckCircle, RotateCcw, User, Phone, 
   Laptop, Calendar, Trash2, Printer, ShieldCheck, Edit3, X, 
-  History, Clock, AlertCircle, Eye, ChevronRight
+  History, Clock, AlertCircle, Eye, ChevronRight, Cpu
 } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { apiSuaChua } from '../../api';
+import { apiSuaChua, apiLinhKien } from '../../api';
 import { formatCurrency, parseCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangSuaChua() {
@@ -32,8 +32,13 @@ export default function TrangSuaChua() {
 
   // Danh sách dịch vụ nhập tay
   const [services, setServices] = useState([
-    { serviceName: '', price: '', quantity: 1, warrantyValue: 1, warrantyUnit: 'THANG', warrantyMonths: 1, warrantyPeriod: '1 Tháng', note: '' }
+    { serviceName: '', sku: '', price: '', quantity: 1, warrantyValue: 1, warrantyUnit: 'THANG', warrantyMonths: 1, warrantyPeriod: '1 Tháng', note: '' }
   ]);
+
+  // State kho linh kiện
+  const [availableParts, setAvailableParts] = useState([]);
+  const [showPartPickerModal, setShowPartPickerModal] = useState(false);
+  const [partSearchTerm, setPartSearchTerm] = useState('');
 
   const [completedOrder, setCompletedOrder] = useState(null);
 
@@ -42,10 +47,20 @@ export default function TrangSuaChua() {
 
   useEffect(() => {
     fetchOrders();
+    fetchAvailableParts();
     if (location.state?.editOrder) {
       handleEditOrder(location.state.editOrder);
     }
   }, [location.state]);
+
+  const fetchAvailableParts = async () => {
+    try {
+      const res = await apiLinhKien.getAvailable();
+      setAvailableParts(res.data?.data || res.data || []);
+    } catch (err) {
+      console.error('Lỗi lấy danh sách linh kiện kho:', err);
+    }
+  };
 
   const fetchOrders = async (keyword = '') => {
     setIsLoading(true);
@@ -60,7 +75,31 @@ export default function TrangSuaChua() {
   };
 
   const handleAddServiceRow = () => {
-    setServices([...services, { serviceName: '', price: '', quantity: 1, warrantyValue: 1, warrantyUnit: 'THANG', warrantyMonths: 1, warrantyPeriod: '1 Tháng', note: '' }]);
+    setServices([...services, { serviceName: '', sku: '', price: '', quantity: 1, warrantyValue: 1, warrantyUnit: 'THANG', warrantyMonths: 1, warrantyPeriod: '1 Tháng', note: '' }]);
+  };
+
+  const handlePickPart = (part) => {
+    const newRow = {
+      serviceName: part.name,
+      sku: part.sku,
+      price: part.retailPrice || 0,
+      quantity: 1,
+      warrantyValue: part.warrantyMonths || 1,
+      warrantyUnit: 'THANG',
+      warrantyMonths: part.warrantyMonths || 1,
+      warrantyPeriod: part.warrantyPeriod || (part.warrantyMonths > 0 ? `${part.warrantyMonths} Tháng` : 'Không BH'),
+      partStock: part.quantity,
+      note: ''
+    };
+
+    // Nếu dòng đầu tiên đang trống thì ghi đè, ngược lại thêm vào
+    if (services.length === 1 && !services[0].serviceName.trim() && !services[0].price) {
+      setServices([newRow]);
+    } else {
+      setServices([...services, newRow]);
+    }
+    setShowPartPickerModal(false);
+    showToast(`Đã thêm linh kiện: ${part.name}`, 'success');
   };
 
   const handleRemoveServiceRow = (index) => {
@@ -126,6 +165,7 @@ export default function TrangSuaChua() {
 
         return {
           serviceName: it.serviceName || '',
+          sku: it.sku || '',
           price: it.price || 0,
           quantity: it.quantity || 1,
           warrantyValue: val,
@@ -208,6 +248,7 @@ export default function TrangSuaChua() {
 
           return {
             serviceName: s.serviceName.trim(),
+            sku: s.sku || null,
             price: parseFloat(s.price) || 0,
             quantity: parseInt(s.quantity) || 1,
             warrantyMonths: calculatedMonths,
@@ -361,16 +402,21 @@ export default function TrangSuaChua() {
                 {/* Bảng nhập danh sách dịch vụ / linh kiện */}
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <h6 className="fw-bold m-0 text-dark">Danh sách dịch vụ / linh kiện thực hiện:</h6>
-                  <button type="button" className="btn btn-sm btn-outline-primary d-flex align-items-center" onClick={handleAddServiceRow}>
-                    <Plus size={14} className="me-1"/> Thêm dòng
-                  </button>
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-sm btn-outline-success d-flex align-items-center rounded-pill px-3 shadow-sm" onClick={() => setShowPartPickerModal(true)}>
+                      <Cpu size={14} className="me-1 text-success"/> Chọn từ kho linh kiện
+                    </button>
+                    <button type="button" className="btn btn-sm btn-outline-primary d-flex align-items-center rounded-pill px-3 shadow-sm" onClick={handleAddServiceRow}>
+                      <Plus size={14} className="me-1"/> Thêm dòng tự do
+                    </button>
+                  </div>
                 </div>
 
                 <div className="table-responsive border rounded bg-white mb-3">
                   <table className="table table-hover align-middle mb-0">
                     <thead className="table-light text-secondary small text-uppercase">
                       <tr>
-                        <th className="ps-3 py-2" style={{minWidth: '200px'}}>Tên dịch vụ / Linh kiện</th>
+                        <th className="ps-3 py-2" style={{minWidth: '220px'}}>Tên dịch vụ / Linh kiện</th>
                         <th className="py-2 text-center" style={{width: '70px'}}>SL</th>
                         <th className="py-2 text-end" style={{width: '130px'}}>Đơn giá</th>
                         <th className="py-2 text-center" style={{minWidth: '130px'}}>Bảo hành</th>
@@ -389,6 +435,26 @@ export default function TrangSuaChua() {
                               value={row.serviceName}
                               onChange={e => handleUpdateServiceField(idx, 'serviceName', e.target.value)}
                             />
+                            {row.sku && (
+                              <div className="d-flex align-items-center gap-1 mt-1">
+                                <span className="badge bg-light text-primary font-monospace border" style={{ fontSize: '10px' }}>
+                                  SKU: {row.sku}
+                                </span>
+                                {row.partStock !== undefined && (
+                                  <span className="badge bg-success-subtle text-success" style={{ fontSize: '10px' }}>
+                                    Kho tồn: {row.partStock}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-link btn-xs text-danger p-0 ms-1 text-decoration-none"
+                                  title="Gỡ liên kết kho (chuyển thành nhập tay)"
+                                  onClick={() => handleUpdateServiceField(idx, 'sku', '')}
+                                >
+                                  &times; gỡ mã
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="text-center">
                             <input 
@@ -759,6 +825,130 @@ export default function TrangSuaChua() {
                   <Printer size={16} className="me-1" /> In phiếu biên nhận
                 </button>
                 <button type="button" className="btn btn-primary px-4" onClick={() => setCompletedOrder(null)}>
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHỌN LINH KIỆN TỪ KHO */}
+      {showPartPickerModal && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div className="modal-header bg-white border-bottom py-3">
+                <div>
+                  <h5 className="modal-title fw-bold text-dark d-flex align-items-center">
+                    <Cpu size={20} className="me-2 text-primary" />
+                    Chọn Linh Kiện Từ Kho
+                  </h5>
+                  <small className="text-muted">Chọn linh kiện để tự động điền đơn giá bán lẻ, thời hạn bảo hành và trừ tồn kho khi lưu đơn</small>
+                </div>
+                <button type="button" className="btn-close" onClick={() => setShowPartPickerModal(false)}></button>
+              </div>
+
+              <div className="p-3 bg-light border-bottom">
+                <div className="position-relative">
+                  <Search size={18} className="position-absolute text-muted ms-3 top-50 translate-middle-y" />
+                  <input
+                    type="text"
+                    className="form-control ps-5 rounded-pill bg-white"
+                    placeholder="Tìm theo tên linh kiện, mã SKU, loại..."
+                    value={partSearchTerm}
+                    onChange={e => setPartSearchTerm(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="modal-body p-0 overflow-y-auto" style={{ maxHeight: '450px' }}>
+                {availableParts.filter(p => {
+                  if (!partSearchTerm.trim()) return true;
+                  const q = partSearchTerm.toLowerCase();
+                  return (p.name || '').toLowerCase().includes(q) ||
+                         (p.sku || '').toLowerCase().includes(q) ||
+                         (p.category || '').toLowerCase().includes(q) ||
+                         (p.note || '').toLowerCase().includes(q);
+                }).length === 0 ? (
+                  <div className="text-center py-5 text-muted">
+                    <Cpu size={36} className="text-secondary opacity-50 mb-2" />
+                    <div>Không tìm thấy linh kiện nào còn hàng phù hợp.</div>
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="table-light small text-uppercase">
+                        <tr>
+                          <th className="ps-4">Mã SKU</th>
+                          <th>Tên linh kiện & Thông số</th>
+                          <th className="text-center">Loại</th>
+                          <th className="text-center">Tồn kho</th>
+                          <th className="text-end">Giá bán lẻ</th>
+                          <th className="text-center">Bảo hành</th>
+                          <th className="pe-4 text-end"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {availableParts.filter(p => {
+                          if (!partSearchTerm.trim()) return true;
+                          const q = partSearchTerm.toLowerCase();
+                          return (p.name || '').toLowerCase().includes(q) ||
+                                 (p.sku || '').toLowerCase().includes(q) ||
+                                 (p.category || '').toLowerCase().includes(q) ||
+                                 (p.note || '').toLowerCase().includes(q);
+                        }).map(part => (
+                          <tr key={part.id} style={{ cursor: 'pointer' }} onClick={() => handlePickPart(part)}>
+                            <td className="ps-4">
+                              <span className="badge bg-light text-dark font-monospace border px-2 py-1">
+                                {part.sku}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="fw-bold text-dark">{part.name}</div>
+                              {part.note && <small className="text-muted d-block">{part.note}</small>}
+                            </td>
+                            <td className="text-center">
+                              <span className="badge bg-info-subtle text-info border border-info-subtle">
+                                {part.category}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className={`badge rounded-pill px-2 py-1 ${part.quantity > 5 ? 'bg-success' : 'bg-warning text-dark'}`}>
+                                Còn {part.quantity}
+                              </span>
+                            </td>
+                            <td className="text-end fw-bold text-primary">
+                              {part.retailPrice ? formatCurrency(part.retailPrice) + 'đ' : '0đ'}
+                            </td>
+                            <td className="text-center">
+                              <span className="badge bg-light text-secondary border">
+                                {part.warrantyPeriod || (part.warrantyMonths ? `${part.warrantyMonths}T` : 'Không BH')}
+                              </span>
+                            </td>
+                            <td className="pe-4 text-end">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary rounded-pill px-3 fw-medium shadow-sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePickPart(part);
+                                }}
+                              >
+                                Chọn món này
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer bg-light py-2">
+                <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setShowPartPickerModal(false)}>
                   Đóng
                 </button>
               </div>

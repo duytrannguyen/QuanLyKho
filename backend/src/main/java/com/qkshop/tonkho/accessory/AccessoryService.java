@@ -20,6 +20,7 @@ public class AccessoryService {
     private final AccessoryOrderRepository accessoryOrderRepository;
     private final AccessoryOrderItemRepository accessoryOrderItemRepository;
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     /**
      * Tạo đơn xuất bán phụ kiện (hỗ trợ nhiều loại, mỗi loại thời hạn bảo hành riêng)
@@ -56,10 +57,8 @@ public class AccessoryService {
             }
         }
 
-        // Sinh mã đơn hàng dạng PK-yyyyMMdd-XXXX
-        String datePrefix = saleDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long countToday = accessoryOrderRepository.count();
-        String orderCode = String.format("PK-%s-%04d", datePrefix, (countToday % 10000) + 1);
+        // Sinh mã hóa đơn chuẩn 10 ký tự: PK + STT 4 số trong tháng + ddMM 4 số (Ví dụ: PK00010111)
+        String orderCode = invoiceCodeService.generateAccessoryInvoiceCode(saleDate);
 
         AccessoryOrder order = AccessoryOrder.builder()
                 .orderCode(orderCode)
@@ -232,6 +231,9 @@ public class AccessoryService {
             so.setSalesperson(order.getSalesperson());
             so.setOrigin("WEB_APP");
             so.setOrderCategory("ACCESSORY");
+            if (txnId.startsWith("PK-KEM-")) {
+                so.setMatchedCycleId(txnId.substring("PK-KEM-".length()));
+            }
 
             salesOrderRepo.save(so);
         } catch (Exception e) {

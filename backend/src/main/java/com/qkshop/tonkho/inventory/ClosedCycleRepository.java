@@ -15,6 +15,11 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     List<ClosedCycle> findBySerialKeyOrderByClosedAtDesc(String serialKey);
     List<ClosedCycle> findByCloseType(CloseType closeType);
 
+    boolean existsBySourceReference(String sourceReference);
+
+    @Query("SELECT cc.sourceReference FROM ClosedCycle cc WHERE (cc.saleDate >= :startOfMonth AND cc.saleDate < :endOfMonth OR (cc.saleDate IS NULL AND cc.closedAt >= :startOfMonth AND cc.closedAt < :endOfMonth)) AND cc.sourceReference LIKE 'BM%'")
+    List<String> findMachineInvoiceCodesInMonth(@Param("startOfMonth") LocalDateTime startOfMonth, @Param("endOfMonth") LocalDateTime endOfMonth);
+
     @Query("SELECT cc FROM ClosedCycle cc WHERE (LOWER(cc.serialKey) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR cc.customerPhone LIKE CONCAT('%', :keyword, '%') " +
            "OR LOWER(cc.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +

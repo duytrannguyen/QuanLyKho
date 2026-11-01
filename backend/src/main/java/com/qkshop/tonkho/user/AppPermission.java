@@ -23,6 +23,8 @@ public enum AppPermission {
     IMPORT_MACHINE("IMPORT_MACHINE", "Nhập máy", "Kho hàng", "Nhập máy lẻ hoặc nhập hàng loạt từ file Excel"),
     IMPORT_ACCESSORY("IMPORT_ACCESSORY", "Nhập phụ kiện", "Kho hàng", "Nhập kho các mặt hàng phụ kiện mới"),
     INVENTORY_ACCESSORY("INVENTORY_ACCESSORY", "Tồn kho phụ kiện", "Kho hàng", "Theo dõi và điều chỉnh số lượng tồn phụ kiện"),
+    IMPORT_PART("IMPORT_PART", "Nhập linh kiện", "Kho hàng", "Nhập kho các mặt hàng linh kiện sửa chữa, thay thế và nâng cấp máy"),
+    INVENTORY_PART("INVENTORY_PART", "Tồn kho linh kiện", "Kho hàng", "Theo dõi và quản lý tồn kho linh kiện sửa chữa, thay thế"),
     INSPECTION("INSPECTION", "Kiểm định máy", "Kho hàng", "Kiểm tra kỹ thuật máy, duyệt hoặc từ chối máy nhập kho"),
 
     // Hậu mãi & Tra cứu
@@ -30,6 +32,10 @@ public enum AppPermission {
     ACCESSORY_HISTORY("ACCESSORY_HISTORY", "Lịch sử phụ kiện", "Hậu mãi & Tra cứu", "Xem nhật ký giao dịch và lịch sử xuất bán phụ kiện"),
     WARRANTY_CHECK("WARRANTY_CHECK", "Bảo hành", "Hậu mãi & Tra cứu", "Tra cứu thông tin đơn hàng và thời hạn bảo hành của khách"),
     SERVICE_REPAIR("SERVICE_REPAIR", "Dịch vụ sửa chữa", "Hậu mãi & Tra cứu", "Tiếp nhận máy sửa chữa, lập phiếu dịch vụ và tra cứu sửa chữa"),
+
+    // Khách hàng (CRM)
+    CRM_VIEW("CRM_VIEW", "Xem khách hàng (CRM)", "Khách hàng", "Tra cứu hồ sơ khách hàng, tổng giao dịch và toàn bộ hóa đơn của từng khách"),
+    CRM_MANAGE("CRM_MANAGE", "Quản lý khách hàng (CRM)", "Khách hàng", "Gán đơn chưa xác định khách và dựng lại dữ liệu CRM từ đơn hàng"),
 
     // Hệ thống
     SYNC_MANAGE("SYNC_MANAGE", "Đối soát & đồng bộ", "Hệ thống", "Đồng bộ dữ liệu Google Sheets / DataSale và giải quyết sai lệch"),
@@ -86,6 +92,7 @@ public enum AppPermission {
                         ACCESSORY_HISTORY.getCode(),
                         WARRANTY_CHECK.getCode(),
                         SERVICE_REPAIR.getCode(),
+                        CRM_VIEW.getCode(),
                         INSPECTION.getCode()
                 );
             default:

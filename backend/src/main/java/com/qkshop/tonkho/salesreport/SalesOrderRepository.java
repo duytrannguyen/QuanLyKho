@@ -20,6 +20,9 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     boolean existsByTransactionId(String transactionId);
 
+    @Query("SELECT s.transactionId FROM SalesOrder s WHERE s.saleDate >= :startOfMonth AND s.saleDate < :endOfMonth AND s.transactionId LIKE 'BM%'")
+    List<String> findMachineTransactionIdsInMonth(@Param("startOfMonth") LocalDateTime startOfMonth, @Param("endOfMonth") LocalDateTime endOfMonth);
+
     /**
      * Interface projection cho các truy vấn tổng hợp nhóm.
      */
