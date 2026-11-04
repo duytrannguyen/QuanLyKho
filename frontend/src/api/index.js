@@ -179,7 +179,7 @@ export const crmApi = {
   searchCustomers: (params) => axiosClient.get('/crm/customers', { params }),
   getCustomer: (id) => axiosClient.get(`/crm/customers/${id}`),
   updateCustomer: (id, payload) => axiosClient.put(`/crm/customers/${id}`, payload),
-  getCareNotes: (id) => axiosClient.get(`/crm/customers/${id}/care-notes`),
+  getCareNotes: (id, params) => axiosClient.get(`/crm/customers/${id}/care-notes`, { params }),
   addCareNote: (id, payload) => axiosClient.post(`/crm/customers/${id}/care-notes`, payload),
   exportExcel: (params) => axiosClient.get('/crm/customers/export-excel', { params, responseType: 'blob' }),
   getCustomerOrders: (id, params) => axiosClient.get(`/crm/customers/${id}/orders`, { params }),
@@ -187,6 +187,10 @@ export const crmApi = {
   getUnlinkedOrders: (params) => axiosClient.get('/crm/unlinked-orders', { params }),
   assignOrder: (payload) => axiosClient.post('/crm/orders/assign', payload),
   rebuild: () => axiosClient.post('/crm/rebuild', null, { timeout: 300000 }),
+  getExpiredWarrantySummary: () => axiosClient.get('/crm/expired-warranty/summary', { silent: true }),
+  getExpiredWarrantyBrands: () => axiosClient.get('/crm/expired-warranty/brands', { silent: true }),
+  getExpiredWarrantyOrders: (params) => axiosClient.get('/crm/expired-warranty/orders', { params }),
+  exportExpiredWarrantyExcel: (params) => axiosClient.get('/crm/expired-warranty/export-excel', { params, responseType: 'blob' }),
 };
 
 export const apiBanHang = {

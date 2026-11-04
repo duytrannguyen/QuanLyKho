@@ -13,6 +13,7 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     Optional<ClosedCycle> findByCycleId(String cycleId);
     List<ClosedCycle> findBySerialKey(String serialKey);
     List<ClosedCycle> findBySerialKeyOrderByClosedAtDesc(String serialKey);
+    List<ClosedCycle> findBySerialKeyInOrderByClosedAtDesc(java.util.Collection<String> serialKeys);
     List<ClosedCycle> findByCloseType(CloseType closeType);
 
     boolean existsBySourceReference(String sourceReference);

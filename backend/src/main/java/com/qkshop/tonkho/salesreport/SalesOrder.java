@@ -20,7 +20,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_so_source", columnList = "normalized_source"),
         @Index(name = "idx_so_brand", columnList = "brand"),
         @Index(name = "idx_so_status", columnList = "order_status, payment_status"),
-        @Index(name = "idx_so_crm_customer", columnList = "crm_customer_id, sale_date")
+        @Index(name = "idx_so_crm_customer", columnList = "crm_customer_id, sale_date"),
+        @Index(name = "idx_so_care_status", columnList = "care_status, next_care_date")
 })
 @Getter
 @Setter
@@ -185,6 +186,33 @@ public class SalesOrder {
     /** Khách hàng CRM sở hữu đơn này (chỉ được gán qua CrmCustomerLinkService, không ghi từ entity). */
     @Column(name = "crm_customer_id", insertable = false, updatable = false)
     private Long crmCustomerId;
+
+    /**
+     * Trạng thái tiến trình chăm sóc:
+     * - CHUA_CHAM_SOC: Chưa chăm sóc
+     * - DANG_HEN: Đang hẹn ngày liên hệ lại
+     * - DA_VE_SINH: Khách đã đến vệ sinh máy, đang chờ chu kỳ tiếp theo (chỉ cho đơn bán máy)
+     * - HOAN_TAT_1_LAN: Đã hoàn tất chăm sóc 7-14 ngày sau mua (cho phụ kiện / sửa chữa, không lặp lại)
+     */
+    @Column(name = "care_status", length = 50)
+    private String careStatus;
+
+    /** Ngày chăm sóc / liên hệ gần nhất */
+    @Column(name = "last_care_date")
+    private LocalDate lastCareDate;
+
+    /** Ngày khách đến vệ sinh máy gần nhất (chỉ áp dụng cho đơn bán máy) */
+    @Column(name = "last_maintenance_date")
+    private LocalDate lastMaintenanceDate;
+
+    /** Ngày dự kiến chăm sóc hoặc đến kỳ vệ sinh định kỳ tiếp theo */
+    @Column(name = "next_care_date")
+    private LocalDate nextCareDate;
+
+    /** Tổng số lần đã chăm sóc cho hóa đơn này */
+    @Column(name = "care_count")
+    @Builder.Default
+    private Integer careCount = 0;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

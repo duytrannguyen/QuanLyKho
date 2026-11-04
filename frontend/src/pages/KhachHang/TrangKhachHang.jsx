@@ -1,34 +1,57 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Users, Search, RefreshCw, AlertCircle, PhoneOff, FileText, 
-  ArrowRight, X, Filter, Phone, MessageSquare, PhoneCall, 
-  Edit3, ShieldAlert, Wrench, Calendar, CheckCircle2, Download 
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Users, Search, RefreshCw, AlertCircle, PhoneOff,
+  ArrowRight, X, Filter, Phone, MessageSquare, PhoneCall,
+  Edit3, ShieldAlert, Wrench, Calendar, CheckCircle2, Download,
+  Copy, Check, Crown, Star, UserCheck, Sparkles, ChevronRight,
+  ExternalLink, Eye, ArrowUpRight, XCircle, RotateCcw, Clock
 } from 'lucide-react';
 import { crmApi } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
-import HoaDonKhachHang from './HoaDonKhachHang';
+import { getCustomerTier } from './HoaDonKhachHang';
 import DonChuaXacDinh from './DonChuaXacDinh';
 import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
 
 const SORT_OPTIONS = [
   { value: 'lastOrderAt:desc', label: 'Mua gần đây nhất' },
-  { value: 'totalOrders:desc', label: 'Nhiều giao dịch nhất' },
   { value: 'totalSpent:desc', label: 'Chi tiêu cao nhất' },
+  { value: 'totalOrders:desc', label: 'Nhiều giao dịch nhất' },
   { value: 'firstOrderAt:asc', label: 'Khách lâu năm nhất' },
-  { value: 'fullName:asc', label: 'Tên A → Z' },
+  { value: 'fullName:asc', label: 'Tên khách A → Z' },
 ];
 
 const PAGE_SIZE = 20;
 
+/**
+ * Tính khoảng cách thời gian tương đối (ví dụ: "3 ngày trước", "2 tháng trước")
+ */
+const getRelativeTime = (dateStr) => {
+  if (!dateStr) return '';
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffTime = now - date;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return 'Hôm nay';
+  if (diffDays === 1) return 'Hôm qua';
+  if (diffDays < 30) return `${diffDays} ngày trước`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} tháng trước`;
+  const diffYears = Math.floor(diffDays / 365);
+  return `${diffYears} năm trước`;
+};
+
 export default function TrangKhachHang() {
+  const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const { showToast } = useToast();
   const canManage = hasPermission('CRM_MANAGE');
 
-  const [tab, setTab] = useState('customers'); // 'customers' | 'unlinked' | 'customer-detail'
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  // Phân hệ chính: 'customers' | 'unlinked'
+  const [activeTab, setActiveTab] = useState('customers');
   const [editingCustomer, setEditingCustomer] = useState(null);
 
   const [keyword, setKeyword] = useState('');
@@ -41,14 +64,15 @@ export default function TrangKhachHang() {
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [summary, setSummary] = useState({ 
-    totalCustomers: 0, 
+  const [summary, setSummary] = useState({
+    totalCustomers: 0,
     unlinkedOrders: 0,
     warrantyExpiringCount: 0,
-    maintenanceDueCount: 0 
+    maintenanceDueCount: 0
   });
   const [rebuilding, setRebuilding] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [copiedPhoneId, setCopiedPhoneId] = useState(null);
   const requestSeq = useRef(0);
 
   const handleExportExcel = async () => {
@@ -64,21 +88,29 @@ export default function TrangKhachHang() {
       const url = window.URL.createObjectURL(new Blob([res]));
       const link = document.createElement('a');
       link.href = url;
-      const filterSuffix = filterType === 'WARRANTY_EXPIRING' ? '_SapHetBaoHanh' : (filterType === 'MAINTENANCE_DUE' ? '_DenHanBaoDuong' : '');
+      const filterSuffix = filterType === 'WARRANTY_EXPIRING'
+        ? '_SapHetBaoHanh'
+        : (filterType === 'CARE_DUE' || filterType === 'MAINTENANCE_DUE')
+          ? '_CanChamSoc'
+          : filterType === 'APPOINTMENT_SET'
+            ? '_DangHenKhach'
+            : filterType === 'CARE_COMPLETED'
+              ? '_DaHoanThanh'
+              : '';
       link.setAttribute('download', `Danh_Sach_Khach_Hang_CRM${filterSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast?.showSuccess?.('Xuất file Excel danh sách khách hàng thành công!');
+      showToast('Xuất file Excel danh sách khách hàng thành công!', 'success');
     } catch (err) {
       console.error('Lỗi xuất Excel:', err);
-      toast?.showError?.('Không thể xuất file Excel. Vui lòng thử lại.');
+      showToast('Không thể xuất file Excel. Vui lòng thử lại sau.', 'error');
     } finally {
       setExporting(false);
     }
   };
 
-  // Debounce ô tìm kiếm để tránh gọi API mỗi lần gõ phím
+  // Debounce ô tìm kiếm để tránh gọi API liên tục
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedKeyword(keyword.trim());
@@ -92,7 +124,7 @@ export default function TrangKhachHang() {
       const res = await crmApi.getSummary();
       if (res.success) setSummary(res.data);
     } catch {
-      // Chỉ số tổng quan không bắt buộc, bỏ qua lỗi
+      // Chỉ số tổng quan không chặn UI
     }
   }, []);
 
@@ -103,11 +135,11 @@ export default function TrangKhachHang() {
       setError('');
       const [sortBy, direction] = sort.split(':');
       const res = await crmApi.searchCustomers({
-        keyword: debouncedKeyword, 
+        keyword: debouncedKeyword,
         filterType,
-        sortBy, 
-        direction, 
-        page, 
+        sortBy,
+        direction,
+        page,
         size: PAGE_SIZE,
       });
       if (seq !== requestSeq.current) return;
@@ -134,15 +166,9 @@ export default function TrangKhachHang() {
     loadSummary();
   }, [loadSummary]);
 
-  const handleSelectCustomer = (customer) => {
-    setSelectedCustomer(customer);
-    setTab('customer-detail');
-  };
-
-  const handleCloseDetailTab = (e) => {
-    if (e) e.stopPropagation();
-    setSelectedCustomer(null);
-    setTab('customers');
+  // Điều hướng sang trang riêng biệt của khách hàng
+  const handleOpenCustomer = (customer) => {
+    navigate(`/khach-hang/${customer.id}`);
   };
 
   const handleRebuild = async () => {
@@ -151,9 +177,7 @@ export default function TrangKhachHang() {
       setRebuilding(true);
       const res = await crmApi.rebuild();
       if (res.success) {
-        showToast(res.userMessage || 'Đã dựng lại dữ liệu khách hàng', 'success');
-        setSelectedCustomer(null);
-        setTab('customers');
+        showToast(res.userMessage || 'Đã dựng lại dữ liệu khách hàng thành công', 'success');
         await Promise.all([loadCustomers(), loadSummary()]);
       } else {
         showToast(res.userMessage || 'Dựng lại dữ liệu thất bại', 'error');
@@ -167,485 +191,595 @@ export default function TrangKhachHang() {
 
   const handleCustomerUpdated = (updated) => {
     setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-    if (selectedCustomer?.id === updated.id) {
-      setSelectedCustomer(updated);
-    }
     loadSummary();
+  };
+
+  const copyCustomerPhone = (e, customer) => {
+    e.stopPropagation();
+    if (customer?.phone) {
+      navigator.clipboard.writeText(customer.phone);
+      setCopiedPhoneId(customer.id);
+      setTimeout(() => setCopiedPhoneId(null), 2000);
+    }
   };
 
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
-      
-      {/* --- HEADER SECTION --- */}
+
+      {/* --- HEADER SECTION: Tiêu đề + Thao tác xuất / đồng bộ --- */}
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
-          <h1 className="h4 fw-bolder mb-1 d-flex align-items-center text-dark gap-2">
+          <div className="d-flex align-items-center gap-2">
             <div className="bg-primary text-white p-2 rounded-3 shadow-sm d-flex align-items-center justify-content-center">
-              <Users size={20} />
+              <Users size={22} />
             </div>
-            Quản trị Khách hàng & Hậu mãi (CRM)
-          </h1>
-          <p className="text-secondary mb-0 mt-2">
-            Tra cứu lịch sử mua hàng, chăm sóc khách định kỳ và quản lý toàn bộ hóa đơn.
-          </p>
+            <div>
+              <h1 className="h4 fw-bolder mb-0 text-dark">
+                Quản Trị Khách Hàng & Chăm Sóc Hậu Mãi (CRM)
+              </h1>
+              <p className="text-secondary small mb-0 mt-1">
+                Tra cứu hồ sơ khách hàng 360°, theo dõi lịch bảo dưỡng và quản lý toàn bộ lịch sử mua sắm.
+              </p>
+            </div>
+          </div>
         </div>
-        {canManage && (
+
+        {/* Nút Xuất Excel & Đồng bộ */}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           <button
             type="button"
-            className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm px-4"
-            disabled={rebuilding}
-            onClick={handleRebuild}
+            className="btn btn-sm btn-outline-success rounded-pill px-3 py-2 fw-medium d-inline-flex align-items-center gap-2 shadow-xs bg-white"
+            onClick={handleExportExcel}
+            disabled={exporting}
+            title="Xuất file Excel danh sách khách hàng theo điều kiện lọc hiện tại"
           >
-            <RefreshCw size={18} className={rebuilding ? 'opacity-50 spin' : ''} />
-            {rebuilding ? 'Đang xử lý dữ liệu...' : 'Đồng bộ lại dữ liệu'}
+            {exporting ? <span className="spinner-border spinner-border-sm" /> : <Download size={15} />}
+            <span>{exporting ? 'Đang xuất...' : 'Xuất Excel'}</span>
           </button>
-        )}
-      </div>
 
-      {/* --- QUICK STATS / FILTER WIDGETS --- */}
-      <div className="row g-3 mb-4">
-        
-        {/* Widget 1: Tất cả khách */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div 
-            role="button"
-            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === '' ? 'border-primary border-2 bg-primary bg-opacity-10' : 'bg-white hover-card'}`}
-            onClick={() => { setFilterType(''); setTab('customers'); setPage(0); }}
-          >
-            <div className="card-body p-3 d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-muted small fw-medium">Tất cả khách hàng</div>
-                <div className="fs-4 fw-bolder text-dark mt-1">{summary.totalCustomers}</div>
-                <div className="text-primary small" style={{ fontSize: '0.75rem' }}>Bấm để xem tất cả</div>
-              </div>
-              <div className="bg-primary bg-opacity-10 text-primary p-3 rounded-circle">
-                <Users size={22} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Widget 2: Sắp hết bảo hành trong 30 ngày */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div 
-            role="button"
-            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === 'WARRANTY_EXPIRING' ? 'border-warning border-2 bg-warning bg-opacity-10' : 'bg-white hover-card'}`}
-            onClick={() => { setFilterType('WARRANTY_EXPIRING'); setTab('customers'); setPage(0); }}
-          >
-            <div className="card-body p-3 d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-warning-emphasis small fw-medium">Sắp hết bảo hành</div>
-                <div className="fs-4 fw-bolder text-warning-emphasis mt-1">{summary.warrantyExpiringCount || 0}</div>
-                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Trong vòng 30 ngày tới</div>
-              </div>
-              <div className="bg-warning bg-opacity-10 text-warning-emphasis p-3 rounded-circle">
-                <ShieldAlert size={22} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Widget 3: Đến hạn bảo dưỡng máy */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div 
-            role="button"
-            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'customers' && filterType === 'MAINTENANCE_DUE' ? 'border-info border-2 bg-info bg-opacity-10' : 'bg-white hover-card'}`}
-            onClick={() => { setFilterType('MAINTENANCE_DUE'); setTab('customers'); setPage(0); }}
-          >
-            <div className="card-body p-3 d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-info small fw-medium">Đến hạn bảo dưỡng máy</div>
-                <div className="fs-4 fw-bolder text-info mt-1">{summary.maintenanceDueCount || 0}</div>
-                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Văn phòng: 12th • Khác: 6th</div>
-              </div>
-              <div className="bg-info bg-opacity-10 text-info p-3 rounded-circle">
-                <Wrench size={22} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Widget 4: Đơn chưa xác định khách */}
-        <div className="col-12 col-sm-6 col-xl-3">
-          <div 
-            role="button"
-            className={`card border-0 shadow-sm rounded-4 h-100 transition-all cursor-pointer ${tab === 'unlinked' ? 'border-danger border-2 bg-danger bg-opacity-10' : 'bg-white hover-card'}`}
-            onClick={() => setTab('unlinked')}
-          >
-            <div className="card-body p-3 d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-danger small fw-medium">Đơn chưa gán khách</div>
-                <div className="fs-4 fw-bolder text-danger mt-1">{summary.unlinkedOrders || 0}</div>
-                <div className="text-muted" style={{ fontSize: '0.72rem' }}>Thiếu hoặc sai số điện thoại</div>
-              </div>
-              <div className="bg-danger bg-opacity-10 text-danger p-3 rounded-circle">
-                <PhoneOff size={22} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* --- MAIN CARD --- */}
-      <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
-        
-        {/* Tab Navigation */}
-        <div className="card-header bg-white border-bottom-0 pt-3 pb-0 px-4">
-          <ul className="nav nav-tabs border-bottom fw-medium">
-            <li className="nav-item">
-              <button
-                type="button"
-                className={`nav-link border-0 border-bottom border-3 px-3 py-3 d-flex align-items-center gap-2 ${tab === 'customers' ? 'active border-primary text-primary bg-white' : 'border-transparent text-secondary hover-bg-light'}`}
-                onClick={() => setTab('customers')}
-              >
-                <Users size={18} />
-                Khách hàng
-                <span className={`badge rounded-pill ${tab === 'customers' ? 'bg-primary' : 'bg-secondary'}`}>
-                  {summary.totalCustomers}
-                </span>
-              </button>
-            </li>
-            <li className="nav-item">
-              <button
-                type="button"
-                className={`nav-link border-0 border-bottom border-3 px-3 py-3 d-flex align-items-center gap-2 ${tab === 'unlinked' ? 'active border-primary text-primary bg-white' : 'border-transparent text-secondary hover-bg-light'}`}
-                onClick={() => setTab('unlinked')}
-              >
-                <PhoneOff size={18} />
-                Đơn chưa xác định
-                {summary.unlinkedOrders > 0 && (
-                  <span className="badge rounded-pill bg-warning text-dark">
-                    {summary.unlinkedOrders}
-                  </span>
-                )}
-              </button>
-            </li>
-            {selectedCustomer && (
-              <li className="nav-item">
-                <div
-                  role="button"
-                  className={`nav-link border-0 border-bottom border-3 px-3 py-3 d-flex align-items-center gap-2 ${tab === 'customer-detail' ? 'active border-primary text-primary bg-white' : 'border-transparent text-secondary'}`}
-                  onClick={() => setTab('customer-detail')}
-                >
-                  <FileText size={18} />
-                  <span>Chi tiết: {selectedCustomer.fullName || selectedCustomer.phone}</span>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-close ms-2 p-1"
-                    title="Đóng tab"
-                    onClick={handleCloseDetailTab}
-                  />
-                </div>
-              </li>
-            )}
-          </ul>
-        </div>
-
-        {/* Tab Content */}
-        <div className="card-body p-0">
-          {tab === 'customer-detail' && selectedCustomer ? (
-            <div className="p-4">
-              <HoaDonKhachHang 
-                customer={selectedCustomer} 
-                onBack={() => setTab('customers')} 
-                onCustomerUpdated={handleCustomerUpdated}
-              />
-            </div>
-          ) : tab === 'unlinked' ? (
-            <div className="p-4">
-              <DonChuaXacDinh canManage={canManage} onChanged={() => { loadSummary(); loadCustomers(); }} />
-            </div>
-          ) : (
-            <div className="d-flex flex-column h-100">
-              
-              {/* Toolbar: Search, Filter Buttons & Sort */}
-              <div className="bg-white p-4 border-bottom">
-                <div className="row g-3 align-items-center justify-content-between">
-                  
-                  {/* Ô tìm kiếm */}
-                  <div className="col-12 col-md-5">
-                    <div className="input-group input-group-lg shadow-sm">
-                      <span className="input-group-text bg-white border-end-0 text-secondary">
-                        <Search size={20} />
-                      </span>
-                      <input
-                        type="search"
-                        className="form-control border-start-0 ps-0"
-                        placeholder="Tìm SĐT hoặc tên khách hàng..."
-                        value={keyword}
-                        onChange={(e) => setKeyword(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nhóm nút lọc nhanh (Bộ lọc CSKH) */}
-                  <div className="col-12 col-md-auto d-flex flex-wrap align-items-center gap-2">
-                    <button
-                      type="button"
-                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all ${filterType === '' ? 'btn-primary shadow-sm' : 'btn-light border text-secondary'}`}
-                      onClick={() => { setFilterType(''); setPage(0); }}
-                    >
-                      Tất cả
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all d-flex align-items-center gap-1 ${filterType === 'WARRANTY_EXPIRING' ? 'btn-warning text-dark shadow-sm' : 'btn-light border text-secondary'}`}
-                      onClick={() => { setFilterType('WARRANTY_EXPIRING'); setPage(0); }}
-                    >
-                      <ShieldAlert size={14} /> Sắp hết bảo hành
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-sm rounded-pill px-3 py-2 fw-medium transition-all d-flex align-items-center gap-1 ${filterType === 'MAINTENANCE_DUE' ? 'btn-info text-dark shadow-sm' : 'btn-light border text-secondary'}`}
-                      onClick={() => { setFilterType('MAINTENANCE_DUE'); setPage(0); }}
-                    >
-                      <Wrench size={14} /> Cần bảo dưỡng
-                    </button>
-
-                    {/* Nút Xuất Excel */}
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-success rounded-pill px-3 py-2 fw-medium d-inline-flex align-items-center gap-1 shadow-sm ms-lg-1"
-                      onClick={handleExportExcel}
-                      disabled={exporting}
-                      title="Xuất danh sách khách hàng ra file Excel theo bộ lọc"
-                    >
-                      <Download size={14} />
-                      <span>{exporting ? 'Đang xuất...' : 'Xuất Excel'}</span>
-                    </button>
-                  </div>
-                  
-                  {/* Dropdown Sắp xếp */}
-                  <div className="col-12 col-md-auto d-flex align-items-center gap-2">
-                    <Filter size={18} className="text-secondary d-none d-lg-block" />
-                    <select
-                      className="form-select shadow-sm"
-                      style={{ minWidth: '190px' }}
-                      value={sort}
-                      onChange={(e) => { setSort(e.target.value); setPage(0); }}
-                    >
-                      {SORT_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                </div>
-
-                {error && (
-                  <div className="alert alert-danger d-flex align-items-center gap-2 mt-3 mb-0 py-2 border-0 shadow-sm">
-                    <AlertCircle size={18} /> {error}
-                  </div>
-                )}
-              </div>
-
-              {/* Table Section */}
-              <div className="table-responsive bg-white">
-                <table className="table table-hover table-borderless align-middle mb-0">
-                  <thead className="table-light border-bottom">
-                    <tr>
-                      <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '60px' }}>STT</th>
-                      <th className="py-3 text-secondary fw-semibold">Khách hàng</th>
-                      <th className="py-3 text-secondary fw-semibold">Số điện thoại</th>
-                      <th className="py-3 text-secondary fw-semibold text-center">Phân loại</th>
-                      <th className="py-3 text-secondary fw-semibold text-center">Tổng đơn</th>
-                      <th className="py-3 text-secondary fw-semibold text-end">Tổng chi tiêu</th>
-                      <th className="py-3 text-secondary fw-semibold text-end">Giao dịch gần nhất</th>
-                      <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '160px' }}>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="border-top-0">
-                    {customers.map((c, index) => {
-                      const cleanPhone = (c.phone || '').replace(/\D/g, '');
-                      return (
-                        <tr
-                          key={c.id}
-                          role="button"
-                          className={`border-bottom cursor-pointer hover-table-row ${selectedCustomer?.id === c.id ? 'bg-primary bg-opacity-10' : ''}`}
-                          onClick={() => handleSelectCustomer(c)}
-                        >
-                          {/* STT */}
-                          <td className="text-center text-secondary fw-medium">
-                            {page * PAGE_SIZE + index + 1}
-                          </td>
-                          
-                          {/* Họ tên */}
-                          <td>
-                            <div className="fw-bold text-dark">
-                              {c.fullName || <span className="text-muted fw-normal fst-italic">(Chưa cập nhật)</span>}
-                            </div>
-                            {c.address && (
-                              <div className="text-muted small text-truncate" style={{ maxWidth: '240px' }} title={c.address}>
-                                {c.address}
-                              </div>
-                            )}
-                          </td>
-                          
-                          {/* SĐT + Quick Action: Zalo + Call */}
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="badge bg-light text-dark border font-monospace px-2 py-1 fs-6">
-                                {c.phone}
-                              </span>
-                              {cleanPhone && (
-                                <div className="d-flex align-items-center gap-1">
-                                  {/* Mở Zalo */}
-                                  <a
-                                    href={`https://zalo.me/${cleanPhone}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="btn btn-sm btn-light border text-primary p-1 rounded-circle hover-primary transition-all"
-                                    title="Mở chat Zalo với khách"
-                                  >
-                                    <MessageSquare size={14} />
-                                  </a>
-                                  {/* Gọi điện */}
-                                  <a
-                                    href={`tel:${cleanPhone}`}
-                                    className="btn btn-sm btn-light border text-success p-1 rounded-circle hover-bg-light transition-all"
-                                    title="Gọi điện cho khách"
-                                  >
-                                    <PhoneCall size={14} />
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          
-                          {/* Phân loại */}
-                          <td className="text-center">
-                            {c.customerType ? (
-                              <span className="badge bg-info bg-opacity-10 text-info border border-info px-2 py-1">
-                                {c.customerType}
-                              </span>
-                            ) : <span className="text-muted">—</span>}
-                          </td>
-                          
-                          {/* Tổng đơn */}
-                          <td className="text-center">
-                            <span className="badge rounded-circle bg-primary bg-opacity-10 text-primary p-2" style={{ width: '32px', height: '32px' }}>
-                              {c.totalOrders}
-                            </span>
-                          </td>
-                          
-                          {/* Tổng chi tiêu */}
-                          <td className="text-end fw-bolder text-success">
-                            {dinhDangTien(c.totalSpent || 0)} đ
-                          </td>
-                          
-                          {/* Gần nhất */}
-                          <td className="text-end text-secondary small">
-                            {formatDate(c.lastOrderAt)}
-                          </td>
-                          
-                          {/* Thao tác */}
-                          <td className="text-center" onClick={(e) => e.stopPropagation()}>
-                            <div className="d-flex align-items-center justify-content-center gap-1">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-primary rounded-pill d-inline-flex align-items-center justify-content-center gap-1 px-2 py-1"
-                                onClick={() => handleSelectCustomer(c)}
-                                title="Xem hóa đơn của khách"
-                              >
-                                <FileText size={14} />
-                                <span>Hóa đơn</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-light border text-secondary rounded-pill d-inline-flex align-items-center justify-content-center gap-1 px-2 py-1 hover-primary"
-                                onClick={() => setEditingCustomer(c)}
-                                title="Chỉnh sửa hồ sơ khách"
-                              >
-                                <Edit3 size={14} />
-                                <span>Sửa</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                    {/* Empty State */}
-                    {!loading && customers.length === 0 && !error && (
-                      <tr>
-                        <td colSpan={8} className="text-center py-5">
-                          <div className="d-flex flex-column align-items-center justify-content-center text-muted">
-                            <Search size={48} className="mb-3 opacity-25" />
-                            <h5 className="fw-normal">
-                              {debouncedKeyword ? 'Không tìm thấy khách hàng nào.' : 'Chưa có dữ liệu khách hàng theo bộ lọc này.'}
-                            </h5>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Loading State */}
-                    {loading && (
-                      <tr>
-                        <td colSpan={8} className="text-center py-5">
-                          <div className="spinner-border text-primary" role="status">
-                            <span className="visually-hidden">Đang tải...</span>
-                          </div>
-                          <p className="text-muted mt-2 mb-0">Đang lấy dữ liệu khách hàng...</p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination Footer */}
-              <div className="bg-light p-3 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                <span className="text-secondary fw-medium">
-                  Hiển thị <strong className="text-dark">{customers.length}</strong> / Tổng <strong className="text-dark">{totalElements}</strong> khách hàng
-                </span>
-                
-                {totalPages > 1 && (
-                  <nav aria-label="Page navigation">
-                    <ul className="pagination pagination-sm mb-0 shadow-sm">
-                      <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
-                        <button className="page-link px-3" onClick={() => setPage(p => p - 1)}>
-                          Trước
-                        </button>
-                      </li>
-                      <li className="page-item disabled">
-                        <span className="page-link bg-white text-dark fw-medium px-4">
-                          Trang {page + 1} / {totalPages}
-                        </span>
-                      </li>
-                      <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
-                        <button className="page-link px-3" onClick={() => setPage(p => p + 1)}>
-                          Sau
-                        </button>
-                      </li>
-                    </ul>
-                  </nav>
-                )}
-              </div>
-
-            </div>
+          {canManage && (
+            <button
+              type="button"
+              className="btn btn-sm btn-primary rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2 shadow-xs"
+              disabled={rebuilding}
+              onClick={handleRebuild}
+              title="Đồng bộ và tính toán lại các chỉ số khách hàng từ toàn bộ hóa đơn"
+            >
+              <RefreshCw size={15} className={rebuilding ? 'spin' : ''} />
+              <span>{rebuilding ? 'Đang xử lý...' : 'Đồng bộ lại'}</span>
+            </button>
           )}
         </div>
       </div>
 
+      {/* --- ĐIỀU HƯỚNG PHÂN HỆ CHÍNH: KHÁCH HÀNG vs ĐƠN CHƯA GÁN --- */}
+      <div className="d-flex align-items-center justify-content-between gap-3 mb-3">
+        <div className="btn-group p-1 bg-white rounded-pill border shadow-xs" role="group">
+          <button
+            type="button"
+            className={`btn btn-sm rounded-pill px-4 py-2 d-inline-flex align-items-center gap-2 fw-bold transition-all ${activeTab === 'customers'
+                ? 'btn-primary text-white shadow-xs'
+                : 'btn-white text-secondary border-0'
+              }`}
+            onClick={() => setActiveTab('customers')}
+          >
+            <Users size={16} />
+            <span>Danh Sách Khách Hàng</span>
+            <span className={`badge rounded-pill ${activeTab === 'customers' ? 'bg-white text-primary' : 'bg-light text-secondary border'}`}>
+              {summary.totalCustomers}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm rounded-pill px-4 py-2 d-inline-flex align-items-center gap-2 fw-bold transition-all ${activeTab === 'unlinked'
+                ? 'btn-primary text-white shadow-xs'
+                : 'btn-white text-secondary border-0'
+              }`}
+            onClick={() => setActiveTab('unlinked')}
+          >
+            <PhoneOff size={16} />
+            <span>Đơn Chưa Xác Định SĐT</span>
+            {summary.unlinkedOrders > 0 && (
+              <span className={`badge rounded-pill ${activeTab === 'unlinked' ? 'bg-white text-warning-emphasis' : 'bg-warning text-dark'}`}>
+                {summary.unlinkedOrders}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      {activeTab === 'unlinked' ? (
+        <DonChuaXacDinh canManage={canManage} onChanged={() => { loadSummary(); loadCustomers(); }} />
+      ) : (
+        <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+
+          {/* CARD HEADER: PHỄU TIẾN TRÌNH CSKH & THANH TÌM KIẾM THỐNG NHẤT */}
+          <div className="card-header bg-white border-bottom p-3 px-4">
+
+            {/* TẦNG 1: PHỄU TIẾN TRÌNH CSKH (PIPELINE TABS) - Thay thế hoàn toàn dropdown trùng lặp */}
+            <div className="d-flex align-items-center gap-2 overflow-x-auto pb-2 pb-md-0 mb-3 border-bottom border-light flex-wrap">
+              <span className="text-secondary small fw-bold text-uppercase d-none d-md-inline-block me-1" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
+                Phễu chăm sóc:
+              </span>
+
+              {/* 1. Tất cả */}
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 border transition-all ${filterType === '' || filterType === 'ALL'
+                    ? 'btn-dark text-white fw-bold shadow-xs'
+                    : 'btn-light text-secondary border-0 hover-bg-light'
+                  }`}
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => { setFilterType(''); setPage(0); }}
+              >
+                <Users size={14} />
+                <span>Tất cả</span>
+                <span className={`badge rounded-pill ms-1 ${filterType === '' || filterType === 'ALL' ? 'bg-white text-dark' : 'bg-white text-secondary border'
+                  }`}>
+                  {summary.totalCustomers || 0}
+                </span>
+              </button>
+
+              {/* 2. Cần chăm sóc ngay */}
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 border transition-all ${filterType === 'CARE_DUE' || filterType === 'MAINTENANCE_DUE'
+                    ? 'btn-danger text-white fw-bold shadow-xs'
+                    : 'btn-white text-danger border-danger border-opacity-25 hover-bg-light'
+                  }`}
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => {
+                  setFilterType(prev => (prev === 'CARE_DUE' || prev === 'MAINTENANCE_DUE') ? '' : 'CARE_DUE');
+                  setPage(0);
+                }}
+                title="Khách có đơn máy đến hạn vệ sinh hoặc đơn phụ kiện/sửa chữa cần thăm hỏi sau 7-14 ngày"
+              >
+                <AlertCircle size={14} />
+                <span>Cần chăm sóc ngay</span>
+                <span className={`badge rounded-pill ms-1 ${filterType === 'CARE_DUE' || filterType === 'MAINTENANCE_DUE' ? 'bg-white text-danger' : 'bg-danger text-white'
+                  }`}>
+                  {summary.careDueCount ?? summary.maintenanceDueCount ?? 0}
+                </span>
+              </button>
+
+              {/* 3. Đang hẹn khách */}
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 border transition-all ${filterType === 'APPOINTMENT_SET'
+                    ? 'btn-warning text-dark fw-bold shadow-xs'
+                    : 'btn-white text-warning-emphasis border-warning border-opacity-50 hover-bg-light'
+                  }`}
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => {
+                  setFilterType(prev => prev === 'APPOINTMENT_SET' ? '' : 'APPOINTMENT_SET');
+                  setPage(0);
+                }}
+                title="Khách hàng đã trao đổi và đang có lịch hẹn mang máy qua hoặc gọi lại"
+              >
+                <Calendar size={14} />
+                <span>Đang hẹn khách</span>
+                <span className={`badge rounded-pill ms-1 ${filterType === 'APPOINTMENT_SET' ? 'bg-dark text-warning' : 'bg-warning text-dark'
+                  }`}>
+                  {summary.appointmentCount || 0}
+                </span>
+              </button>
+
+              {/* 4. Đã hoàn thành */}
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 border transition-all ${filterType === 'CARE_COMPLETED'
+                    ? 'btn-success text-white fw-bold shadow-xs'
+                    : 'btn-white text-success border-success border-opacity-25 hover-bg-light'
+                  }`}
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => {
+                  setFilterType(prev => prev === 'CARE_COMPLETED' ? '' : 'CARE_COMPLETED');
+                  setPage(0);
+                }}
+                title="Khách hàng đã hoàn thành vệ sinh máy hoặc hoàn tất chăm sóc sau mua 1 lần"
+              >
+                <CheckCircle2 size={14} />
+                <span>Đã hoàn thành</span>
+                <span className={`badge rounded-pill ms-1 ${filterType === 'CARE_COMPLETED' ? 'bg-white text-success' : 'bg-success text-white'
+                  }`}>
+                  {summary.completedCount || 0}
+                </span>
+              </button>
+
+              {/* 5. Sắp hết hạn BH */}
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 border transition-all ${filterType === 'WARRANTY_EXPIRING'
+                    ? 'btn-secondary text-white fw-bold shadow-xs'
+                    : 'btn-white text-secondary border hover-bg-light'
+                  }`}
+                style={{ fontSize: '0.8rem' }}
+                onClick={() => {
+                  setFilterType(prev => prev === 'WARRANTY_EXPIRING' ? '' : 'WARRANTY_EXPIRING');
+                  setPage(0);
+                }}
+                title="Khách hàng có máy sắp hết hạn bảo hành trong 30 ngày tới"
+              >
+                <ShieldAlert size={14} />
+                <span>Sắp hết hạn BH</span>
+                <span className={`badge rounded-pill ms-1 ${filterType === 'WARRANTY_EXPIRING' ? 'bg-white text-secondary' : 'bg-secondary bg-opacity-25 text-dark'
+                  }`}>
+                  {summary.warrantyExpiringCount || 0}
+                </span>
+              </button>
+
+            </div>
+
+            {/* TẦNG 2: TÌM KIẾM & SẮP XẾP & ĐẶT LẠI */}
+            <div className="row g-2.5 align-items-center justify-content-between">
+
+              {/* Ô tìm kiếm thông minh */}
+              <div className="col-12 col-md-6 col-lg-5">
+                <div className="input-group input-group-sm shadow-xs rounded-pill overflow-hidden border">
+                  <span className="input-group-text bg-white border-0 text-secondary ps-3">
+                    <Search size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-0 ps-1 shadow-none py-2"
+                    placeholder="Tìm theo số điện thoại hoặc họ tên khách hàng..."
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                  />
+                  {keyword && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link text-secondary text-decoration-none pe-3"
+                      onClick={() => setKeyword('')}
+                      title="Xóa tìm kiếm"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Nhóm Sắp xếp & Đặt lại bộ lọc */}
+              <div className="col-12 col-md-auto d-flex align-items-center gap-2.5 justify-content-md-end flex-wrap">
+
+                {/* Nút đặt lại khi đang có bộ lọc hoặc từ khóa */}
+                {(filterType !== '' || keyword) && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light border rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 text-secondary hover-primary transition-all shadow-2xs"
+                    style={{ fontSize: '0.78rem' }}
+                    onClick={() => { setFilterType(''); setKeyword(''); setPage(0); }}
+                    title="Xóa bộ lọc & từ khóa để quay về tất cả khách hàng"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Đặt lại bộ lọc</span>
+                  </button>
+                )}
+
+                {/* Dropdown Sắp xếp */}
+                <div className="d-flex align-items-center gap-2">
+                  <span className="text-secondary small fw-medium text-nowrap" style={{ fontSize: '0.78rem' }}>Sắp xếp:</span>
+                  <select
+                    className="form-select form-select-sm rounded-pill shadow-xs"
+                    style={{ minWidth: '185px', fontSize: '0.8rem' }}
+                    value={sort}
+                    onChange={(e) => { setSort(e.target.value); setPage(0); }}
+                  >
+                    {SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+              </div>
+
+            </div>
+
+            {error && (
+              <div className="alert alert-danger d-flex align-items-center gap-2 mt-3 mb-0 py-2 border-0 shadow-xs rounded-3 small">
+                <AlertCircle size={16} /> {error}
+              </div>
+            )}
+          </div>
+
+          {/* DANH SÁCH KHÁCH HÀNG TABLE */}
+          <div className="table-responsive bg-white">
+            <table className="table table-hover table-borderless align-middle mb-0">
+              <thead className="table-light border-bottom">
+                <tr>
+                  <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '50px' }}>STT</th>
+                  <th className="py-3 text-secondary fw-semibold">Khách hàng</th>
+                  <th className="py-3 text-secondary fw-semibold">Số điện thoại & Liên hệ</th>
+                  <th className="py-3 text-secondary fw-semibold text-center">Phân hạng</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ minWidth: '160px' }}>Trạng thái CSKH</th>
+                  <th className="py-3 text-secondary fw-semibold text-center">Tổng đơn</th>
+                  <th className="py-3 text-secondary fw-semibold text-end">Tổng chi tiêu</th>
+                  <th className="py-3 text-secondary fw-semibold text-end">Giao dịch gần nhất</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '180px' }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="border-top-0">
+                {customers.map((c, index) => {
+                  const cleanPhone = (c.phone || '').replace(/\D/g, '');
+                  const tier = getCustomerTier(c.totalSpent, c.totalOrders);
+                  const TierIcon = tier.icon;
+                  const relativeTime = getRelativeTime(c.lastOrderAt);
+
+                  return (
+                    <tr
+                      key={c.id}
+                      role="button"
+                      className="border-bottom cursor-pointer hover-table-row transition-all"
+                      onClick={() => handleOpenCustomer(c)}
+                      title="Nhấn để mở trang hồ sơ khách hàng"
+                    >
+                      {/* STT */}
+                      <td className="text-center text-secondary fw-medium">
+                        {page * PAGE_SIZE + index + 1}
+                      </td>
+
+                      {/* Khách hàng: Avatar + Họ tên + Địa chỉ */}
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold small flex-shrink-0" style={{ width: '38px', height: '38px' }}>
+                            {(c.fullName || 'K').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="fw-bold text-dark text-truncate" style={{ maxWidth: '210px' }}>
+                              {c.fullName || <span className="text-muted fw-normal fst-italic">(Chưa cập nhật tên)</span>}
+                            </div>
+                            {c.address && (
+                              <div className="text-muted small text-truncate" style={{ maxWidth: '220px', fontSize: '0.78rem' }} title={c.address}>
+                                {c.address}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* SĐT + Quick Action: Copy + Zalo + Call */}
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div className="d-flex align-items-center gap-1">
+                          <span className="badge bg-light text-dark border font-monospace px-2 py-1 fs-6 d-inline-flex align-items-center gap-1">
+                            <span>{c.phone}</span>
+                            <button
+                              type="button"
+                              className="btn btn-sm p-0 text-secondary hover-primary border-0 ms-1"
+                              onClick={(e) => copyCustomerPhone(e, c)}
+                              title="Sao chép SĐT"
+                            >
+                              {copiedPhoneId === c.id ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+                            </button>
+                          </span>
+
+                          {cleanPhone && (
+                            <div className="d-flex align-items-center gap-1 ms-1">
+                              {/* Mở Zalo */}
+                              <a
+                                href={`https://zalo.me/${cleanPhone}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-sm btn-light border text-primary p-1 rounded-circle hover-primary transition-all shadow-xs"
+                                title="Mở chat Zalo với khách"
+                              >
+                                <MessageSquare size={13} />
+                              </a>
+                              {/* Gọi điện */}
+                              <a
+                                href={`tel:${cleanPhone}`}
+                                className="btn btn-sm btn-light border text-success p-1 rounded-circle hover-bg-light transition-all shadow-xs"
+                                title="Gọi điện cho khách"
+                              >
+                                <PhoneCall size={13} />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Phân hạng */}
+                      <td className="text-center">
+                        <span className={`badge rounded-pill ${tier.className} d-inline-flex align-items-center gap-1 px-2 py-1 small`}>
+                          <TierIcon size={12} /> {tier.name}
+                        </span>
+                      </td>
+
+                      {/* Trạng thái CSKH */}
+                      <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                        {c.careStatusTag === 'CARE_DUE' ? (
+                          <span
+                            className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle d-inline-flex align-items-center gap-1 px-2.5 py-1.5 fw-semibold"
+                            style={{ fontSize: '0.76rem' }}
+                            title="Khách có đơn máy đến hạn vệ sinh hoặc đơn cần thăm hỏi sau 7-14 ngày"
+                          >
+                            <AlertCircle size={13} className="text-danger" />
+                            <span>{c.careStatusLabel || 'Đến hạn chăm sóc'}</span>
+                          </span>
+                        ) : c.careStatusTag === 'APPOINTMENT' ? (
+                          <span
+                            className="badge bg-warning bg-opacity-15 text-warning-emphasis border border-warning-subtle d-inline-flex align-items-center gap-1 px-2.5 py-1.5 fw-semibold"
+                            style={{ fontSize: '0.76rem' }}
+                            title={`Khách đang có lịch hẹn: ${c.nextAppointmentDate || ''}`}
+                          >
+                            <Calendar size={13} className="text-warning-emphasis" />
+                            <span>{c.careStatusLabel || 'Đang hẹn khách'}</span>
+                          </span>
+                        ) : c.careStatusTag === 'COMPLETED' ? (
+                          <span
+                            className="badge bg-success bg-opacity-10 text-success border border-success-subtle d-inline-flex align-items-center gap-1 px-2.5 py-1.5 fw-semibold"
+                            style={{ fontSize: '0.76rem' }}
+                            title="Đã chăm sóc hoàn tất chu kỳ hiện tại"
+                          >
+                            <CheckCircle2 size={13} className="text-success" />
+                            <span>{c.careStatusLabel || 'Đã hoàn tất'}</span>
+                          </span>
+                        ) : c.careStatusTag === 'VOIDED' ? (
+                          <span
+                            className="badge bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25 d-inline-flex align-items-center gap-1 px-2.5 py-1.5 fw-semibold"
+                            style={{ fontSize: '0.76rem' }}
+                            title="Khách hàng đã bán lại toàn bộ máy cho shop. Không áp dụng lịch bảo dưỡng định kỳ."
+                          >
+                            <XCircle size={13} className="text-secondary" />
+                            <span>{c.careStatusLabel || 'Đã bán lại cho shop'}</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="badge bg-light text-secondary border d-inline-flex align-items-center gap-1 px-2 py-1"
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            <span>{c.careStatusLabel || 'Đang theo dõi'}</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Tổng đơn */}
+                      <td className="text-center">
+                        <span className="badge rounded-pill bg-light text-dark border px-2 py-1 fw-bold">
+                          {c.totalOrders}
+                        </span>
+                      </td>
+
+                      {/* Tổng chi tiêu */}
+                      <td className="text-end fw-bolder text-success">
+                        {dinhDangTien(c.totalSpent || 0)} đ
+                      </td>
+
+                      {/* Giao dịch gần nhất */}
+                      <td className="text-end">
+                        <div className="text-dark small fw-medium">
+                          {formatDate(c.lastOrderAt)}
+                        </div>
+                        {relativeTime && (
+                          <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                            {relativeTime}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Thao tác */}
+                      <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="d-flex align-items-center justify-content-center gap-1">
+
+                          {/* Nút Xem hồ sơ (Chuyển trang) */}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary rounded-pill d-inline-flex align-items-center justify-content-center gap-1 px-2 py-1 shadow-xs"
+                            onClick={() => handleOpenCustomer(c)}
+                            title="Mở trang chi tiết hồ sơ & hóa đơn khách hàng"
+                          >
+                            <Eye size={13} />
+                            <span>Hồ sơ</span>
+                          </button>
+
+                          {/* Nút Mở Tab Mới Trên Trình Duyệt */}
+                          <a
+                            href={`/khach-hang/${c.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-light border text-secondary rounded-circle p-1 hover-primary transition-all shadow-xs"
+                            title="Mở hồ sơ khách trong tab mới của trình duyệt"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+
+                          {/* Nút Sửa hồ sơ */}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light border text-secondary rounded-circle p-1 hover-primary transition-all shadow-xs"
+                            onClick={() => setEditingCustomer(c)}
+                            title="Chỉnh sửa nhanh hồ sơ khách"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* Empty State */}
+                {!loading && customers.length === 0 && !error && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-5">
+                      <div className="d-flex flex-column align-items-center justify-content-center text-muted">
+                        <Search size={44} className="mb-3 opacity-25" />
+                        <h6 className="fw-medium text-dark mb-1">
+                          {debouncedKeyword ? 'Không tìm thấy khách hàng nào.' : 'Chưa có dữ liệu khách hàng theo bộ lọc này.'}
+                        </h6>
+                        <p className="small text-secondary mb-0">Hãy thử thay đổi từ khóa hoặc bộ lọc ở thanh công cụ phía trên.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {/* Loading State */}
+                {loading && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-5">
+                      <div className="spinner-border text-primary spinner-border-sm" role="status">
+                        <span className="visually-hidden">Đang tải...</span>
+                      </div>
+                      <p className="text-muted small mt-2 mb-0">Đang đồng bộ dữ liệu khách hàng...</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="bg-light p-3 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 px-4">
+            <span className="text-secondary small fw-medium">
+              Hiển thị <strong className="text-dark">{customers.length}</strong> / Tổng <strong className="text-dark">{totalElements}</strong> khách hàng
+            </span>
+
+            {totalPages > 1 && (
+              <nav aria-label="Page navigation">
+                <ul className="pagination pagination-sm mb-0 shadow-xs">
+                  <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
+                    <button className="page-link px-3" onClick={() => setPage(p => p - 1)}>
+                      Trước
+                    </button>
+                  </li>
+                  <li className="page-item disabled">
+                    <span className="page-link bg-white text-dark fw-medium px-4">
+                      Trang {page + 1} / {totalPages}
+                    </span>
+                  </li>
+                  <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
+                    <button className="page-link px-3" onClick={() => setPage(p => p + 1)}>
+                      Sau
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            )}
+          </div>
+
+        </div>
+      )}
+
       {/* Modal Chỉnh Sửa Hồ Sơ Khách Hàng */}
       {editingCustomer && (
-        <ModalChinhSuaKhachHang 
+        <ModalChinhSuaKhachHang
           customer={editingCustomer}
           onClose={() => setEditingCustomer(null)}
           onUpdated={handleCustomerUpdated}
         />
       )}
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .hover-card:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.08)!important; }
         .hover-bg-light:hover { background-color: #f8f9fa !important; }
         .hover-table-row:hover { background-color: #f8fafc !important; }
         .cursor-pointer { cursor: pointer; }
-        .hover-primary:hover { background-color: #0d6efd !important; color: white !important; border-color: #0d6efd !important; }
+        .hover-primary:hover { background-color: #0b5ed7 !important; color: white !important; border-color: #0b5ed7 !important; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        .shadow-xs { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
       `}} />
     </div>
   );

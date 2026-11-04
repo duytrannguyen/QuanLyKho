@@ -30,13 +30,19 @@ public class SalesOrderBackfillService implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        long count = salesOrderRepo.count();
-        if (count == 0) {
-            log.info("[BACKFILL] Bảng sales_orders đang trống. Bắt đầu nạp dữ liệu lịch sử từ qk_migration_sales...");
-            int imported = backfillAllSales();
-            log.info("[BACKFILL] Hoàn tất nạp {} đơn hàng vào sales_orders.", imported);
-        } else {
-            log.info("[BACKFILL] Bảng sales_orders đã có {} đơn hàng. Bỏ qua tự động nạp.", count);
+        try {
+            long count = salesOrderRepo.count();
+            if (count == 0) {
+                log.info("[BACKFILL] Bảng sales_orders đang trống. Kiểm tra nạp dữ liệu lịch sử từ qk_migration_sales...");
+                int imported = backfillAllSales();
+                if (imported > 0) {
+                    log.info("[BACKFILL] Hoàn tất nạp {} đơn hàng vào sales_orders.", imported);
+                }
+            } else {
+                log.info("[BACKFILL] Bảng sales_orders đã có {} đơn hàng. Bỏ qua tự động nạp.", count);
+            }
+        } catch (Exception e) {
+            log.warn("[BACKFILL] Bỏ qua nạp dữ liệu đơn hàng ban đầu: {}", e.getMessage());
         }
     }
 
@@ -45,6 +51,20 @@ public class SalesOrderBackfillService implements CommandLineRunner {
      */
     @Transactional(rollbackFor = Exception.class)
     public int backfillAllSales() {
+        try {
+            Integer tableExists = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'qk_migration_sales'",
+                Integer.class
+            );
+            if (tableExists == null || tableExists == 0) {
+                log.info("[BACKFILL] Bảng qk_migration_sales không tồn tại trong CSDL hiện tại (hệ thống cài đặt mới). Bỏ qua nạp dữ liệu.");
+                return 0;
+            }
+        } catch (Exception e) {
+            log.warn("[BACKFILL] Không thể kiểm tra bảng qk_migration_sales: {}. Bỏ qua.", e.getMessage());
+            return 0;
+        }
+
         String sql = """
             SELECT
                 transaction_id,

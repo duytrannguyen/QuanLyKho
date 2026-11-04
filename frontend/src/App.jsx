@@ -33,6 +33,8 @@ const TrangSuaChua = React.lazy(() => import('./pages/SuaChua/TrangSuaChua'));
 const TrangTraCuuSuaChua = React.lazy(() => import('./pages/SuaChua/TrangTraCuuSuaChua'));
 const TrangBaoCaoBanHang = React.lazy(() => import('./pages/BaoCaoBanHang/TrangBaoCaoBanHang'));
 const TrangKhachHang = React.lazy(() => import('./pages/KhachHang/TrangKhachHang'));
+const TrangMayHetBaoHanh = React.lazy(() => import('./pages/KhachHang/TrangMayHetBaoHanh'));
+const TrangChiTietKhachHang = React.lazy(() => import('./pages/KhachHang/TrangChiTietKhachHang'));
 
 function ProtectedRoute({ children, permission }) {
   const { user, loading, hasPermission } = useAuth();
@@ -110,6 +112,8 @@ function AppRoutes() {
           <Route path="dich-vu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangSuaChua /></ProtectedRoute>} />
           <Route path="tra-cuu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangTraCuuSuaChua /></ProtectedRoute>} />
           <Route path="khach-hang" element={<ProtectedRoute permission="CRM_VIEW"><TrangKhachHang /></ProtectedRoute>} />
+          <Route path="khach-hang/het-han-bao-hanh" element={<ProtectedRoute permission="CRM_VIEW"><TrangMayHetBaoHanh /></ProtectedRoute>} />
+          <Route path="khach-hang/:id" element={<ProtectedRoute permission="CRM_VIEW"><TrangChiTietKhachHang /></ProtectedRoute>} />
           <Route path="phan-tich" element={<ProtectedRoute permission="ANALYTICS_VIEW"><TrangThongKe /></ProtectedRoute>} />
           <Route path="doi-soat" element={<ProtectedRoute permission="SYNC_MANAGE"><TrangDoiSoat /></ProtectedRoute>} />
           <Route path="nhat-ky" element={<ProtectedRoute permission="LOGS_VIEW"><TrangNhatKyHoatDong /></ProtectedRoute>} />

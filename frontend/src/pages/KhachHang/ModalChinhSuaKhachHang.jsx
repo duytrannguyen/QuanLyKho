@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Phone, MapPin, Calendar, Mail, FileText, Save, X } from 'lucide-react';
+import { User, Phone, MapPin, Calendar, Mail, FileText, Save, X, Sparkles } from 'lucide-react';
 import { crmApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 
@@ -45,28 +45,28 @@ export default function ModalChinhSuaKhachHang({ customer, onClose, onUpdated })
 
   return (
     <div 
-      className="modal fade show d-block animate__animated animate__fadeIn animate__faster" 
+      className="modal fade show d-block" 
       tabIndex="-1" 
       style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)', zIndex: 1060 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="modal-dialog modal-dialog-centered modal-lg animate__animated animate__zoomIn animate__faster">
+      <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
           
           {/* Header */}
-          <div className="modal-header bg-white border-bottom px-4 py-3 d-flex justify-content-between align-items-center">
+          <div className="modal-header bg-primary text-white px-4 py-3 d-flex justify-content-between align-items-center border-0">
             <div className="d-flex align-items-center gap-3">
-              <div className="bg-primary bg-opacity-10 p-2 rounded-3 text-primary">
+              <div className="bg-white bg-opacity-20 p-2 rounded-3 text-white">
                 <User size={22} />
               </div>
               <div>
-                <h5 className="modal-title fw-bold text-dark mb-0">Chỉnh Sửa Hồ Sơ Khách Hàng</h5>
-                <span className="small text-muted">
-                  SĐT định danh: <strong className="font-monospace text-primary">{customer.phone}</strong>
+                <h5 className="modal-title fw-bold text-white mb-0">Chỉnh Sửa Hồ Sơ Khách Hàng</h5>
+                <span className="small text-white-50">
+                  Mã SĐT định danh: <strong className="font-monospace text-white">{customer.phone}</strong>
                 </span>
               </div>
             </div>
-            <button type="button" className="btn-close shadow-none" aria-label="Đóng" onClick={onClose} />
+            <button type="button" className="btn-close btn-close-white shadow-none" aria-label="Đóng" onClick={onClose} />
           </div>
 
           {/* Form Body */}
@@ -154,7 +154,7 @@ export default function ModalChinhSuaKhachHang({ customer, onClose, onUpdated })
                   <textarea 
                     className="form-control" 
                     rows="3" 
-                    placeholder="Ví dụ: Khách làm đồ họa kiến trúc, thích dòng máy Dell Precision hoặc ThinkPad; Khách chuộng giao hàng ngoài giờ hành chính..."
+                    placeholder="Ví dụ: Khách làm đồ họa kiến trúc, thích dòng máy Dell Precision hoặc ThinkPad; Khách chuộng giao hàng ngoài giờ hành chính..." 
                     value={preferenceNote}
                     onChange={(e) => setPreferenceNote(e.target.value)}
                   />

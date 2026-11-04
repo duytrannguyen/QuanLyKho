@@ -10,5 +10,7 @@ public interface CrmCareNoteRepository extends JpaRepository<CrmCareNote, Long> 
 
     List<CrmCareNote> findByCustomer_IdOrderByCreatedAtDesc(Long customerId);
 
+    List<CrmCareNote> findByCustomer_IdAndOrderIdOrderByCreatedAtDesc(Long customerId, Long orderId);
+
     long countByCustomer_Id(Long customerId);
 }

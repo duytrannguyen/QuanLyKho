@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   AlertCircle, UserPlus, Phone, User, 
-  Save, X, Calendar, CheckCircle2, SearchX, Eye
+  Save, X, Calendar, CheckCircle2, SearchX, Eye,
+  Search, Filter, Package, Wrench, Monitor, Headphones
 } from 'lucide-react';
 import { crmApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
@@ -21,6 +22,12 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Search & Filter state
+  const [searchKw, setSearchKw] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState(''); // '' | 'MACHINE' | 'ACCESSORY' | 'REPAIR'
+
+  // Inline edit state
   const [editingId, setEditingId] = useState(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
@@ -59,15 +66,16 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
   };
 
   const handleAssign = async (orderId) => {
-    if (!phone.trim()) {
-      showToast('Vui lòng nhập số điện thoại khách hàng', 'error');
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
+      showToast('Vui lòng nhập số điện thoại hợp lệ gồm 10 chữ số (bắt đầu bằng 0)', 'error');
       return;
     }
     try {
       setSaving(true);
-      const res = await crmApi.assignOrder({ orderId, phone: phone.trim(), customerName: name.trim() });
+      const res = await crmApi.assignOrder({ orderId, phone: cleanPhone, customerName: name.trim() });
       if (res.success) {
-        showToast(res.userMessage || 'Đã gán đơn hàng thành công', 'success');
+        showToast(res.userMessage || 'Đã gán đơn hàng vào hồ sơ khách thành công', 'success');
         setEditingId(null);
         await load(page);
         if (onChanged) onChanged();
@@ -81,51 +89,135 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
     }
   };
 
+  // Client-side filtering for search & category in current batch
+  const displayedOrders = useMemo(() => {
+    return orders.filter(o => {
+      const matchCategory = !categoryFilter || o.orderCategory === categoryFilter;
+      const kw = searchKw.trim().toLowerCase();
+      const matchKw = !kw || 
+        (o.transactionId && o.transactionId.toLowerCase().includes(kw)) ||
+        (o.customerName && o.customerName.toLowerCase().includes(kw)) ||
+        (o.productName && o.productName.toLowerCase().includes(kw)) ||
+        (o.customerPhone && o.customerPhone.includes(kw));
+      return matchCategory && matchKw;
+    });
+  }, [orders, searchKw, categoryFilter]);
+
   return (
     <div className="d-flex flex-column gap-4 animate__animated animate__fadeIn">
       
       {/* Alert Info Box */}
-      <div className="alert alert-warning border-0 border-start border-warning border-4 shadow-sm bg-warning bg-opacity-10 d-flex align-items-start gap-3 p-4 mb-0 rounded-end-4">
-        <div className="bg-warning bg-opacity-25 p-2 rounded-circle text-warning-emphasis mt-1">
-          <AlertCircle size={24} />
-        </div>
-        <div>
-          <h5 className="alert-heading fw-bold text-dark mb-1">Cần xác định khách hàng</h5>
-          <p className="mb-0 text-dark opacity-75">
-            Các đơn dưới đây chưa có số điện thoại hợp lệ nên chưa thuộc hồ sơ khách hàng nào. 
-            {canManage ? ' Hãy nhập SĐT chuẩn để gán đơn vào đúng hồ sơ khách.' : ' Vui lòng liên hệ quản lý để bổ sung SĐT hợp lệ.'}
-          </p>
-          <hr className="border-warning opacity-25 my-2" />
-          <div className="fw-medium text-warning-emphasis">
-            Tồn đọng: <span className="badge bg-warning text-dark fs-6 ms-1">{totalElements}</span> đơn
+      <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div className="card-body p-4 border-start border-warning border-5">
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div className="d-flex align-items-start gap-3">
+              <div className="bg-warning bg-opacity-10 text-warning-emphasis p-3 rounded-circle flex-shrink-0">
+                <AlertCircle size={26} />
+              </div>
+              <div>
+                <h5 className="fw-bold text-dark mb-1">Cần Chuẩn Hóa Số Điện Thoại Để Nhận Diện Khách Hàng</h5>
+                <p className="mb-0 text-secondary small">
+                  Các đơn hàng dưới đây bị thiếu hoặc nhập sai định dạng số điện thoại khi bán hàng, nên hệ thống chưa thể tự động gom vào hồ sơ CRM của khách.
+                  {canManage ? ' Bạn có thể nhập SĐT chuẩn (10 chữ số) để hệ thống tự động gán vào khách cũ hoặc tạo mới hồ sơ.' : ' Vui lòng báo quản lý kho để bổ sung số điện thoại chuẩn.'}
+                </p>
+              </div>
+            </div>
+            <div className="bg-light border rounded-4 px-4 py-3 text-center flex-shrink-0">
+              <div className="text-muted small fw-medium">Tồn đọng chưa gán</div>
+              <div className="fs-3 fw-bolder text-warning-emphasis lh-1 mt-1">{totalElements}</div>
+              <div className="text-secondary small mt-1">đơn hàng</div>
+            </div>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-2 py-3">
+        <div className="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-2 py-3 rounded-4">
           <SearchX size={18} /> {error}
         </div>
       )}
 
       {/* Main Table Card */}
       <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        
+        {/* Filter Toolbar */}
+        <div className="card-header bg-white border-bottom p-3 px-4">
+          <div className="row g-3 align-items-center justify-content-between">
+            <div className="col-12 col-md-5">
+              <div className="input-group input-group-sm shadow-xs rounded-pill overflow-hidden border">
+                <span className="input-group-text bg-white border-0 text-secondary ps-3">
+                  <Search size={16} />
+                </span>
+                <input
+                  type="text"
+                  className="form-control border-0 ps-0 shadow-none"
+                  placeholder="Tìm theo mã đơn, tên khách, sản phẩm..."
+                  value={searchKw}
+                  onChange={(e) => setSearchKw(e.target.value)}
+                />
+                {searchKw && (
+                  <button 
+                    className="btn btn-sm btn-link text-secondary text-decoration-none pe-3" 
+                    type="button" 
+                    onClick={() => setSearchKw('')}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="col-12 col-md-auto d-flex flex-wrap align-items-center gap-2">
+              <span className="text-secondary small fw-medium me-1">Loại đơn:</span>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 fw-medium ${!categoryFilter ? 'btn-primary' : 'btn-light border text-secondary'}`}
+                onClick={() => setCategoryFilter('')}
+              >
+                Tất cả
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 fw-medium ${categoryFilter === 'MACHINE' ? 'btn-primary' : 'btn-light border text-secondary'}`}
+                onClick={() => setCategoryFilter('MACHINE')}
+              >
+                Máy móc
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 fw-medium ${categoryFilter === 'ACCESSORY' ? 'btn-primary' : 'btn-light border text-secondary'}`}
+                onClick={() => setCategoryFilter('ACCESSORY')}
+              >
+                Phụ kiện
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 fw-medium ${categoryFilter === 'REPAIR' ? 'btn-primary' : 'btn-light border text-secondary'}`}
+                onClick={() => setCategoryFilter('REPAIR')}
+              >
+                Sửa chữa
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Table Content */}
         <div className="table-responsive">
           <table className="table table-hover table-borderless align-middle mb-0">
             <thead className="table-light border-bottom">
               <tr>
                 <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '60px' }}>STT</th>
                 <th className="py-3 text-secondary fw-semibold">Mã đơn & Ngày</th>
-                <th className="py-3 text-secondary fw-semibold">Loại</th>
-                <th className="py-3 text-secondary fw-semibold">Khách (Trên đơn)</th>
-                <th className="py-3 text-secondary fw-semibold">Sản phẩm</th>
+                <th className="py-3 text-secondary fw-semibold text-center">Danh mục</th>
+                <th className="py-3 text-secondary fw-semibold">Tên & SĐT tạm trên đơn</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ minWidth: 220 }}>Sản phẩm</th>
                 <th className="py-3 text-secondary fw-semibold text-center">Trạng thái</th>
                 <th className="py-3 text-secondary fw-semibold text-end">Thành tiền</th>
                 {canManage && <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '280px' }}>Thao tác</th>}
               </tr>
             </thead>
             <tbody className="border-top-0">
-              {orders.map((o, index) => {
+              {displayedOrders.map((o, index) => {
                 const isEditing = editingId === o.id;
                 return (
                   <tr 
@@ -150,13 +242,15 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     </td>
 
                     {/* Loại */}
-                    <td>
+                    <td className="text-center">
                       <CategoryBadge category={o.orderCategory} />
                     </td>
 
                     {/* Khách hàng */}
                     <td>
-                      <div className="fw-bold text-dark mb-1">{o.customerName || <span className="fst-italic text-muted fw-normal">(Trống)</span>}</div>
+                      <div className="fw-bold text-dark mb-1">
+                        {o.customerName || <span className="fst-italic text-muted fw-normal">(Không có tên)</span>}
+                      </div>
                       {o.customerPhone ? (
                         <div className="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center gap-1 py-1">
                           <Phone size={11} /> SĐT sai: {o.customerPhone}
@@ -169,8 +263,13 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     </td>
 
                     {/* Sản phẩm */}
-                    <td style={{ minWidth: 200 }}>
+                    <td>
                       <span className="text-dark fw-medium line-clamp-2">{o.productName || '—'}</span>
+                      {o.serialKeys && (
+                        <span className="small text-muted font-monospace d-block mt-1">
+                          Serial: {o.serialKeys}
+                        </span>
+                      )}
                     </td>
 
                     {/* Trạng thái */}
@@ -180,20 +279,23 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
                     {/* Thành tiền */}
                     <td className="text-end text-nowrap">
-                      <div className="fw-bolder text-dark fs-6">{dinhDangTien(o.netRevenue || 0)} đ</div>
+                      <div className="fw-bolder text-success fs-6">{dinhDangTien(o.netRevenue || 0)} đ</div>
                     </td>
 
                     {/* Thao tác / Gán khách */}
                     {canManage && (
                       <td className="text-center px-3 py-2" onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
-                          <div className="d-flex flex-column gap-2 bg-white p-2 rounded-3 border shadow-sm animate__animated animate__zoomIn animate__faster">
+                          <div className="d-flex flex-column gap-2 bg-white p-3 rounded-4 border shadow-sm">
+                            <div className="text-start small fw-bold text-dark mb-1">
+                              Gán SĐT định danh khách hàng:
+                            </div>
                             <div className="input-group input-group-sm">
                               <span className="input-group-text bg-light text-secondary"><Phone size={14} /></span>
                               <input
                                 id={`crm-assign-phone-${o.id}`}
                                 className="form-control font-monospace text-primary fw-bold"
-                                placeholder="Số điện thoại (10 số)"
+                                placeholder="Nhập SĐT chuẩn 10 số (0...)"
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 autoFocus
@@ -204,7 +306,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                               <input
                                 id={`crm-assign-name-${o.id}`}
                                 className="form-control"
-                                placeholder="Tên khách (tùy chọn)"
+                                placeholder="Họ và tên khách (tùy chọn)"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                               />
@@ -212,16 +314,16 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                             <div className="d-flex gap-2 mt-1">
                               <button 
                                 type="button" 
-                                className="btn btn-sm btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1" 
+                                className="btn btn-sm btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1 rounded-pill" 
                                 disabled={saving} 
                                 onClick={() => handleAssign(o.id)}
                               >
                                 {saving ? <span className="spinner-border spinner-border-sm" /> : <Save size={14} />}
-                                Lưu
+                                Lưu gán
                               </button>
                               <button 
                                 type="button" 
-                                className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center gap-1 text-secondary" 
+                                className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center gap-1 text-secondary rounded-pill" 
                                 disabled={saving} 
                                 onClick={() => setEditingId(null)}
                               >
@@ -233,7 +335,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                           <div className="d-flex align-items-center justify-content-center gap-2">
                             <button 
                               type="button" 
-                              className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-2 py-1"
+                              className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
                               onClick={() => setSelectedOrder(o)}
                               title="Xem chi tiết hóa đơn"
                             >
@@ -243,10 +345,10 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                             <button 
                               type="button" 
                               id={`crm-assign-btn-${o.id}`} 
-                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1 hover-primary" 
+                              className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1 shadow-xs hover-primary" 
                               onClick={() => startEdit(o)}
                             >
-                              <UserPlus size={15} /> Gán khách
+                              <UserPlus size={14} /> Gán SĐT
                             </button>
                           </div>
                         )}
@@ -257,15 +359,19 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
               })}
 
               {/* Trạng thái trống (Tốt) */}
-              {!loading && orders.length === 0 && !error && (
+              {!loading && displayedOrders.length === 0 && !error && (
                 <tr>
                   <td colSpan={canManage ? 8 : 7} className="text-center py-5">
                     <div className="d-flex flex-column align-items-center text-muted">
                       <div className="bg-success bg-opacity-10 text-success p-3 rounded-circle mb-3">
-                        <CheckCircle2 size={48} />
+                        <CheckCircle2 size={44} />
                       </div>
-                      <h5 className="fw-medium text-success">Tuyệt vời!</h5>
-                      <p className="mb-0">Tất cả đơn hàng đều đã được xác định SĐT khách hàng.</p>
+                      <h5 className="fw-bold text-success mb-1">
+                        {searchKw || categoryFilter ? 'Không tìm thấy đơn hàng phù hợp.' : 'Tuyệt vời! Không còn đơn chưa xác định.'}
+                      </h5>
+                      <p className="mb-0 text-secondary small">
+                        {searchKw || categoryFilter ? 'Hãy thử xóa bộ lọc tìm kiếm.' : 'Toàn bộ đơn hàng trong hệ thống đều đã được gán số điện thoại khách hàng chuẩn hóa.'}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -278,7 +384,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     <div className="spinner-border text-primary" role="status">
                       <span className="visually-hidden">Đang tải...</span>
                     </div>
-                    <p className="text-muted mt-2 mb-0">Đang quét danh sách hóa đơn...</p>
+                    <p className="text-muted mt-2 mb-0 small">Đang quét danh sách hóa đơn chưa xác định khách...</p>
                   </td>
                 </tr>
               )}
@@ -288,7 +394,10 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
         {/* Phân trang Footer */}
         {totalPages > 1 && (
-          <div className="bg-light p-3 border-top d-flex justify-content-center align-items-center gap-3">
+          <div className="bg-light p-3 border-top d-flex justify-content-between align-items-center px-4 flex-wrap gap-2">
+            <span className="text-secondary small fw-medium">
+              Hiển thị {displayedOrders.length} / Tổng {totalElements} đơn chưa gán
+            </span>
             <nav aria-label="Page navigation">
               <ul className="pagination pagination-sm mb-0 shadow-sm">
                 <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
@@ -330,7 +439,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
         .cursor-pointer { cursor: pointer; }
         .hover-table-row:hover { background-color: #f8fafc !important; }
         .transition-all { transition: background-color 0.2s ease-in-out; }
-        .hover-primary:hover { background-color: #0d6efd !important; color: white !important; }
+        .hover-primary:hover { background-color: #0b5ed7 !important; color: white !important; }
       `}} />
     </div>
   );

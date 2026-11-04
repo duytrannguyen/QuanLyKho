@@ -15,6 +15,9 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
     Optional<ActiveInventory> findBySerialKey(String serialKey);
     Optional<ActiveInventory> findBySerialKeyIgnoreCaseOrCycleId(String serialKey, String cycleId);
     boolean existsBySerialKey(String serialKey);
+
+    @Query("SELECT ai.serialKey FROM ActiveInventory ai WHERE ai.serialKey IN (:serialKeys)")
+    java.util.Set<String> findExistingSerialKeysIn(@Param("serialKeys") java.util.Collection<String> serialKeys);
     List<ActiveInventory> findByState(CycleState state);
     long countByState(CycleState state);
     long count();

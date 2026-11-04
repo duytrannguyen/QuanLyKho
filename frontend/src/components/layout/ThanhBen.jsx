@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, PackagePlus, ClipboardCheck, Search, BarChart3, RefreshCw, 
   FileText, Settings, ChevronsLeft, ChevronsRight, ShoppingCart, List, Tag, 
-  ShieldCheck, ChevronRight, Package, History, X, Wrench, ShoppingBag, TrendingUp, Cpu, Users
+  ShieldCheck, ChevronRight, Package, History, X, Wrench, ShoppingBag, TrendingUp, Cpu, Users, Clock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import '../../styles/Sidebar.css';
@@ -57,6 +57,7 @@ const navGroups = [
     title: 'KHÁCH HÀNG',
     items: [
       { path: '/khach-hang', label: 'Khách hàng (CRM)', icon: Users, permission: 'CRM_VIEW' },
+      { path: '/khach-hang/het-han-bao-hanh', label: 'Máy hết hạn bảo hành', icon: Clock, permission: 'CRM_VIEW' },
     ]
   },
   {

@@ -95,8 +95,10 @@ public class CrmController {
 
     @GetMapping("/customers/{id}/care-notes")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
-    public ResponseEntity<ApiResponse<java.util.List<CareNoteItem>>> getCareNotes(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok(queryService.getCareNotes(id)));
+    public ResponseEntity<ApiResponse<java.util.List<CareNoteItem>>> getCareNotes(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(queryService.getCareNotes(id, orderId)));
     }
 
     @PostMapping("/customers/{id}/care-notes")
@@ -121,6 +123,44 @@ public class CrmController {
                 queryService.generateCustomersExcel(keyword, filterType, sortBy, direction);
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Danh_Sach_Khach_Hang_CRM.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
+    }
+
+    @GetMapping("/expired-warranty/summary")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<ApiResponse<ExpiredWarrantySummary>> getExpiredWarrantySummary() {
+        return ResponseEntity.ok(ApiResponse.ok(queryService.getExpiredWarrantySummary()));
+    }
+
+    @GetMapping("/expired-warranty/brands")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> getExpiredWarrantyBrands() {
+        return ResponseEntity.ok(ApiResponse.ok(queryService.getExpiredWarrantyBrands()));
+    }
+
+    @GetMapping("/expired-warranty/orders")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<ApiResponse<PageResult<ExpiredWarrantyOrderItem>>> getExpiredWarrantyOrders(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String brand,
+            @RequestParam(defaultValue = "") String range,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                queryService.searchExpiredWarrantyOrders(keyword, brand, range, page, size)));
+    }
+
+    @GetMapping("/expired-warranty/export-excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    public ResponseEntity<org.springframework.core.io.Resource> exportExpiredWarrantyExcel(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String brand,
+            @RequestParam(defaultValue = "") String range) {
+        org.springframework.core.io.ByteArrayResource resource =
+                queryService.generateExpiredWarrantyExcel(keyword, brand, range);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=May_Moc_Het_Han_Bao_Hanh_QKShop.xlsx")
                 .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(resource);
     }
