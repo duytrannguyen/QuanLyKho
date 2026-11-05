@@ -109,7 +109,7 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
           <div>
             <div class="logo">QKSHOP.VN</div>
             <div class="subtitle">Hệ thống Laptop & Phụ Kiện Uy Tín</div>
-            <div class="subtitle">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
+            <div class="subtitle">Hotline: 0939 558 894 | Website: qkshop.vn</div>
           </div>
           <div style="text-align: right;">
             <div style="font-size: 12px; color: #64748b;">Mã hóa đơn: <strong style="color: #0d6efd; font-family: monospace;">${order.transactionId}</strong></div>

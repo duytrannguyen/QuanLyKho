@@ -1,10 +1,11 @@
 package com.qkshop.tonkho.sync;
 
-import com.qkshop.tonkho.sync.CommandLedger;
-import com.qkshop.tonkho.sync.CommandLedgerRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -25,6 +26,7 @@ import java.util.Optional;
 public class IdempotencyService {
 
     private final CommandLedgerRepository commandLedgerRepo;
+    private final ObjectMapper objectMapper;
 
     /**
      * Kiểm tra xem request đã được xử lý chưa.
@@ -57,8 +59,9 @@ public class IdempotencyService {
     }
 
     /**
-     * Ghi nhận command đã thất bại.
+     * Ghi nhận command đã thất bại (chạy trong REQUIRES_NEW để vẫn lưu được kể cả khi transaction ngoài bị rollback).
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CommandLedger recordFailure(String requestId, String commandType, Object payload, String errorCode, String actor) {
         CommandLedger ledger = CommandLedger.builder()
                 .requestId(requestId)
@@ -81,11 +84,22 @@ public class IdempotencyService {
     }
 
     /**
-     * Hash payload để so sánh — dùng SHA-256.
+     * Hash payload để so sánh — dùng SHA-256 trên chuỗi JSON chuẩn của ObjectMapper.
      */
     private String hashPayload(Object payload) {
         try {
-            String json = payload != null ? payload.toString() : "";
+            String json = "";
+            if (payload != null) {
+                if (objectMapper != null) {
+                    try {
+                        json = objectMapper.writeValueAsString(payload);
+                    } catch (Exception ex) {
+                        json = payload.toString();
+                    }
+                } else {
+                    json = payload.toString();
+                }
+            }
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(json.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);

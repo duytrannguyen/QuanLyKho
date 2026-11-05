@@ -2,6 +2,7 @@ package com.qkshop.tonkho.notification;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -46,6 +47,27 @@ public class NotificationService {
         }
 
         return emitter;
+    }
+
+    /**
+     * Gửi nhịp tim (heartbeat) định kỳ mỗi 30 giây để giữ kết nối SSE không bị đóng bởi proxy/load balancer
+     * và tự động dọn dẹp các emitter đã ngắt kết nối.
+     */
+    @Scheduled(fixedRate = 30000)
+    public void sendHeartbeat() {
+        if (emitters.isEmpty()) {
+            return;
+        }
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("HEARTBEAT")
+                        .comment("keep-alive")
+                        .data("ping"));
+            } catch (Exception e) {
+                emitters.remove(emitter);
+            }
+        }
     }
 
     /**

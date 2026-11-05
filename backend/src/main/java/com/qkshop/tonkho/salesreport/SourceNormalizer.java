@@ -1,6 +1,5 @@
 package com.qkshop.tonkho.salesreport;
 
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -18,7 +17,7 @@ public final class SourceNormalizer {
     private static final Pattern PATTERN_FACEBOOK = Pattern.compile("facebook|\\bfb\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_ZALO = Pattern.compile("zalo", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_GOOGLE = Pattern.compile("google|maps", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PATTERN_DIRECT = Pattern.compile("trực tiếp|truc tiep|vãng lai|vang lai|cửa hàng|cua hang|tại shop|tai shop|tại chỗ", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PATTERN_DIRECT = Pattern.compile("trực tiếp|truc tiep|vãng lai|vang lai|cửa hàng|cua hang|tại shop|tai shop|tại chỗ|mang máy đến|mang may den", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_REFERRAL = Pattern.compile("giới thiệu|gioi thieu|người quen|nguoi quen|nhân viên|nhan vien|referral", Pattern.CASE_INSENSITIVE);
     private static final Pattern PATTERN_UNKNOWN = Pattern.compile("chưa|chua|không rõ|khong ro|không xác định|khong xac dinh|^unknown$", Pattern.CASE_INSENSITIVE);
 

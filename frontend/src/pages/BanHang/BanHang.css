@@ -1,0 +1,72 @@
+body {
+  background-color: #f8f9fa;
+}
+
+.pos-input {
+  background-color: #fdfdfe;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #ced4da;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.pos-input:focus {
+  background-color: #ffffff;
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+}
+
+.section-card {
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 0.65rem;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.02);
+}
+
+.section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: #6c757d;
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #f1f3f5;
+  padding-bottom: 0.35rem;
+}
+
+.sticky-panel {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 10;
+}
+
+.hover-bg-light:hover {
+  background-color: #f8f9fa;
+  cursor: pointer;
+}
+
+.glass-footer {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid #dee2e6;
+}
+
+.badge-soft-primary {
+  background-color: rgba(13, 110, 253, 0.08);
+  color: #0d6efd;
+  border: 1px solid rgba(13, 110, 253, 0.15);
+}
+
+/* Custom scrollbars for compact dropdowns */
+.dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.dropdown-menu::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}

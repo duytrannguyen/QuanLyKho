@@ -130,6 +130,20 @@ public class SalesOrder {
     @Column(name = "warranty_expiry")
     private LocalDate warrantyExpiry;
 
+    /** Đơn ship xa / giao hàng */
+    @Column(name = "is_shipping")
+    @Builder.Default
+    private Boolean isShipping = false;
+
+    /** Khách đã nhận hàng thành công */
+    @Column(name = "is_delivered")
+    @Builder.Default
+    private Boolean isDelivered = false;
+
+    /** Ngày khách nhận hàng thực tế (kích hoạt bảo hành) */
+    @Column(name = "delivery_date")
+    private LocalDate deliveryDate;
+
     /** Cột W: doanh thu gộp / trước giảm (VNĐ) */
     @Column(name = "gross_revenue", precision = 15, scale = 0)
     private BigDecimal grossRevenue;

@@ -1,7 +1,5 @@
 package com.qkshop.tonkho.inventory;
 
-import com.qkshop.tonkho.inventory.ActiveInventory;
-import com.qkshop.tonkho.inventory.CycleState;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -97,12 +95,13 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
     List<ActiveInventory> findFilteredAll(@Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
 
     @Query("SELECT ai FROM ActiveInventory ai " +
-           "LEFT JOIN ai.config c LEFT JOIN c.variant v LEFT JOIN v.platform p " +
-           "LEFT JOIN p.modelLine m " +
-           "LEFT JOIN m.brand b " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "LEFT JOIN FETCH p.modelLine m " +
+           "LEFT JOIN FETCH m.brand b " +
            "WHERE (:state IS NULL OR ai.state = :state) " +
            "  AND (:brandName IS NULL OR LOWER(b.brandName) = LOWER(:brandName)) " +
-           "  AND (:segment IS NULL OR m.segmentCode = :segment)")
+           "  AND (:segment IS NULL OR m.segmentCode = :segment) " +
+           "ORDER BY ai.intakeAt DESC, ai.id DESC")
     List<ActiveInventory> findByFilters(
             @Param("state") CycleState state,
             @Param("brandName") String brandName,

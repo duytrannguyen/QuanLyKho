@@ -1,13 +1,10 @@
 package com.qkshop.tonkho.sync;
+
 import com.qkshop.tonkho.issue.DataIssueRepository;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
 import com.qkshop.tonkho.issue.IssueStatus;
 import com.qkshop.tonkho.issue.DataIssue;
-
-
-
-
 import com.qkshop.tonkho.catalog.ModelLine;
 import com.qkshop.tonkho.catalog.VariantV2;
 import com.qkshop.tonkho.core.enums.CloseType;
@@ -16,13 +13,17 @@ import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.machine.dto.MachineImportRequest;
 import com.qkshop.tonkho.sale.SalesConfig;
+import com.qkshop.tonkho.salesreport.SalesOrder;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -41,7 +42,7 @@ public class ReconciliationService {
     public DataIssue recheckIssue(String issueId) {
         DataIssue issue = dataIssueRepo.findByIssueId(issueId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy DataIssue với ID: " + issueId));
-        
+
         if (issue.getStatus() == IssueStatus.RESOLVED || issue.getStatus() == IssueStatus.ACCEPTED_EXCEPTION) {
             return issue; // Already resolved
         }
@@ -50,15 +51,11 @@ public class ReconciliationService {
 
         // Logic kiểm tra lại tùy theo loại lỗi
         if ("MISSING_SALE_RECORD".equals(issue.getIssueType()) || "SOLD_WHILE_INSPECTING".equals(issue.getIssueType())) {
-            // Kiểm tra xem máy đã được đóng (bán) chưa
-            // issue.getEntityId() đang chứa cycleId
             boolean inActive = activeInventoryRepo.findByCycleId(issue.getEntityId()).isPresent();
             if (!inActive) {
-                // Đã không còn trong kho -> có thể đã đóng
                 isResolved = true;
             }
         } else if ("UNKNOWN_SERIAL_SOLD".equals(issue.getIssueType())) {
-            // Kiểm tra xem serial đã được nhập vào kho chưa (dùng truy vấn có index)
             String serial = issue.getEntityId();
             boolean found = activeInventoryRepo.findBySerialKey(serial).isPresent() ||
                             !closedCycleRepo.findBySerialKeyOrderByClosedAtDesc(serial).isEmpty();
@@ -66,7 +63,6 @@ public class ReconciliationService {
                 isResolved = true;
             }
         } else {
-            // Các lỗi khác mặc định quét lại coi như đã fix (demo)
             isResolved = true;
         }
 
@@ -84,7 +80,7 @@ public class ReconciliationService {
     public DataIssue resolveIssueManual(String issueId, String note) {
         DataIssue issue = dataIssueRepo.findByIssueId(issueId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy DataIssue với ID: " + issueId));
-        
+
         issue.setStatus(IssueStatus.ACCEPTED_EXCEPTION);
         issue.setResolvedAt(LocalDateTime.now());
         return dataIssueRepo.save(issue);
@@ -104,10 +100,11 @@ public class ReconciliationService {
             throw new IllegalStateException("Máy " + serial + " hiện đã có trong kho ở trạng thái hoạt động!");
         }
 
-        ClosedCycle cc = closedCycleRepo.findBySerialKeyOrderByClosedAtDesc(serial).stream()
-                .filter(c -> c.getCloseType() == CloseType.SALE)
-                .findFirst()
-                .orElse(null);
+        ClosedCycle cc = closedCycleRepo.findTopBySerialKeyOrderByClosedAtDesc(serial)
+                .orElseGet(() -> closedCycleRepo.findBySerialKeyOrderByClosedAtDesc(serial).stream()
+                        .filter(c -> c.getCloseType() == CloseType.SALE)
+                        .findFirst()
+                        .orElse(null));
 
         String brandName = "KHÁC";
         String productLine = "Chưa phân loại";
@@ -176,13 +173,35 @@ public class ReconciliationService {
             closedCycleRepo.save(cc);
         }
 
-        // Đồng bộ sổ cái SalesOrder: chuyển trạng thái sang "Trả hàng" và doanh thu thuần = 0
+        // Đồng bộ sổ cái SalesOrder của đúng chu kỳ vừa trả (không xóa/ghi đè lịch sử các vòng bán trước đó)
         try {
-            for (com.qkshop.tonkho.salesreport.SalesOrder so : salesOrderRepo.findBySerialKeysContaining(serial)) {
+            Optional<SalesOrder> targetOrderOpt = Optional.empty();
+            if (cc != null && cc.getCycleId() != null) {
+                targetOrderOpt = salesOrderRepo.findByMatchedCycleId(cc.getCycleId());
+            }
+            if (targetOrderOpt.isEmpty()) {
+                targetOrderOpt = salesOrderRepo.findBySerialKeysContaining(serial).stream()
+                        .filter(s -> s.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(s.getOrderCategory()))
+                        .max(Comparator.comparing(
+                                (SalesOrder s) -> s.getSaleDate() != null ? s.getSaleDate() : LocalDateTime.MIN)
+                                .thenComparing(s -> s.getId() != null ? s.getId() : 0L));
+            }
+
+            targetOrderOpt.ifPresent(so -> {
                 so.setOrderStatus("Trả hàng");
-                so.setNetRevenue(java.math.BigDecimal.ZERO);
+                so.setNetRevenue(BigDecimal.ZERO);
                 so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newInv.getCycleId());
                 salesOrderRepo.save(so);
+            });
+
+            if (cc != null && cc.getCycleId() != null) {
+                String pkKemTxnId = "PK-KEM-" + cc.getCycleId().replace("CYC-", "");
+                salesOrderRepo.findByTransactionId(pkKemTxnId).ifPresent(accSo -> {
+                    accSo.setOrderStatus("Trả hàng");
+                    accSo.setNetRevenue(BigDecimal.ZERO);
+                    accSo.setNote((accSo.getNote() != null ? accSo.getNote() + " | " : "") + "Khách trả máy kèm phụ kiện - nhập lại kho " + newInv.getCycleId());
+                    salesOrderRepo.save(accSo);
+                });
             }
         } catch (Exception e) {
             log.warn("Không thể cập nhật SalesOrder khi duyệt trả máy {}: {}", serial, e.getMessage());
@@ -197,10 +216,10 @@ public class ReconciliationService {
     public java.util.List<DataIssue> getAllOpenIssues() {
         return dataIssueRepo.findByStatusIn(java.util.List.of(IssueStatus.OPEN, IssueStatus.IN_REVIEW, IssueStatus.FIXED_WAIT_RESCAN));
     }
-    
+
     public java.util.List<SyncRun> getRecentSyncRuns() {
         java.util.List<SyncRun> all = new java.util.ArrayList<>(syncRunRepo.findAll());
-        all.sort((a,b) -> b.getStartedAt().compareTo(a.getStartedAt()));
+        all.sort((a, b) -> b.getStartedAt().compareTo(a.getStartedAt()));
         return all;
     }
 

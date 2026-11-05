@@ -43,26 +43,29 @@ export const ToastProvider = ({ children }) => {
     <NguCanhThongBao.Provider value={{ showToast, confirm }}>
       {children}
       <div className="toast-container position-fixed top-0 end-0 p-3 mt-5" style={{ zIndex: 9999 }}>
-        {toasts.map(t => (
-          <div key={t.id} className={`toast show align-items-center text-bg-${t.type} border-0 mb-2 shadow-lg`} role="alert" aria-live="assertive" aria-atomic="true">
-            <div className="toast-header">
-              <strong className="me-auto">{t.isConfirm ? 'Xác nhận' : 'Thông báo'}</strong>
-              <small className={t.type === 'light' ? 'text-muted' : ''}>vừa xong</small>
-              {!t.isConfirm && (
-                <button type="button" className="btn-close" onClick={() => removeToast(t.id)}></button>
-              )}
+        {toasts.map(t => {
+          const bgType = t.type === 'error' ? 'danger' : t.type;
+          return (
+            <div key={t.id} className={`toast show align-items-center text-bg-${bgType} border-0 mb-2 shadow-lg`} role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="toast-header">
+                <strong className="me-auto">{t.isConfirm ? 'Xác nhận' : 'Thông báo'}</strong>
+                <small className={bgType === 'light' ? 'text-muted' : ''}>vừa xong</small>
+                {!t.isConfirm && (
+                  <button type="button" className="btn-close" onClick={() => removeToast(t.id)}></button>
+                )}
+              </div>
+              <div className="toast-body">
+                {t.message}
+                {t.isConfirm && (
+                  <div className="mt-2 pt-2 border-top d-flex justify-content-end gap-2">
+                    <button className="btn btn-sm btn-secondary" onClick={() => t.onResolve(false)}>Hủy</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => t.onResolve(true)}>OK</button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="toast-body">
-              {t.message}
-              {t.isConfirm && (
-                <div className="mt-2 pt-2 border-top d-flex justify-content-end gap-2">
-                  <button className="btn btn-sm btn-secondary" onClick={() => t.onResolve(false)}>Hủy</button>
-                  <button className="btn btn-sm btn-primary" onClick={() => t.onResolve(true)}>OK</button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </NguCanhThongBao.Provider>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Search, RefreshCw } from 'lucide-react';
 import { apiKiemDinh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatInspectionStatus } from '../../constants/trangThai';
@@ -138,25 +139,65 @@ export default function TrangKiemDinh() {
   return (
     <div className="container-fluid p-0">
       
-      <div className="mb-4">
-        <h2 className="fw-bold m-0 text-dark">Kiểm tra máy</h2>
-        <p className="text-secondary">Xử lý các máy đang chờ kiểm tra kỹ thuật</p>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+          <h2 className="fw-bold m-0 text-dark">Kiểm định chất lượng máy (QC)</h2>
+          <p className="text-secondary m-0">Quét mã Serial hoặc tìm kiếm máy đang chờ kiểm tra kỹ thuật</p>
+        </div>
+        <button className="btn btn-outline-primary d-flex align-items-center gap-2" onClick={fetchInspections}>
+          <RefreshCw size={16} /> Làm mới danh sách
+        </button>
       </div>
 
-      <div className="mb-4">
-        <ul className="nav nav-pills gap-2 flex-nowrap overflow-auto pb-2">
-          {['ĐANG MỞ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => (
-            <li className="nav-item" key={tab}>
-              <button
-                className={`nav-link fw-medium border ${activeTab === tab ? 'active bg-primary border-primary' : 'bg-white text-secondary border-secondary'}`}
-                onClick={() => setActiveTab(tab)}
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                {tab}
+      <div className="row g-3 align-items-center mb-4">
+        <div className="col-md-5 col-lg-4">
+          <div className="input-group shadow-sm">
+            <span className="input-group-text bg-white border-end-0 text-secondary">
+              <Search size={18} />
+            </span>
+            <input
+              type="text"
+              className="form-control border-start-0"
+              placeholder="Quét mã vạch hoặc nhập Serial, Tên máy, Mã phiếu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="btn btn-outline-secondary border-start-0" type="button" onClick={() => setSearchQuery('')}>
+                Xóa
               </button>
-            </li>
-          ))}
-        </ul>
+            )}
+          </div>
+        </div>
+        <div className="col-md-7 col-lg-8">
+          <ul className="nav nav-pills gap-2 flex-nowrap overflow-auto pb-1">
+            {['ĐANG MỞ', 'ĐANG XỬ LÝ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => {
+              const count = inspections.filter(item => {
+                if (tab === 'TẤT CẢ') return true;
+                if (tab === 'ĐANG MỞ') return item.status === 'OPEN';
+                if (tab === 'ĐANG XỬ LÝ') return item.status === 'IN_PROGRESS';
+                if (tab === 'YÊU CẦU KIỂM TRA LẠI') return item.status === 'RECHECK_REQUESTED';
+                if (tab === 'ĐẠT') return item.status === 'PASSED';
+                if (tab === 'HỦY/TRẢ') return item.status === 'REJECTED_RETURNED';
+                return true;
+              }).length;
+              return (
+                <li className="nav-item" key={tab}>
+                  <button
+                    className={`nav-link fw-medium border d-flex align-items-center gap-2 ${activeTab === tab ? 'active bg-primary border-primary' : 'bg-white text-secondary border-secondary-subtle'}`}
+                    onClick={() => setActiveTab(tab)}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    <span>{tab}</span>
+                    <span className={`badge rounded-pill ${activeTab === tab ? 'bg-white text-primary' : 'bg-light text-dark'}`}>
+                      {count}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
 
       <div className="mb-3 fw-medium text-secondary small">Hiển thị {filteredInspections.length} kết quả</div>

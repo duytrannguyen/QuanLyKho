@@ -129,10 +129,20 @@ export default function TrangNhapLinhKien() {
     }
   };
 
-  const handleCategoryChange = (val) => {
+  const handleCategoryChange = async (val) => {
     const code = getCategoryCode(val);
-    const newSku = generateSKU(code, false);
-    setForm(prev => ({ ...prev, category: val, sku: newSku }));
+    const fallbackSku = generateSKU(code, false);
+    setForm(prev => ({ ...prev, category: val, sku: fallbackSku }));
+    if (code) {
+      try {
+        const res = await apiLinhKien.getNextSku(code);
+        if (res?.data) {
+          setForm(prev => ({ ...prev, sku: res.data }));
+        }
+      } catch {
+        // Giữ fallbackSku nếu lỗi
+      }
+    }
   };
 
   const handleChange = (field, value) => {

@@ -87,8 +87,15 @@ export default function TrangNhapMayMoc() {
   };
 
   const handleSerialBlur = async () => {
-    if (!form.serial.trim()) {
+    const raw = form.serial.trim();
+    if (!raw) {
       setIsExisting(false);
+      return;
+    }
+    const multiParts = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    if (multiParts.length > 1) {
+      setIsExisting(false);
+      showToast(`Phát hiện ${multiParts.length} mã Serial cùng cấu hình. Sẽ nhập theo lô!`, 'info');
       return;
     }
     setIsLoadingSerial(true);
@@ -179,7 +186,8 @@ export default function TrangNhapMayMoc() {
           warrantyExpiry: resolvedExpiry,
           price: form.price ? form.price : null
         };
-        if (isExisting) {
+        const parsedSerials = [...new Set(form.serial.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean))];
+        if (isExisting && parsedSerials.length === 1) {
           const updatePayload = {
             brand: payload.brand, productLine: payload.productLine, modelFull: payload.modelFull,
             segment: payload.segment, importType: payload.importType, status: payload.initialStatus,
@@ -188,9 +196,9 @@ export default function TrangNhapMayMoc() {
             cpu: payload.cpu, gpu: payload.gpu, ram: payload.ram, ssd: payload.ssd, touchscreen: payload.touchscreen,
             screenSize: payload.screenSize, price: payload.price, notes: payload.notes
           };
-          setPreviewGroups([{ isUpdate: true, serials: [payload.serial], count: 1, ...updatePayload }]);
+          setPreviewGroups([{ isUpdate: true, serials: parsedSerials, count: 1, ...updatePayload }]);
         } else {
-          setPreviewGroups([{ isUpdate: false, serials: [payload.serial], count: 1, ...payload }]);
+          setPreviewGroups([{ isUpdate: false, serials: parsedSerials, count: parsedSerials.length, ...payload }]);
         }
       }
     } catch (err) {
@@ -348,9 +356,9 @@ export default function TrangNhapMayMoc() {
 
             <div className="row g-4 mb-4">
               <div className="col-md-6">
-                <label className={labelClass}>Serial <span className="text-danger">*</span></label>
+                <label className={labelClass}>Serial (Ngăn cách bằng dấu phẩy nếu nhập nhiều máy) <span className="text-danger">*</span></label>
                 <div className="input-group">
-                  <input className="form-control bg-light" placeholder="Nhập hoặc quét mã vạch..."
+                  <input className="form-control bg-light" placeholder="Quét mã vạch hoặc nhập nhiều Serial cách nhau dấu phẩy (VD: SN01, SN02)..."
                     value={form.serial} onChange={e => handleChange('serial', e.target.value)} onBlur={handleSerialBlur} />
                   {isLoadingSerial && <span className="input-group-text bg-light"><div className="spinner-border spinner-border-sm text-primary"></div></span>}
                 </div>

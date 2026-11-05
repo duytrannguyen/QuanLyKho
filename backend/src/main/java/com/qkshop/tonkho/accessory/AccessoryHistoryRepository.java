@@ -11,4 +11,5 @@ public interface AccessoryHistoryRepository extends JpaRepository<AccessoryHisto
     List<AccessoryHistory> findByCreatedAtBetween(java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
     List<AccessoryHistory> findByActionAndCreatedAtBetween(String action, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate);
     List<AccessoryHistory> findBySku(String sku);
+    List<AccessoryHistory> findBySkuOrderByCreatedAtDesc(String sku);
 }

@@ -157,9 +157,11 @@ export default function TrangTimKiemTonKho() {
       if (type === 'PRICE_ALL') {
         const newPrice = parseCurrency(modalForm.price);
         if (!newPrice || isNaN(newPrice)) throw new Error("Giá không hợp lệ");
-        const promises = payload.variant.machines.map(m => apiMayMoc.update(m.serial, { price: newPrice }));
-        await Promise.all(promises);
-        showToast('Cập nhật giá thành công', 'success');
+        const serials = (payload.variant.machines || []).map(m => m.serial).filter(Boolean);
+        if (serials.length > 0) {
+          await apiMayMoc.bulkUpdatePrice(serials, newPrice);
+        }
+        showToast('Cập nhật giá hàng loạt thành công', 'success');
       } else if (type === 'PRICE_SINGLE') {
         const newPrice = parseCurrency(modalForm.price);
         if (!newPrice || isNaN(newPrice)) throw new Error("Giá không hợp lệ");

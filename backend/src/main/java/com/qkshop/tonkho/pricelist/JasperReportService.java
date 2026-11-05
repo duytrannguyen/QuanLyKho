@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service tao file PDF bang gia dung JasperReports.
@@ -27,6 +28,24 @@ public class JasperReportService {
     private static final int PER_PAGE_A4 = 9;
     private static final int PER_PAGE_A5 = 4;
 
+    private final Map<String, JasperReport> reportCache = new ConcurrentHashMap<>();
+
+    private JasperReport getCompiledReport(String templateName) throws JRException {
+        JasperReport cached = reportCache.get(templateName);
+        if (cached != null) {
+            return cached;
+        }
+        try (InputStream jrxmlStream = new ClassPathResource(templateName).getInputStream()) {
+            JasperReport compiled = JasperCompileManager.compileReport(jrxmlStream);
+            reportCache.put(templateName, compiled);
+            return compiled;
+        } catch (JRException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new JRException("Không tìm thấy template: " + templateName, e);
+        }
+    }
+
     /**
      * Xuat PDF bang gia.
      * @param pageSize "A4" hoac "A5"
@@ -38,14 +57,8 @@ public class JasperReportService {
         String templateName = isA5 ? "reports/bang_gia_a5.jrxml" : "reports/bang_gia.jrxml";
         int perPage = isA5 ? PER_PAGE_A5 : PER_PAGE_A4;
 
-        // 1. Load va compile JRXML template
-        InputStream jrxmlStream;
-        try {
-            jrxmlStream = new ClassPathResource(templateName).getInputStream();
-        } catch (Exception e) {
-            throw new JRException("Khong tim thay template: " + templateName, e);
-        }
-        JasperReport jasperReport = JasperCompileManager.compileReport(jrxmlStream);
+        // 1. Load hoac lay tu cache JRXML template da compile
+        JasperReport jasperReport = getCompiledReport(templateName);
 
         // 2. Fill tung trang
         List<JasperPrint> prints = new ArrayList<>();
@@ -62,7 +75,7 @@ public class JasperReportService {
         }
 
         if (prints.isEmpty()) {
-            throw new JRException("Khong co du lieu de tao PDF");
+            throw new JRException("Không có dữ liệu để tạo PDF");
         }
 
         // 3. Ghep trang
@@ -83,7 +96,7 @@ public class JasperReportService {
         exporter.setConfiguration(config);
         exporter.exportReport();
 
-        log.info("Da tao PDF bang gia [{}]: {} the, {} trang", pageSize, items.size(), merged.getPages().size());
+        log.info("Đã tạo PDF bảng giá [{}]: {} thẻ, {} trang", pageSize, items.size(), merged.getPages().size());
         return baos.toByteArray();
     }
 

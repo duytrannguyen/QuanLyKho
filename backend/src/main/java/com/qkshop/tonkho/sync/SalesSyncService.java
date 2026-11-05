@@ -35,7 +35,6 @@ public class SalesSyncService {
     private final GoogleSheetClient sheetClient;
     private final GoogleSheetProperties props;
     private final com.qkshop.tonkho.system.SystemConfigService systemConfigService;
-    private final com.qkshop.tonkho.log.ActivityLogService activityLogService;
     private final com.qkshop.tonkho.notification.NotificationService notificationService;
 
     /** Không cho 2 lượt đồng bộ (cron + bấm tay) chạy chồng nhau. */
@@ -143,15 +142,6 @@ public class SalesSyncService {
         } finally {
             run.setFinishedAt(LocalDateTime.now());
             syncRunRepo.save(run);
-            try {
-                if (activityLogService != null) {
-                    activityLogService.log("ĐỒNG BỘ GOOGLE SHEET", null, null, null, run.getRunStatus(),
-                            String.format("Lượt %s (%s): Đã xuất kho %d máy, %d lỗi trên tổng %d dòng xử lý",
-                                    syncRunId, runMode, run.getRowsProcessed(), run.getRowsError(), run.getRowsValid()));
-                }
-            } catch (Exception ex) {
-                log.warn("[GSHEET] Không thể ghi activity log: {}", ex.getMessage());
-            }
 
             try {
                 if (notificationService != null) {

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3 } from 'lucide-react';
+import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3, Truck, Clock, Calendar } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import ModalChiTietDonHang from './ModalChiTietDonHang';
 import ModalSuaDonMay from './ModalSuaDonMay';
 import ModalSuaDonPhuKien from './ModalSuaDonPhuKien';
 import ModalSuaDonSuaChua from './ModalSuaDonSuaChua';
-import { getCleanWarrantyType, formatCurrency, formatDate } from '../../utils/dinh_dang';
+import { getCleanWarrantyType, formatCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangKiemTraBaoHanh() {
   const { showToast } = useToast();
@@ -32,6 +32,40 @@ export default function TrangKiemTraBaoHanh() {
   const [editingMachineOrder, setEditingMachineOrder] = useState(null);
   const [editingAccessoryOrder, setEditingAccessoryOrder] = useState(null);
   const [editingRepairOrder, setEditingRepairOrder] = useState(null);
+
+  // Modal xác nhận khách đã nhận hàng (Đơn ship xa)
+  const [confirmingDeliveryOrder, setConfirmingDeliveryOrder] = useState(null);
+  const [confirmDeliveryDate, setConfirmDeliveryDate] = useState(getTodayDateString());
+  const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
+
+  const handleOpenConfirmDelivery = (order) => {
+    setConfirmingDeliveryOrder(order);
+    setConfirmDeliveryDate(getTodayDateString());
+  };
+
+  const handleConfirmDeliverySubmit = async (e) => {
+    e?.preventDefault();
+    if (!confirmingDeliveryOrder || !confirmDeliveryDate) return;
+
+    setIsConfirmingDelivery(true);
+    try {
+      const res = await apiBaoHanh.confirmDelivery(confirmingDeliveryOrder.cycleId, {
+        deliveryDate: confirmDeliveryDate
+      });
+      const updatedOrder = res.data?.data || res.data;
+      showToast(`Đã xác nhận khách nhận máy ${confirmingDeliveryOrder.serialKey}! Bảo hành đã được kích hoạt.`, 'success');
+
+      setMachines(prev => prev.map(m => m.cycleId === confirmingDeliveryOrder.cycleId ? { ...m, ...updatedOrder } : m));
+      if (selectedOrder && selectedOrder.cycleId === confirmingDeliveryOrder.cycleId) {
+        setSelectedOrder(prev => ({ ...prev, ...updatedOrder }));
+      }
+      setConfirmingDeliveryOrder(null);
+    } catch (err) {
+      showToast(err.userMessage || err.message || 'Lỗi khi xác nhận nhận hàng', 'danger');
+    } finally {
+      setIsConfirmingDelivery(false);
+    }
+  };
 
   const handleSearch = async (e) => {
     e?.preventDefault();
@@ -107,7 +141,7 @@ export default function TrangKiemTraBaoHanh() {
     setSelectedOrder(null);
   };
 
-  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock) => {
+  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock, isShipping, isDelivered, deliveryDate) => {
     if (isInStock) {
       const now = new Date();
       let end = warrantyExpiry ? new Date(warrantyExpiry) : null;
@@ -143,7 +177,20 @@ export default function TrangKiemTraBaoHanh() {
       };
     }
 
-    if (!saleDate && !warrantyExpiry) {
+    // Đơn ship xa chưa nhận hàng: Ghi nhận là Chờ, chưa tính thời gian bảo hành
+    if (isShipping && !isDelivered) {
+      return {
+        status: 'PENDING_DELIVERY',
+        text: 'Chờ khách nhận hàng',
+        badge: 'bg-warning bg-opacity-25 text-warning-emphasis border border-warning',
+        icon: Truck,
+        endDate: null,
+        diffDays: undefined,
+        isShippingPending: true
+      };
+    }
+
+    if (!saleDate && !warrantyExpiry && !deliveryDate) {
       return {
         status: 'UNKNOWN',
         text: 'Không xác định',
@@ -155,6 +202,8 @@ export default function TrangKiemTraBaoHanh() {
 
     const now = new Date();
     let end;
+
+    const baseDate = (isShipping && isDelivered && deliveryDate) ? deliveryDate : saleDate;
 
     if (warrantyExpiry) {
       end = new Date(warrantyExpiry);
@@ -168,25 +217,25 @@ export default function TrangKiemTraBaoHanh() {
         end = new Date(year, month, day, 23, 59, 59, 999);
       } else if (warrantyPeriod.toLowerCase().includes('tháng')) {
         const monthMatch = warrantyPeriod.match(/(\d+)/);
-        if (monthMatch) {
+        if (monthMatch && baseDate) {
           const months = parseInt(monthMatch[1]);
-          const sale = new Date(saleDate);
+          const sale = new Date(baseDate);
           end = new Date(sale.setMonth(sale.getMonth() + months));
           end.setHours(23, 59, 59, 999);
         }
       } else if (warrantyPeriod.toLowerCase().includes('năm')) {
         const yearMatch = warrantyPeriod.match(/(\d+)/);
-        if (yearMatch) {
+        if (yearMatch && baseDate) {
           const years = parseInt(yearMatch[1]);
-          const sale = new Date(saleDate);
+          const sale = new Date(baseDate);
           end = new Date(sale.setFullYear(sale.getFullYear() + years));
           end.setHours(23, 59, 59, 999);
         }
       } else if (warrantyPeriod.toLowerCase().includes('ngày')) {
         const dayMatch = warrantyPeriod.match(/(\d+)/);
-        if (dayMatch) {
+        if (dayMatch && baseDate) {
           const days = parseInt(dayMatch[1]);
-          const sale = new Date(saleDate);
+          const sale = new Date(baseDate);
           end = new Date(sale.setDate(sale.getDate() + days));
           end.setHours(23, 59, 59, 999);
         }
@@ -475,7 +524,7 @@ export default function TrangKiemTraBaoHanh() {
                         </thead>
                         <tbody>
                           {machines.map((item, index) => {
-                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock);
+                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock, item.isShipping, item.isDelivered, item.deliveryDate);
                             const StatusIcon = statusInfo.icon;
                             return (
                               <tr key={item.cycleId || index} onClick={() => setSelectedOrder(item)} style={{ cursor: 'pointer' }} title="Bấm để xem chi tiết đơn hàng">
@@ -514,6 +563,14 @@ export default function TrangKiemTraBaoHanh() {
                                     ) : (
                                       <span className="badge bg-light text-secondary border font-monospace">Kích hoạt khi bán</span>
                                     )
+                                  ) : statusInfo.status === 'PENDING_DELIVERY' ? (
+                                    <div>
+                                      <div className="text-warning-emphasis fw-medium small d-flex align-items-center">
+                                        <Clock size={13} className="me-1 text-warning flex-shrink-0" />
+                                        <span>Chờ nhận hàng</span>
+                                      </div>
+                                      <div className="small text-muted" style={{ fontSize: '11px' }}>Kích hoạt khi nhận</div>
+                                    </div>
                                   ) : statusInfo.endDate ? (
                                     <div>
                                       <div className="fw-medium text-dark">{statusInfo.endDate.toLocaleDateString('vi-VN')}</div>
@@ -533,15 +590,28 @@ export default function TrangKiemTraBaoHanh() {
                                 </td>
                                 <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
                                   {!item.isInStock ? (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
-                                      onClick={() => setEditingMachineOrder(item)}
-                                      title="Chỉnh sửa thông tin đơn máy này"
-                                    >
-                                      <Edit3 size={13} />
-                                      <span>Sửa</span>
-                                    </button>
+                                    <div className="d-inline-flex align-items-center gap-1 justify-content-end">
+                                      {item.isShipping && !item.isDelivered && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-success py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm"
+                                          onClick={() => handleOpenConfirmDelivery(item)}
+                                          title="Xác nhận khách đã nhận hàng & Kích hoạt bảo hành"
+                                        >
+                                          <Truck size={13} />
+                                          <span>Đã nhận</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
+                                        onClick={() => setEditingMachineOrder(item)}
+                                        title="Chỉnh sửa thông tin đơn máy này"
+                                      >
+                                        <Edit3 size={13} />
+                                        <span>Sửa</span>
+                                      </button>
+                                    </div>
                                   ) : (
                                     <span className="badge bg-light text-secondary border">Trong kho</span>
                                   )}
@@ -802,9 +872,104 @@ export default function TrangKiemTraBaoHanh() {
       {selectedOrder && (
         <ModalChiTietDonHang
           order={selectedOrder}
-          statusInfo={getWarrantyStatus(selectedOrder.saleDate, selectedOrder.warrantyPeriod, selectedOrder.isVoided, selectedOrder.warrantyExpiry)}
+          statusInfo={getWarrantyStatus(
+            selectedOrder.saleDate,
+            selectedOrder.warrantyPeriod,
+            selectedOrder.isVoided,
+            selectedOrder.warrantyExpiry,
+            selectedOrder.isInStock,
+            selectedOrder.isShipping,
+            selectedOrder.isDelivered,
+            selectedOrder.deliveryDate
+          )}
+          onConfirmDelivery={handleOpenConfirmDelivery}
           onClose={() => setSelectedOrder(null)}
         />
+      )}
+
+      {/* Modal Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành */}
+      {confirmingDeliveryOrder && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1070 }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content shadow border-0 rounded-4">
+              <div className="modal-header bg-success text-white py-3">
+                <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
+                  <Truck size={20} />
+                  Xác Nhận Khách Đã Nhận Hàng
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setConfirmingDeliveryOrder(null)}
+                  disabled={isConfirmingDelivery}
+                />
+              </div>
+              <form onSubmit={handleConfirmDeliverySubmit}>
+                <div className="modal-body p-4">
+                  <div className="p-3 bg-light rounded-3 border mb-3">
+                    <div className="fw-bold text-dark mb-1">
+                      {confirmingDeliveryOrder.sourceModelText || 'Máy tính'}
+                    </div>
+                    <div className="small text-muted font-monospace mb-1">
+                      Serial: <strong className="text-primary">{confirmingDeliveryOrder.serialKey}</strong>
+                    </div>
+                    <div className="small text-muted">
+                      Khách hàng: <strong className="text-dark">{confirmingDeliveryOrder.customerName || 'Khách lẻ'}</strong> - {confirmingDeliveryOrder.customerPhone || '—'}
+                    </div>
+                    <div className="small text-muted mt-1">
+                      Gói bảo hành: <span className="badge bg-primary ms-1">{confirmingDeliveryOrder.warrantyPeriod || 'Theo máy'}</span>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-dark mb-1 d-flex align-items-center gap-1">
+                      <Calendar size={15} className="text-success" />
+                      Ngày khách nhận hàng thực tế <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="form-control border-success fw-medium"
+                      value={confirmDeliveryDate}
+                      onChange={(e) => setConfirmDeliveryDate(e.target.value)}
+                      required
+                    />
+                    <div className="form-text small text-muted">
+                      Thời gian bảo hành của máy sẽ bắt đầu được tính từ mốc ngày này.
+                    </div>
+                  </div>
+
+                  <div className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-0 rounded-3">
+                    <Info size={16} className="text-info flex-shrink-0" />
+                    <span>Sau khi xác nhận, đơn sẽ hoàn tất và kích hoạt hạn bảo hành tương ứng với gói của máy.</span>
+                  </div>
+                </div>
+
+                <div className="modal-footer bg-light d-flex justify-content-end gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary px-4 rounded-pill"
+                    onClick={() => setConfirmingDeliveryOrder(null)}
+                    disabled={isConfirmingDelivery}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-success px-4 rounded-pill fw-bold d-flex align-items-center gap-2 text-white"
+                    disabled={isConfirmingDelivery}
+                  >
+                    {isConfirmingDelivery ? (
+                      <span className="spinner-border spinner-border-sm" />
+                    ) : (
+                      <CheckCircle2 size={16} />
+                    )}
+                    <span>Xác nhận & Kích hoạt BH</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal Chi Tiết Hóa Đơn Dịch Vụ Sửa Chữa */}

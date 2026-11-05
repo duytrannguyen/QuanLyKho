@@ -96,6 +96,17 @@ public class ClosedCycle {
     @Column(name = "warranty_expiry")
     private LocalDate warrantyExpiry;
 
+    @Column(name = "is_shipping")
+    @Builder.Default
+    private Boolean isShipping = false;
+
+    @Column(name = "is_delivered")
+    @Builder.Default
+    private Boolean isDelivered = false;
+
+    @Column(name = "delivery_date")
+    private LocalDate deliveryDate;
+
     @Column(name = "payment_status", length = 50)
     private String paymentStatus;
 

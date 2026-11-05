@@ -31,9 +31,10 @@ public class ClosedCycleDTO {
     private String warrantyPeriod;
     private LocalDate warrantyExpiry;
 
-    // Metadata từ SerialRegistry (brand)
+    // Metadata từ SerialRegistry / Catalog
     private String brandId;
     private String brandName;
+    private String segment;
 
     // Computed
     private long storageDays;         // Số ngày lưu kho = closedAt - intakeAt

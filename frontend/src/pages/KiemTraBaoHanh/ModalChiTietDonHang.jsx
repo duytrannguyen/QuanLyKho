@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
-  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash
+  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck
 } from 'lucide-react';
 import { getCleanWarrantyType } from '../../utils/dinh_dang';
 
-export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
+export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery }) {
   const [copiedKey, setCopiedKey] = useState(null);
 
   if (!order) return null;
@@ -201,6 +201,10 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
             <div class="info-row">
               <span class="info-label">Gói bảo hành:</span>
               <span class="info-val">${getCleanWarrantyType(order.warrantyPeriod)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Hình thức giao:</span>
+              <span class="info-val">${order.isShipping ? `Đơn ship xa ${order.isDelivered ? `(Đã nhận: ${formatDate(order.deliveryDate)})` : '(Chờ nhận hàng)'}` : 'Mua tại cửa hàng'}</span>
             </div>
           </div>
         </div>
@@ -454,6 +458,64 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo }) {
                         <span className="text-muted small">Ngày giao dịch:</span>
                         <div className="fw-medium text-dark">{formatDate(order.saleDate)}</div>
                       </div>
+
+                      {/* Vận chuyển & Giao nhận */}
+                      <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                        <span className="text-muted small">Hình thức bán:</span>
+                        <div>
+                          {order.isShipping ? (
+                            <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 d-inline-flex align-items-center gap-1">
+                              <Truck size={13} /> Đơn ship xa
+                            </span>
+                          ) : (
+                            <span className="badge bg-light text-secondary border">
+                              Tại cửa hàng
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {order.isShipping && (
+                        <div className="p-3 rounded-3 bg-light border mb-1">
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="small text-secondary fw-semibold">Trạng thái nhận hàng:</span>
+                            {order.isDelivered ? (
+                              <span className="badge bg-success bg-opacity-15 text-success border border-success d-inline-flex align-items-center gap-1">
+                                <CheckCircle2 size={13} /> Khách đã nhận
+                              </span>
+                            ) : (
+                              <span className="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning d-inline-flex align-items-center gap-1">
+                                <Clock size={13} /> Chờ khách nhận hàng
+                              </span>
+                            )}
+                          </div>
+
+                          {order.isDelivered ? (
+                            <div className="small text-muted mt-1">
+                              Ngày nhận: <strong className="text-dark">{formatDate(order.deliveryDate)}</strong>
+                              <div className="text-success small mt-1 fw-medium">
+                                (Thời hạn bảo hành bắt đầu tính từ ngày này)
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2">
+                              <div className="small text-warning-emphasis mb-2">
+                                ⏳ Thời gian bảo hành chưa kích hoạt cho đến khi xác nhận giao thành công.
+                              </div>
+                              {onConfirmDelivery && (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-success w-100 fw-bold d-flex align-items-center justify-content-center gap-2 py-2 shadow-sm rounded-3 text-white"
+                                  onClick={() => onConfirmDelivery(order)}
+                                >
+                                  <Truck size={15} />
+                                  <span>Xác nhận khách đã nhận & Kích hoạt BH</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="d-flex justify-content-between align-items-center">
                         <span className="text-muted small">Mã chu kỳ (Cycle):</span>

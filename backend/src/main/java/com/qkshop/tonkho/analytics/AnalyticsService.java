@@ -1,6 +1,6 @@
 package com.qkshop.tonkho.analytics;
+
 import com.qkshop.tonkho.core.enums.CloseType;
-import com.qkshop.tonkho.catalog.Platform;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
@@ -52,7 +52,7 @@ public class AnalyticsService {
         LocalDateTime toDate = LocalDateTime.now();
 
         SegmentCode segment = null;
-        try { if(filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch(Exception ignored){}
+        try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
         BigDecimal totalInventoryValue = BigDecimal.ZERO;
         long inventoryCount = 0;
@@ -69,22 +69,24 @@ public class AnalyticsService {
                     .map(m -> m.getSalePrice() != null ? m.getSalePrice() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
             inventoryCount += currentActive.size();
-            
+
             List<ClosedCycle> exportedInPeriod = closedCycleRepo.findFilteredExported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
             soldValue = soldValue.add(exportedInPeriod.stream()
                     .filter(m -> m.getCloseType() == CloseType.SALE)
                     .map(m -> m.getSalePriceSnapshot() != null ? m.getSalePriceSnapshot() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
-                    
-            List<ActiveInventory> importedInPeriod = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
-            
+
+            // Đếm tổng số máy nhập trong kỳ trên cả ActiveInventory (còn tồn) VÀ ClosedCycle (nhập trong kỳ và đã bán/đóng)
+            List<ActiveInventory> importedActiveInPeriod = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+            List<ClosedCycle> importedClosedInPeriod = closedCycleRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+
             withoutPrice += currentActive.stream().filter(m -> m.getSalePrice() == null || m.getSalePrice().compareTo(BigDecimal.ZERO) <= 0).count();
-            
+
             long lSoldCount = exportedInPeriod.stream().filter(m -> m.getCloseType() == CloseType.SALE).count();
             soldCount += exportedInPeriod.size();
             realSoldCount += lSoldCount;
             otherExportCount += (exportedInPeriod.size() - lSoldCount);
-            importedCount += importedInPeriod.size();
+            importedCount += importedActiveInPeriod.size() + importedClosedInPeriod.size();
         }
 
         if (isAccessory(filter)) {
@@ -92,27 +94,29 @@ public class AnalyticsService {
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
                 accList = accList.stream().filter(a -> filter.getCategory().equals(a.getCategory())).collect(Collectors.toList());
             }
-            
+
             List<String> validSkus = accList.stream().map(Accessory::getSku).collect(Collectors.toList());
-            
-            for(Accessory a : accList) {
-                if(a.getQuantity() > 0) {
+
+            for (Accessory a : accList) {
+                if (a.getQuantity() > 0) {
                     inventoryCount += a.getQuantity();
                     BigDecimal price = a.getPrice() != null ? a.getPrice() : BigDecimal.ZERO;
                     totalInventoryValue = totalInventoryValue.add(price.multiply(BigDecimal.valueOf(a.getQuantity())));
-                    if(a.getPrice() == null || a.getPrice().compareTo(BigDecimal.ZERO) <= 0) withoutPrice += a.getQuantity();
+                    if (a.getPrice() == null || a.getPrice().compareTo(BigDecimal.ZERO) <= 0) withoutPrice += a.getQuantity();
                 }
             }
-            
+
             List<AccessoryHistory> histories = accessoryHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
                 histories = histories.stream().filter(h -> validSkus.contains(h.getSku())).collect(Collectors.toList());
             }
-            
-            for(AccessoryHistory h : histories) {
-                if("IMPORT".equals(h.getAction())) {
+
+            long accImported = 0;
+            for (AccessoryHistory h : histories) {
+                if ("IMPORT".equals(h.getAction())) {
                     importedCount += h.getQuantity();
-                } else if("SELL".equals(h.getAction())) {
+                    accImported += h.getQuantity();
+                } else if ("SELL".equals(h.getAction())) {
                     soldCount += h.getQuantity();
                     realSoldCount += h.getQuantity();
                     BigDecimal p = h.getPrice() != null ? h.getPrice() : BigDecimal.ZERO;
@@ -122,10 +126,9 @@ public class AnalyticsService {
                     otherExportCount += h.getQuantity();
                 }
             }
-            
-            // Fallback: Nếu không có lịch sử IMPORT nào nhưng hàng được tạo trong kỳ, xem như là hàng nhập
-            if (importedCount == 0) {
-                for(Accessory a : accList) {
+
+            if (accImported == 0) {
+                for (Accessory a : accList) {
                     if (a.getCreatedAt() != null && !a.getCreatedAt().isBefore(fromDate) && !a.getCreatedAt().isAfter(toDate)) {
                         importedCount += a.getQuantity();
                     }
@@ -150,23 +153,34 @@ public class AnalyticsService {
         LocalDateTime toDate = LocalDateTime.now();
 
         SegmentCode segment = null;
-        try { if(filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch(Exception ignored){}
+        try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
         Map<LocalDate, Long> importByDay = new HashMap<>();
         Map<LocalDate, Long> exportByDay = new HashMap<>();
         long currentInventoryCount = 0;
-        
+
         if (isLaptop(filter)) {
-            List<ActiveInventory> imported = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+            List<ActiveInventory> importedActive = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+            List<ClosedCycle> importedClosed = closedCycleRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
             List<ClosedCycle> exported = closedCycleRepo.findFilteredExported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
-            
-            imported.forEach(m -> {
-                LocalDate d = m.getIntakeAt().toLocalDate();
-                importByDay.put(d, importByDay.getOrDefault(d, 0L) + 1);
+
+            importedActive.forEach(m -> {
+                if (m.getIntakeAt() != null) {
+                    LocalDate d = m.getIntakeAt().toLocalDate();
+                    importByDay.put(d, importByDay.getOrDefault(d, 0L) + 1);
+                }
+            });
+            importedClosed.forEach(m -> {
+                if (m.getIntakeAt() != null) {
+                    LocalDate d = m.getIntakeAt().toLocalDate();
+                    importByDay.put(d, importByDay.getOrDefault(d, 0L) + 1);
+                }
             });
             exported.forEach(m -> {
-                LocalDate d = m.getClosedAt().toLocalDate();
-                exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + 1);
+                if (m.getClosedAt() != null) {
+                    LocalDate d = m.getClosedAt().toLocalDate();
+                    exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + 1);
+                }
             });
             currentInventoryCount += activeInventoryRepo.findFilteredAll(filter.getBrandId(), segment, filter.getModelLineId()).size();
         }
@@ -177,14 +191,14 @@ public class AnalyticsService {
                 accList = accList.stream().filter(a -> filter.getCategory().equals(a.getCategory())).collect(Collectors.toList());
             }
             List<String> validSkus = accList.stream().map(Accessory::getSku).collect(Collectors.toList());
-            
-            for(Accessory a : accList) currentInventoryCount += a.getQuantity();
-            
+
+            for (Accessory a : accList) currentInventoryCount += a.getQuantity();
+
             List<AccessoryHistory> histories = accessoryHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
                 histories = histories.stream().filter(h -> validSkus.contains(h.getSku())).collect(Collectors.toList());
             }
-            
+
             for (AccessoryHistory h : histories) {
                 LocalDate d = h.getCreatedAt().toLocalDate();
                 if ("IMPORT".equals(h.getAction())) {
@@ -193,10 +207,9 @@ public class AnalyticsService {
                     exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + h.getQuantity());
                 }
             }
-            
-            // Fallback for trend
+
             if (importByDay.isEmpty()) {
-                for(Accessory a : accList) {
+                for (Accessory a : accList) {
                     if (a.getCreatedAt() != null && !a.getCreatedAt().isBefore(fromDate) && !a.getCreatedAt().isAfter(toDate)) {
                         LocalDate d = a.getCreatedAt().toLocalDate();
                         importByDay.put(d, importByDay.getOrDefault(d, 0L) + a.getQuantity());
@@ -208,21 +221,21 @@ public class AnalyticsService {
         long days = ChronoUnit.DAYS.between(fromDate.toLocalDate(), toDate.toLocalDate()) + 1;
         long step = Math.max(1, days / 30);
         List<Map<String, Object>> trend = new ArrayList<>();
-        
+
         long runningInventory = currentInventoryCount;
         Map<LocalDate, Map<String, Object>> dailyData = new TreeMap<>(Collections.reverseOrder());
         LocalDate processDate = toDate.toLocalDate();
-        
+
         while (!processDate.isBefore(fromDate.toLocalDate())) {
             long nhap = importByDay.getOrDefault(processDate, 0L);
             long xuat = exportByDay.getOrDefault(processDate, 0L);
-            
+
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("date", processDate.toString().substring(5)); // MM-DD
             point.put("nhap", nhap);
             point.put("ban", xuat);
             point.put("ton", runningInventory);
-            
+
             dailyData.put(processDate, point);
             runningInventory = runningInventory - nhap + xuat;
             processDate = processDate.minusDays(1);
@@ -241,17 +254,17 @@ public class AnalyticsService {
 
     public List<Map<String, Object>> getValueStructure(AnalyticsFilterRequest filter) {
         SegmentCode segment = null;
-        try { if(filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch(Exception ignored){}
+        try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
         Map<String, BigDecimal> structMap = new HashMap<>();
-        
+
         if (isLaptop(filter)) {
             List<BrandValueProjection> rawStruct = activeInventoryRepo.getValueStructure(filter.getBrandId(), segment, filter.getModelLineId());
             for (BrandValueProjection proj : rawStruct) {
                 structMap.put("Máy móc - " + proj.getName(), proj.getTotal() != null ? proj.getTotal() : BigDecimal.ZERO);
             }
         }
-        
+
         if (isAccessory(filter)) {
             List<Accessory> accList = accessoryRepo.findAll();
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
@@ -265,7 +278,7 @@ public class AnalyticsService {
                 }
             }
         }
-        
+
         BigDecimal total = structMap.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
 
         List<Map<String, Object>> structure = new ArrayList<>();
@@ -283,21 +296,21 @@ public class AnalyticsService {
 
     public List<Map<String, Object>> getInventoryAge(AnalyticsFilterRequest filter) {
         SegmentCode segment = null;
-        try { if(filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch(Exception ignored){}
+        try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
         Map<String, Long> ageMap = new HashMap<>();
         ageMap.put("Dưới 30 ngày", 0L);
         ageMap.put("30 - 60 ngày", 0L);
         ageMap.put("60 - 90 ngày", 0L);
         ageMap.put("Trên 90 ngày", 0L);
-        
+
         if (isLaptop(filter)) {
             List<AgeGroupProjection> rawAges = activeInventoryRepo.getInventoryAgeGrouped(filter.getBrandId(), segment, filter.getModelLineId());
             for (AgeGroupProjection proj : rawAges) {
                 ageMap.put(proj.getAgeGroup(), ageMap.getOrDefault(proj.getAgeGroup(), 0L) + proj.getCount());
             }
         }
-        
+
         if (isAccessory(filter)) {
             List<Accessory> accList = accessoryRepo.findAll();
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
@@ -332,24 +345,32 @@ public class AnalyticsService {
         LocalDateTime toDate = LocalDateTime.now();
 
         SegmentCode segment = null;
-        try { if(filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch(Exception ignored){}
+        try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
         Map<String, Long> importByGroup = new HashMap<>();
         Map<String, Long> exportByGroup = new HashMap<>();
 
         if (isLaptop(filter)) {
-            List<ActiveInventory> imported = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+            List<ActiveInventory> importedActive = activeInventoryRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
+            List<ClosedCycle> importedClosed = closedCycleRepo.findFilteredImported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
             List<ClosedCycle> exported = closedCycleRepo.findFilteredExported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
 
-            for (ActiveInventory ai : imported) {
-                String platformId = ai.getConfig() != null && ai.getConfig().getVariant() != null && ai.getConfig().getVariant().getPlatform() != null 
+            for (ActiveInventory ai : importedActive) {
+                String platformId = ai.getConfig() != null && ai.getConfig().getVariant() != null && ai.getConfig().getVariant().getPlatform() != null
                         ? ai.getConfig().getVariant().getPlatform().getPlatformId() : null;
                 String name = "Máy móc - " + getBrandNameForPlatform(platformId);
                 importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + 1);
             }
 
+            for (ClosedCycle cc : importedClosed) {
+                String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
+                        ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
+                String name = "Máy móc - " + getBrandNameForPlatform(platformId);
+                importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + 1);
+            }
+
             for (ClosedCycle cc : exported) {
-                String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null 
+                String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
                         ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
                 String name = "Máy móc - " + getBrandNameForPlatform(platformId);
                 exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + 1);
@@ -366,10 +387,10 @@ public class AnalyticsService {
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
                 histories = histories.stream().filter(h -> validSkus.contains(h.getSku())).collect(Collectors.toList());
             }
-            
+
             Map<String, String> skuToCat = new HashMap<>();
             for (Accessory a : accessoryRepo.findAll()) skuToCat.put(a.getSku(), a.getCategory());
-            
+
             for (AccessoryHistory h : histories) {
                 String cat = skuToCat.getOrDefault(h.getSku(), "Khác");
                 String name = "Phụ kiện - " + cat;
@@ -379,8 +400,7 @@ public class AnalyticsService {
                     exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + h.getQuantity());
                 }
             }
-            
-            // Fallback cho luân chuyển
+
             for (Accessory a : accList) {
                 String name = "Phụ kiện - " + a.getCategory();
                 if (!importByGroup.containsKey(name) && a.getCreatedAt() != null && !a.getCreatedAt().isBefore(fromDate) && !a.getCreatedAt().isAfter(toDate)) {
@@ -393,7 +413,7 @@ public class AnalyticsService {
         Set<String> keys = new HashSet<>();
         keys.addAll(importByGroup.keySet());
         keys.addAll(exportByGroup.keySet());
-        
+
         for (String key : keys) {
             long importCount = importByGroup.getOrDefault(key, 0L);
             long exportCount = exportByGroup.getOrDefault(key, 0L);
@@ -443,16 +463,42 @@ public class AnalyticsService {
 
     public List<Map<String, Object>> getHighlights(AnalyticsFilterRequest filter) {
         List<Map<String, Object>> highlights = new ArrayList<>();
-        Map<String, Object> highlight1 = new HashMap<>();
-        highlight1.put("type", "positive");
-        highlight1.put("text", "Doanh thu tăng 15% so với kỳ trước");
-        
-        Map<String, Object> highlight2 = new HashMap<>();
-        highlight2.put("type", "negative");
-        highlight2.put("text", "Tồn kho trên 90 ngày tăng 5%");
-        
-        highlights.add(highlight1);
-        highlights.add(highlight2);
+        Map<String, Object> summary = getSummary(filter);
+
+        long importedCount = summary.get("importedCount") != null ? ((Number) summary.get("importedCount")).longValue() : 0L;
+        long realSoldCount = summary.get("realSoldCount") != null ? ((Number) summary.get("realSoldCount")).longValue() : 0L;
+        long withoutPrice = summary.get("withoutPrice") != null ? ((Number) summary.get("withoutPrice")).longValue() : 0L;
+
+        Map<String, Object> salesHighlight = new HashMap<>();
+        if (realSoldCount > 0) {
+            salesHighlight.put("type", "positive");
+            salesHighlight.put("text", String.format("Đã xuất bán thực tế %d sản phẩm (Nhập mới: %d sản phẩm trong kỳ)", realSoldCount, importedCount));
+        } else {
+            salesHighlight.put("type", "neutral");
+            salesHighlight.put("text", String.format("Chưa ghi nhận giao dịch bán trong kỳ (Nhập mới: %d sản phẩm)", importedCount));
+        }
+        highlights.add(salesHighlight);
+
+        List<Map<String, Object>> ages = getInventoryAge(filter);
+        long over90Count = ages.stream()
+                .filter(a -> "Trên 90 ngày".equals(a.get("range")))
+                .mapToLong(a -> a.get("count") != null ? ((Number) a.get("count")).longValue() : 0L)
+                .findFirst()
+                .orElse(0L);
+
+        Map<String, Object> ageHighlight = new HashMap<>();
+        if (over90Count > 0) {
+            ageHighlight.put("type", "negative");
+            ageHighlight.put("text", String.format("Cảnh báo: Có %d sản phẩm tồn kho trên 90 ngày cần ưu tiên xả hàng", over90Count));
+        } else if (withoutPrice > 0) {
+            ageHighlight.put("type", "negative");
+            ageHighlight.put("text", String.format("Có %d sản phẩm trong kho chưa được cập nhật giá bán niêm yết", withoutPrice));
+        } else {
+            ageHighlight.put("type", "positive");
+            ageHighlight.put("text", "Tốc độ luân chuyển kho tốt, không có hàng tồn đọng quá 90 ngày");
+        }
+        highlights.add(ageHighlight);
+
         return highlights;
     }
 
@@ -460,12 +506,11 @@ public class AnalyticsService {
         Map<String, Object> result = new HashMap<>();
         List<Map<String, Object>> deadStocks = new ArrayList<>();
         List<Map<String, Object>> topPerformers = new ArrayList<>();
-        
-        // Compute dead stocks
+
         if (isLaptop(filter)) {
             List<ActiveInventory> all = activeInventoryRepo.findAll();
             LocalDate limitDate = LocalDate.now().minusDays(90);
-            
+
             Map<String, List<ActiveInventory>> grouped = all.stream()
                 .filter(a -> a.getIntakeAt() != null && a.getIntakeAt().toLocalDate().isBefore(limitDate))
                 .collect(Collectors.groupingBy(a -> {
@@ -474,9 +519,9 @@ public class AnalyticsService {
                     }
                     return "Không xác định";
                 }));
-                
+
             for (Map.Entry<String, List<ActiveInventory>> entry : grouped.entrySet()) {
-                if(entry.getValue().size() > 0) {
+                if (!entry.getValue().isEmpty()) {
                     Map<String, Object> item = new HashMap<>();
                     item.put("name", "Laptop: " + entry.getKey());
                     item.put("quantity", entry.getValue().size());
@@ -487,7 +532,7 @@ public class AnalyticsService {
                 }
             }
         }
-        
+
         if (isAccessory(filter)) {
             LocalDate limitDate = LocalDate.now().minusDays(90);
             List<Accessory> accList = accessoryRepo.findAll();
@@ -503,10 +548,10 @@ public class AnalyticsService {
                 }
             }
         }
-        
+
         deadStocks.sort((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")));
         if (deadStocks.size() > 5) deadStocks = deadStocks.subList(0, 5);
-        
+
         List<Map<String, Object>> turnover = getTurnoverRate(filter);
         for (Map<String, Object> t : turnover) {
             double rate = (Double) t.get("rate");
@@ -518,10 +563,10 @@ public class AnalyticsService {
                 topPerformers.add(item);
             }
         }
-        
+
         topPerformers.sort((a, b) -> Double.compare((Double) b.get("turnoverRate"), (Double) a.get("turnoverRate")));
         if (topPerformers.size() > 5) topPerformers = topPerformers.subList(0, 5);
-        
+
         result.put("deadStocks", deadStocks);
         result.put("topPerformers", topPerformers);
         return result;

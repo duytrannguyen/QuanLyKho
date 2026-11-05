@@ -35,16 +35,16 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 25MB
+      max-request-size: 25MB
 
 # Default Admin Account
 app:
   admin:
-    username: admin
-    password: admin123
-    fullname: Admin QKShop
-    email: admin@qkshop.vn
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}
+    fullname: ${ADMIN_FULLNAME:Admin QKShop}
+    email: ${ADMIN_EMAIL:admin@qkshop.vn}
 
   jwt:
     secret: ${JWT_SECRET:357638792F423F4428472B4B6250655368566D597133743677397A2443264629}

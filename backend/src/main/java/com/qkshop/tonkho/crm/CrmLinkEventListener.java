@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Gắn khách sau khi transaction ghi đơn đã commit; lỗi CRM chỉ ghi log, không ảnh hưởng bán hàng.
- * Đồng thời tự dựng CRM lần đầu từ dữ liệu đơn hàng hiện có.
+ * Đồng thời tự dựng CRM lần đầu từ dữ liệu đơn hàng hiện có, hoặc chỉ gắn các đơn mới chưa liên kết.
  */
 @Slf4j
 @Component
@@ -30,7 +30,6 @@ public class CrmLinkEventListener implements ApplicationRunner {
         try {
             linkService.linkOrder(event.orderId());
         } catch (DataIntegrityViolationException e) {
-            // Hai đơn cùng SĐT mới được ghi đồng thời: thử lại 1 lần, lúc này khách đã tồn tại
             try {
                 linkService.linkOrder(event.orderId());
             } catch (Exception retryEx) {
@@ -54,15 +53,15 @@ public class CrmLinkEventListener implements ApplicationRunner {
                     }
                 });
             } else if (customerRepo.count() > 0) {
-                // Tự động rà soát lại chỉ số các khách hàng để loại bỏ đơn bán kèm PK-KEM khỏi totalOrders
+                // Chỉ gắn các đơn mới chưa có crmCustomerId thay vì tính lại toàn bộ khách hàng mỗi lần khởi động
                 CompletableFuture.runAsync(() -> {
                     try {
-                        List<CrmCustomer> all = customerRepo.findAll();
-                        for (CrmCustomer c : all) {
-                            linkService.recalculateCustomer(c.getId());
+                        List<Long> unlinkedIds = orderRepo.findUnlinkedCandidateOrders();
+                        for (Long orderId : unlinkedIds) {
+                            linkService.linkOrder(orderId);
                         }
                     } catch (Exception e) {
-                        log.warn("[CRM] Tự động cập nhật lại chỉ số khách hàng: {}", e.getMessage());
+                        log.warn("[CRM] Tự động gắn các đơn hàng chưa liên kết khi khởi động: {}", e.getMessage());
                     }
                 });
             }

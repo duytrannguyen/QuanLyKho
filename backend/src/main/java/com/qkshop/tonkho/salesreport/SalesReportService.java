@@ -63,9 +63,13 @@ public class SalesReportService {
         List<SourceRevenueItem> revenueBySource = buildRevenueBySource(currentStart, currentEnd, curKpi.netRevenue);
 
         // 7. Các lát cắt biểu đồ cơ cấu (Donut / Pie)
-        List<ChartSlice> brandMix = buildBrandMix(currentStart, currentEnd, curKpi.netRevenue);
-        List<ChartSlice> seriesMix = buildSeriesMix(currentStart, currentEnd, curKpi.totalOrders);
-        List<ChartSlice> segmentMix = buildSegmentMix(currentStart, currentEnd, curKpi.netRevenue);
+        CategoryStats curMach = curCategoryMap.getOrDefault("Máy móc", new CategoryStats(curKpi.netRevenue, curKpi.soldMachineCount));
+        double machineRevenueDenominator = curMach.netRevenue() > 0 ? curMach.netRevenue() : curKpi.netRevenue;
+        long machineOrdersDenominator = curKpi.soldMachineCount > 0 ? curKpi.soldMachineCount : curKpi.totalOrders;
+
+        List<ChartSlice> brandMix = buildBrandMix(currentStart, currentEnd, machineRevenueDenominator);
+        List<ChartSlice> seriesMix = buildSeriesMix(currentStart, currentEnd, machineOrdersDenominator);
+        List<ChartSlice> segmentMix = buildSegmentMix(currentStart, currentEnd, machineRevenueDenominator);
         List<ChartSlice> firstSourceMix = buildFirstSourceMix(currentStart, currentEnd, curKpi.totalOrders);
         List<ChartSlice> inboxVsDirect = buildInboxVsDirect(currentStart, currentEnd, curKpi.netRevenue);
         List<ChartSlice> customerTypeMix = buildCustomerTypeMix(currentStart, currentEnd, curKpi.totalOrders);
@@ -74,7 +78,7 @@ public class SalesReportService {
 
         // 8. Thống kê chất lượng dữ liệu
         long issuesCount = salesOrderRepo.countDataIssuesInPeriod(currentStart, currentEnd);
-        long unknownSourceCount = curSourceMap.getOrDefault("Chưa rõ", 0.0) > 0 ? 
+        long unknownSourceCount = curSourceMap.getOrDefault("Chưa rõ", 0.0) > 0 ?
                 revenueBySource.stream().filter(s -> "Chưa rõ".equals(s.getSource())).mapToLong(SourceRevenueItem::getOrderCount).findFirst().orElse(0L) : 0L;
 
         DataQualitySummary dq = DataQualitySummary.builder()
@@ -155,7 +159,7 @@ public class SalesReportService {
         return KpiSection.builder()
                 .actualRevenue(createMetric(cur.netRevenue, prev.netRevenue, unit, true))
                 .grossRevenue(createMetric(cur.grossRevenue, prev.grossRevenue, unit, true))
-                .soldUnits(createMetric(cur.totalOrders, prev.totalOrders, unit, false))
+                .soldUnits(createMetric(cur.soldMachineCount, prev.soldMachineCount, unit, false))
                 .aov(createMetric(curAov, prevAov, unit, true))
 
                 // KPI riêng biệt theo Ngành hàng
@@ -220,7 +224,6 @@ public class SalesReportService {
                 .collect(Collectors.toMap(SalesOrderRepository.DailyRevenueAggregate::getSaleDateStr, r -> r, (a, b) -> a));
 
         List<DailyRevenuePoint> result = new ArrayList<>();
-        // Nếu khoảng cách ngày <= 60 ngày thì fill đầy đủ các ngày để biểu đồ liên tục
         long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(sDate, eDate);
         if (daysBetween <= 62) {
             LocalDate curr = sDate;
@@ -354,12 +357,13 @@ public class SalesReportService {
             double totalDiscount,
             long firstTimeCustomers,
             long returningCustomers,
-            long studentOrders
+            long studentOrders,
+            long soldMachineCount
     ) {}
 
     private KpiData parseKpiRow(Object[] row) {
         if (row == null || row.length == 0 || row[0] == null) {
-            return new KpiData(0, 0, 0, 0, 0, 0, 0);
+            return new KpiData(0, 0, 0, 0, 0, 0, 0, 0);
         }
         Object[] cols = (row[0] instanceof Object[]) ? (Object[]) row[0] : row;
         long totalOrders = cols.length > 0 && cols[0] != null ? ((Number) cols[0]).longValue() : 0L;
@@ -369,8 +373,9 @@ public class SalesReportService {
         long firstTime = cols.length > 4 && cols[4] != null ? ((Number) cols[4]).longValue() : 0L;
         long returning = cols.length > 5 && cols[5] != null ? ((Number) cols[5]).longValue() : 0L;
         long student = cols.length > 6 && cols[6] != null ? ((Number) cols[6]).longValue() : 0L;
+        long soldMachineCount = cols.length > 7 && cols[7] != null ? ((Number) cols[7]).longValue() : totalOrders;
 
-        return new KpiData(totalOrders, netRev, grossRev, disc, firstTime, returning, student);
+        return new KpiData(totalOrders, netRev, grossRev, disc, firstTime, returning, student, soldMachineCount);
     }
 
     private record PeriodWindow(
@@ -474,7 +479,7 @@ public class SalesReportService {
                 prevLabel = "Tháng trước (" + prevStart.getMonthValue() + "/" + prevStart.getYear() + ")";
                 unit = "tháng";
             }
-            default -> { // Mặc định tháng hiện tại
+            default -> {
                 start = today.with(TemporalAdjusters.firstDayOfMonth());
                 end = today.with(TemporalAdjusters.lastDayOfMonth());
                 LocalDate lastMonth = today.minusMonths(1);

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -19,33 +20,37 @@ public class AccessoryController {
     private final AccessoryOrderRepository accessoryOrderRepository;
     private final com.qkshop.tonkho.system.SystemConfigService systemConfigService;
 
+    @GetMapping("/next-sku")
+    public ResponseEntity<ApiResponse<String>> getNextSku(
+            @RequestParam(defaultValue = "KHAC") String category) {
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Mã SKU gợi ý", accessoryService.generateNextSku(category)));
+    }
+
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<List<AccessoryHistory>>> getAccessoryHistory() {
-        List<AccessoryHistory> history = accessoryHistoryRepository.findAllByOrderByCreatedAtDesc();
-        ApiResponse<List<AccessoryHistory>> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData(history);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<List<AccessoryHistory>>> getAccessoryHistory(
+            @RequestParam(required = false) String sku) {
+        List<AccessoryHistory> history;
+        if (sku != null && !sku.trim().isEmpty()) {
+            history = accessoryHistoryRepository.findBySkuOrderByCreatedAtDesc(sku.trim());
+        } else {
+            history = accessoryHistoryRepository.findAllByOrderByCreatedAtDesc();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(history));
     }
 
     @GetMapping("/available")
     public ResponseEntity<ApiResponse<List<Accessory>>> getAvailableAccessories() {
         List<Accessory> accessories = accessoryRepository.findByQuantityGreaterThan(0);
-        
-        ApiResponse<List<Accessory>> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData(accessories);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.ok(accessories));
     }
-    
+
     @GetMapping("/all")
-    public ResponseEntity<ApiResponse<List<Accessory>>> getAllAccessories() {
-        List<Accessory> accessories = accessoryRepository.findAll();
-        
-        ApiResponse<List<Accessory>> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData(accessories);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ApiResponse<List<Accessory>>> getAllAccessories(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String stockFilter) {
+        List<Accessory> accessories = accessoryService.getAllAccessories(keyword, category, stockFilter);
+        return ResponseEntity.ok(ApiResponse.ok(accessories));
     }
 
     @PostMapping("/sell-standalone")
@@ -79,36 +84,68 @@ public class AccessoryController {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn phụ kiện với ID: " + id));
         return ResponseEntity.ok(ApiResponse.okWithMessage("Chi tiết đơn phụ kiện", order));
     }
-    
+
     @PostMapping("/submit")
     public ResponseEntity<ApiResponse<Accessory>> submitAccessory(@RequestBody Map<String, Object> payload) {
-        String sku = (String) payload.get("sku");
-        String category = (String) payload.get("category");
-        String name = (String) payload.get("name");
-        Integer quantity = (Integer) payload.get("quantity");
+        String category = payload.get("category") != null ? payload.get("category").toString().trim() : "KHAC";
+        if (category.isEmpty()) category = "KHAC";
+
+        String sku = payload.get("sku") != null ? payload.get("sku").toString().trim() : "";
+        if (sku.isEmpty()) {
+            sku = accessoryService.generateNextSku(category);
+        }
+
+        String name = payload.get("name") != null ? payload.get("name").toString().trim() : "";
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng nhập tên phụ kiện");
+        }
+
+        int quantity = 1;
+        if (payload.get("quantity") != null) {
+            try {
+                quantity = Integer.parseInt(payload.get("quantity").toString().trim());
+            } catch (Exception ignored) {}
+        }
+
+        BigDecimal price = null;
         Object priceObj = payload.get("price");
-        java.math.BigDecimal price = null;
         if (priceObj != null && !priceObj.toString().trim().isEmpty()) {
-            price = new java.math.BigDecimal(priceObj.toString());
+            String cleanPrice = priceObj.toString().replaceAll("[^0-9.]", "").trim();
+            if (!cleanPrice.isEmpty()) {
+                price = new BigDecimal(cleanPrice);
+            }
+        }
+
+        Integer defaultWarrantyMonths = null;
+        Object dwmObj = payload.get("defaultWarrantyMonths");
+        if (dwmObj != null && !dwmObj.toString().trim().isEmpty()) {
+            try {
+                defaultWarrantyMonths = Integer.parseInt(dwmObj.toString().trim());
+            } catch (Exception ignored) {}
         }
 
         Accessory accessory = accessoryRepository.findBySku(sku).orElse(new Accessory());
         accessory.setSku(sku);
-        accessory.setCategory(category);
+        accessory.setCategory(category.toUpperCase());
         accessory.setName(name);
-        
+
         if (accessory.getId() != null) {
-            accessory.setQuantity(accessory.getQuantity() + quantity);
+            accessory.setQuantity((accessory.getQuantity() != null ? accessory.getQuantity() : 0) + quantity);
         } else {
             accessory.setQuantity(quantity);
         }
-        
+
         if (price != null) {
             accessory.setPrice(price);
         }
+        if (defaultWarrantyMonths != null) {
+            accessory.setDefaultWarrantyMonths(defaultWarrantyMonths);
+        } else if (accessory.getDefaultWarrantyMonths() == null) {
+            accessory.setDefaultWarrantyMonths(0);
+        }
 
         Accessory saved = accessoryRepository.save(accessory);
-        
+
         // Ghi lại lịch sử nhập
         AccessoryHistory history = new AccessoryHistory();
         history.setSku(saved.getSku());
@@ -116,21 +153,30 @@ public class AccessoryController {
         history.setQuantity(quantity);
         history.setPrice(saved.getPrice());
         history.setAction("IMPORT");
-        history.setNote("Nhập phụ kiện");
+        String note = payload.get("note") != null ? payload.get("note").toString().trim() : "";
+        history.setNote(!note.isEmpty() ? note : "Nhập phụ kiện");
         accessoryHistoryRepository.save(history);
-        
-        ApiResponse<Accessory> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData(saved);
-        return ResponseEntity.ok(response);
+
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Nhập phụ kiện thành công", saved));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Accessory>> updateAccessory(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> payload) {
+        Accessory saved = accessoryService.updateAccessory(id, payload);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật phụ kiện thành công", saved));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAccessory(@PathVariable Long id) {
+        accessoryService.deleteAccessory(id);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Đã xóa phụ kiện thành công", null));
     }
 
     @PostMapping("/migrate-skus")
     public ResponseEntity<ApiResponse<String>> migrateSkus() {
         accessoryService.migrateSkus();
-        ApiResponse<String> response = new ApiResponse<>();
-        response.setSuccess(true);
-        response.setData("Migrate SKU thành công");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Migrate SKU thành công", "Migrate SKU thành công"));
     }
 }

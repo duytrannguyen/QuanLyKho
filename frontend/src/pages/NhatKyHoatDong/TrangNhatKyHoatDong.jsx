@@ -11,9 +11,17 @@ export default function TrangNhatKyHoatDong() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [totalPages, setTotalPages] = useState(0);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     fetchLogs(searchQuery);
@@ -45,20 +53,23 @@ export default function TrangNhatKyHoatDong() {
           <input 
             className="form-control" 
             style={{ paddingLeft: '36px' }} 
-            placeholder="Tìm serial, Transaction ID hoặc Event ID" 
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(0);
-            }}
+            placeholder="Tìm serial, Transaction ID hoặc Event ID"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
-        <select className="form-select w-auto" style={{ minWidth: '200px' }}>
-          <option>Loại sự kiện: Tất cả</option>
-        </select>
-        <select className="form-select w-auto" style={{ minWidth: '200px' }}>
-          <option>Người thao tác: Tất cả</option>
-        </select>
-        <button className="btn btn-outline-secondary btn-sm" onClick={() => showToast('Tính năng đang phát triển', 'info')}>Xóa bộ lọc</button>
+        {searchInput && (
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => {
+              setSearchInput('');
+              setSearchQuery('');
+              setPage(0);
+            }}
+          >
+            Xóa bộ lọc
+          </button>
+        )}
       </div>
       
       <p className="text-secondary small mb-3">{logs.length} sự kiện phù hợp {loading && '(Đang tải...)'}</p>

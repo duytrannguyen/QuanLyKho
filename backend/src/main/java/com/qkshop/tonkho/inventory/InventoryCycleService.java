@@ -1,4 +1,5 @@
 package com.qkshop.tonkho.inventory;
+
 import com.qkshop.tonkho.core.StateTransitionService;
 import com.qkshop.tonkho.catalog.VariantV2Repository;
 import com.qkshop.tonkho.machine.SerialRegistryRepository;
@@ -6,12 +7,8 @@ import com.qkshop.tonkho.sync.CommandLedgerRepository;
 import com.qkshop.tonkho.sync.CommandLedger;
 import com.qkshop.tonkho.catalog.VariantV2;
 import com.qkshop.tonkho.sale.SalesConfig;
-
 import com.qkshop.tonkho.inventory.dto.InventoryVariantV2DTO;
-
 import com.qkshop.tonkho.core.enums.CloseType;
-import com.qkshop.tonkho.inventory.CycleState;
-import com.qkshop.tonkho.core.enums.SourceType;
 import com.qkshop.tonkho.accessory.AccessoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -46,8 +43,7 @@ public class InventoryCycleService {
 
     /**
      * Tra cứu theo VariantV2.
-     * Cực kỳ đơn giản: Quét ActiveInventory, fetch Config -> Variant -> Platform.
-     * Rồi gom nhóm theo VariantV2.
+     * Quét ActiveInventory (với JOIN FETCH), gom nhóm theo SalesConfig bằng LinkedHashMap để thứ tự trang luôn cố định.
      */
     public Page<InventoryVariantV2DTO> searchInventory(String query, String brand, String segment, String status, int page, int size) {
         CycleState cycleState = null;
@@ -70,15 +66,16 @@ public class InventoryCycleService {
 
         List<ActiveInventory> allActive = activeInventoryRepo.findByFilters(cycleState, filterBrand, segEnum);
 
-        // Group by SalesConfig
-        Map<SalesConfig, List<ActiveInventory>> grouped = new HashMap<>();
-        
+        // Group by SalesConfig with deterministic order
+        Map<String, SalesConfig> configMap = new LinkedHashMap<>();
+        Map<String, List<ActiveInventory>> grouped = new LinkedHashMap<>();
+
         for (ActiveInventory ai : allActive) {
             SalesConfig config = ai.getConfig();
             if (config == null) continue;
-            
+
             VariantV2 variant = config.getVariant();
-            
+
             // Filter by text query
             if (StringUtils.hasText(query)) {
                 String q = query.trim().toLowerCase();
@@ -93,18 +90,20 @@ public class InventoryCycleService {
                 if (!match) continue;
             }
 
-            grouped.computeIfAbsent(config, k -> new ArrayList<>()).add(ai);
+            String key = config.getConfigId() != null ? config.getConfigId() : String.valueOf(config.getId());
+            configMap.putIfAbsent(key, config);
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(ai);
         }
 
         List<InventoryVariantV2DTO> results = grouped.entrySet().stream().map(entry -> {
-            SalesConfig config = entry.getKey();
+            SalesConfig config = configMap.get(entry.getKey());
             VariantV2 variant = config.getVariant();
             List<ActiveInventory> machines = entry.getValue();
 
             long readyCount = machines.stream().filter(m -> m.getState() == CycleState.READY).count();
             long inspectCount = machines.stream().filter(m -> m.getState() == CycleState.NEEDS_INSPECTION).count();
 
-            List<InventoryVariantV2DTO.MachineSimpleDTO> machineDTOs = machines.stream().map(m -> 
+            List<InventoryVariantV2DTO.MachineSimpleDTO> machineDTOs = machines.stream().map(m ->
                 InventoryVariantV2DTO.MachineSimpleDTO.builder()
                         .serial(m.getSerialKey())
                         .status(m.getState().name())
@@ -130,18 +129,18 @@ public class InventoryCycleService {
                     .machines(machineDTOs)
                     .build();
         }).collect(Collectors.toList());
-        
+
         int start = Math.min((int) PageRequest.of(page, size).getOffset(), results.size());
         int end = Math.min((start + size), results.size());
         List<InventoryVariantV2DTO> pageContent = results.subList(start, end);
-        
+
         return new PageImpl<>(pageContent, PageRequest.of(page, size), results.size());
     }
 
     public ActiveInventory lookupSaleCandidate(String keyword) {
         String clean = keyword.trim();
         String upper = clean.toUpperCase();
-        
+
         // 1. Tìm chính xác theo serial (viết hoa chuẩn)
         Optional<ActiveInventory> aiOpt = activeInventoryRepo.findBySerialKey(upper);
         if (aiOpt.isPresent()) {
@@ -157,7 +156,6 @@ public class InventoryCycleService {
         // 3. Tìm theo từ khóa (serial chứa từ khóa hoặc tên model chứa từ khóa)
         List<ActiveInventory> matches = activeInventoryRepo.searchSaleCandidates(clean);
         if (!matches.isEmpty()) {
-            // Ưu tiên máy READY nếu có
             return matches.stream()
                     .filter(m -> m.getState() == CycleState.READY)
                     .findFirst()
@@ -176,20 +174,16 @@ public class InventoryCycleService {
 
     @Transactional
     public ClosedCycle closeCycle(String requestId, String cycleId, CloseType closeType, String reference, String reason, String actor) {
-        // Idempotency check
         if (commandLedgerRepo.existsByRequestId(requestId)) {
             log.info("Request {} already processed", requestId);
-            // In reality we should return the old result, but for simplicity we can just find it.
-            // But we don't have a way to fetch the previous ClosedCycle easily by requestId unless we search by close_event_id.
-            // Let's just let it be handled by throwing or skipping.
             throw new IllegalArgumentException("Request " + requestId + " đã được xử lý (Idempotent).");
         }
 
-        ActiveInventory ai = activeInventoryRepo.findByCycleId(cycleId)
+        activeInventoryRepo.findByCycleId(cycleId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy ActiveInventory với cycleId: " + cycleId));
-        
+
         ClosedCycle closed = stateTransitionService.transitionToClosed(cycleId, closeType, reference, actor, reason);
-        
+
         CommandLedger cmd = CommandLedger.builder()
                 .requestId(requestId)
                 .commandType("CLOSE_CYCLE")
@@ -198,11 +192,11 @@ public class InventoryCycleService {
                 .actor(actor != null ? actor : "SYSTEM")
                 .build();
         commandLedgerRepo.save(cmd);
-        
+
         return closed;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ClosedCycle submitSale(String requestId, String serialKey, BigDecimal finalPrice, String salesperson, Map<String, Object> saleDetails) {
         if (commandLedgerRepo.existsByRequestId(requestId)) {
             throw new IllegalArgumentException("Request " + requestId + " đã được xử lý (Idempotent).");
@@ -212,10 +206,10 @@ public class InventoryCycleService {
         if (ai.getState() != CycleState.READY) {
             throw new IllegalStateException("Máy không ở trạng thái Sẵn sàng bán (READY). Trạng thái hiện tại: " + ai.getState());
         }
-        
+
         BigDecimal originalListedPrice = ai.getSalePrice();
         ai.setSalePrice(finalPrice);
-        activeInventoryRepo.save(ai); // Save the price before closing to have it in the snapshot
+        activeInventoryRepo.save(ai);
 
         LocalDateTime sDate = LocalDateTime.now();
         if (saleDetails != null && saleDetails.containsKey("saleDate") && saleDetails.get("saleDate") != null) {
@@ -231,7 +225,6 @@ public class InventoryCycleService {
             }
         }
 
-        // Sinh mã hóa đơn chuẩn 10 ký tự: BM + STT 4 số trong tháng + ddMM 4 số (Ví dụ: BM00010111)
         String rawTxnId = saleDetails != null ? (String) saleDetails.get("transactionId") : null;
         if (rawTxnId == null || rawTxnId.isBlank()) {
             rawTxnId = saleDetails != null ? (String) saleDetails.get("orderCode") : null;
@@ -243,8 +236,7 @@ public class InventoryCycleService {
         ClosedCycle closed = stateTransitionService.transitionToClosed(ai.getCycleId(), CloseType.SALE, txnId, salesperson, "Bán máy");
         closed.setSourceReference(txnId);
         closed.setSaleDate(sDate);
-        
-        // Enrich ClosedCycle with new sale fields
+
         if (saleDetails != null) {
             closed.setCustomerName((String) saleDetails.get("customerName"));
             closed.setCustomerPhone((String) saleDetails.get("customerPhone"));
@@ -263,7 +255,7 @@ public class InventoryCycleService {
                 wp = ai.getWarrantyPeriod();
             }
             closed.setWarrantyPeriod(wp);
-            
+
             Object discountObj = saleDetails.get("discount");
             if (discountObj != null) {
                 closed.setDiscount(new BigDecimal(discountObj.toString()));
@@ -292,27 +284,60 @@ public class InventoryCycleService {
                 closed.setProductSummary((String) saleDetails.get("productSummary"));
             }
 
-            Object warrantyExpiryObj = saleDetails.get("warrantyExpiry");
-            if (warrantyExpiryObj != null) {
-                if (warrantyExpiryObj instanceof java.time.LocalDate ld) {
-                    closed.setWarrantyExpiry(ld);
-                } else {
+            // Xử lý đơn ship và kích hoạt bảo hành
+            boolean isShipping = false;
+            if (saleDetails.containsKey("isShipping") && saleDetails.get("isShipping") != null) {
+                Object sObj = saleDetails.get("isShipping");
+                if (sObj instanceof Boolean b) isShipping = b;
+                else isShipping = "true".equalsIgnoreCase(sObj.toString()) || "1".equals(sObj.toString());
+            }
+
+            boolean isDelivered = !isShipping;
+            if (isShipping && saleDetails.containsKey("isDelivered") && saleDetails.get("isDelivered") != null) {
+                Object dObj = saleDetails.get("isDelivered");
+                if (dObj instanceof Boolean b) isDelivered = b;
+                else isDelivered = "true".equalsIgnoreCase(dObj.toString()) || "1".equals(dObj.toString());
+            }
+
+            java.time.LocalDate delDate = null;
+            if (isDelivered) {
+                if (saleDetails.containsKey("deliveryDate") && saleDetails.get("deliveryDate") != null && !saleDetails.get("deliveryDate").toString().isBlank()) {
                     try {
-                        closed.setWarrantyExpiry(java.time.LocalDate.parse(warrantyExpiryObj.toString().trim()));
+                        delDate = java.time.LocalDate.parse(saleDetails.get("deliveryDate").toString().trim());
                     } catch (Exception e) {
-                        log.warn("Invalid warrantyExpiry format: {}", warrantyExpiryObj);
+                        log.warn("Invalid deliveryDate format: {}", saleDetails.get("deliveryDate"));
                     }
                 }
-            } else if (wp != null && !wp.isBlank()) {
-                java.time.LocalDate baseSaleDate = java.time.LocalDate.now();
-                if (closed.getSaleDate() != null) {
-                    baseSaleDate = closed.getSaleDate().toLocalDate();
-                } else if (closed.getClosedAt() != null) {
-                    baseSaleDate = closed.getClosedAt().toLocalDate();
+                if (delDate == null) {
+                    delDate = closed.getSaleDate() != null ? closed.getSaleDate().toLocalDate() : java.time.LocalDate.now();
                 }
-                closed.setWarrantyExpiry(com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseSaleDate, wp));
             }
-            
+
+            closed.setIsShipping(isShipping);
+            closed.setIsDelivered(isDelivered);
+            closed.setDeliveryDate(delDate);
+
+            if (isShipping && !isDelivered) {
+                // Đơn ship đang gửi đi: Chưa kích hoạt bảo hành cho đến khi khách nhận được hàng
+                closed.setWarrantyExpiry(null);
+            } else {
+                Object warrantyExpiryObj = saleDetails.get("warrantyExpiry");
+                if (warrantyExpiryObj != null && !warrantyExpiryObj.toString().trim().isEmpty()) {
+                    if (warrantyExpiryObj instanceof java.time.LocalDate ld) {
+                        closed.setWarrantyExpiry(ld);
+                    } else {
+                        try {
+                            closed.setWarrantyExpiry(java.time.LocalDate.parse(warrantyExpiryObj.toString().trim()));
+                        } catch (Exception e) {
+                            log.warn("Invalid warrantyExpiry format: {}", warrantyExpiryObj);
+                        }
+                    }
+                } else if (wp != null && !wp.isBlank()) {
+                    java.time.LocalDate baseDate = delDate != null ? delDate : (closed.getSaleDate() != null ? closed.getSaleDate().toLocalDate() : java.time.LocalDate.now());
+                    closed.setWarrantyExpiry(com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, wp));
+                }
+            }
+
             Object saleDateObj = saleDetails.get("saleDate");
             if (saleDateObj != null) {
                 String strDate = saleDateObj.toString().trim();
@@ -326,7 +351,7 @@ public class InventoryCycleService {
                     log.warn("Invalid saleDate format: {}", saleDateObj);
                 }
             }
-            
+
             // Deduct accessories & upgrade parts
             List<Map<String, Object>> accessories = (List<Map<String, Object>>) saleDetails.get("accessories");
             BigDecimal totalPaidAccessoriesAmount = BigDecimal.ZERO;
@@ -354,22 +379,22 @@ public class InventoryCycleService {
                     if (isUpgrade) {
                         String priceStr = price.compareTo(BigDecimal.ZERO) > 0 ? " [+" + price + "đ]" : "";
                         upgradeItems.add(nameWithQty + priceStr);
-                        // Trừ trực tiếp trong kho linh kiện chuyên dụng nếu có trong bảng Part
-                        boolean deducted = (sku != null && !sku.trim().isEmpty()) 
+                        boolean deducted = (sku != null && !sku.trim().isEmpty())
                                 && partService.deductForUpgrade(sku.trim(), qty, price, closed.getCycleId(),
                                 closed.getCustomerName(), closed.getCustomerPhone(), salesperson, closed.getWarrantyPeriod());
                         if (!deducted) {
-                            // Fallback nếu người dùng chọn SKU linh kiện cũ từ kho phụ kiện
                             generalAccessories.add(a);
                         }
                     } else if (isGift) {
                         giftItems.add(nameWithQty);
                         generalAccessories.add(a);
                     } else {
-                        // Phụ kiện mua thêm có tính phí
-                        BigDecimal itemTotal = price.multiply(BigDecimal.valueOf(qty));
+                        // Phụ kiện mua thêm có tính phí - đồng nhất logic lấy giá với AccessoryService.deductAccessories
+                        BigDecimal resolvedPrice = accessoryService.resolvePaidAccessoryPrice(a, null);
+                        a.put("price", resolvedPrice);
+                        BigDecimal itemTotal = resolvedPrice.multiply(BigDecimal.valueOf(qty));
                         totalPaidAccessoriesAmount = totalPaidAccessoriesAmount.add(itemTotal);
-                        String priceStr = price.compareTo(BigDecimal.ZERO) > 0 ? " [" + price + "đ]" : "";
+                        String priceStr = resolvedPrice.compareTo(BigDecimal.ZERO) > 0 ? " [" + resolvedPrice + "đ]" : "";
                         paidItems.add(nameWithQty + priceStr);
                         generalAccessories.add(a);
                     }
@@ -393,23 +418,19 @@ public class InventoryCycleService {
                 }
 
                 String currentNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
-                String newNote = currentNote.isEmpty() ? accNote.toString() 
+                String newNote = currentNote.isEmpty() ? accNote.toString()
                                                        : currentNote + " | " + accNote.toString();
                 closed.setSaleNote(newNote);
             }
 
-            // Doanh thu thuần của máy = Tổng thanh toán - Doanh thu phụ kiện bán thêm
-            // Đảm bảo không bị tính trùng (double counting) giữa máy và phụ kiện trên báo cáo doanh số
             BigDecimal machineNetRevenue = finalPrice.subtract(totalPaidAccessoriesAmount);
             if (machineNetRevenue.compareTo(BigDecimal.ZERO) < 0) {
                 machineNetRevenue = BigDecimal.ZERO;
             }
             closed.setSalePriceSnapshot(machineNetRevenue);
 
-            // Lưu tường minh ClosedCycle vào CSDL
             closed = closedCycleRepo.save(closed);
-            
-            // Lưu hoặc cập nhật vào bảng sales_orders để Dashboard có số liệu bán ngay lập tức
+
             try {
                 final String finalTxnId = (closed.getSourceReference() != null && !closed.getSourceReference().isBlank())
                         ? closed.getSourceReference()
@@ -465,7 +486,14 @@ public class InventoryCycleService {
                 so.setNormalizedSource(normSource);
                 so.setInboxType(inboxType);
                 so.setIsStudent(isStudent != null ? isStudent : false);
-                so.setOrderStatus("Hoàn tất");
+                so.setIsShipping(closed.getIsShipping());
+                so.setIsDelivered(closed.getIsDelivered());
+                so.setDeliveryDate(closed.getDeliveryDate());
+                if (Boolean.TRUE.equals(closed.getIsShipping()) && !Boolean.TRUE.equals(closed.getIsDelivered())) {
+                    so.setOrderStatus("Chờ giao hàng");
+                } else {
+                    so.setOrderStatus("Hoàn tất");
+                }
                 so.setPaymentStatus(closed.getPaymentStatus() != null ? closed.getPaymentStatus() : "Đã thanh toán");
                 so.setProductName(closed.getProductFullName() != null ? closed.getProductFullName() : ai.getSourceModelText());
                 so.setBrand(brand);
@@ -490,7 +518,7 @@ public class InventoryCycleService {
                 log.warn("Không thể lưu SalesOrder từ submitSale: {}", e.getMessage());
             }
         }
-        
+
         CommandLedger cmd = CommandLedger.builder()
                 .requestId(requestId)
                 .commandType("SUBMIT_SALE")
@@ -504,12 +532,34 @@ public class InventoryCycleService {
     }
 
     public Map<String, List<String>> getFilters() {
+        List<VariantV2> variants = variantRepo.findAllWithHierarchy();
         return Map.of(
-            "brands", variantRepo.findAll().stream().map(v -> v.getPlatform().getModelLine().getBrand().getBrandName()).distinct().collect(Collectors.toList()),
-            "segments", variantRepo.findAll().stream().map(v -> v.getPlatform().getModelLine().getSegmentCode().name()).distinct().collect(Collectors.toList()),
-            "cpus", variantRepo.findAll().stream().map(com.qkshop.tonkho.catalog.VariantV2::getCpuCode).filter(c -> c != null && !c.isEmpty()).distinct().collect(Collectors.toList()),
-            "gpus", variantRepo.findAll().stream().map(com.qkshop.tonkho.catalog.VariantV2::getGpuCode).filter(c -> c != null && !c.isEmpty()).distinct().collect(Collectors.toList()),
-            "screenSizes", variantRepo.findAll().stream().map(com.qkshop.tonkho.catalog.VariantV2::getScreenSize).filter(s -> s != null && !s.isEmpty()).distinct().collect(Collectors.toList())
+            "brands", variants.stream()
+                    .filter(v -> v.getPlatform() != null && v.getPlatform().getModelLine() != null && v.getPlatform().getModelLine().getBrand() != null)
+                    .map(v -> v.getPlatform().getModelLine().getBrand().getBrandName())
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList()),
+            "segments", variants.stream()
+                    .filter(v -> v.getPlatform() != null && v.getPlatform().getModelLine() != null && v.getPlatform().getModelLine().getSegmentCode() != null)
+                    .map(v -> v.getPlatform().getModelLine().getSegmentCode().name())
+                    .distinct()
+                    .collect(Collectors.toList()),
+            "cpus", variants.stream()
+                    .map(VariantV2::getCpuCode)
+                    .filter(c -> c != null && !c.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList()),
+            "gpus", variants.stream()
+                    .map(VariantV2::getGpuCode)
+                    .filter(g -> g != null && !g.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList()),
+            "screenSizes", variants.stream()
+                    .map(VariantV2::getScreenSize)
+                    .filter(s -> s != null && !s.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList())
         );
     }
 }

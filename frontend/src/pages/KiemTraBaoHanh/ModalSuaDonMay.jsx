@@ -1,28 +1,68 @@
 import React, { useState } from 'react';
-import { X, Edit3, Save, AlertCircle, Calendar, User, Phone, Laptop, FileText } from 'lucide-react';
+import { X, Edit3, Save, AlertCircle, Calendar, User, Phone, Laptop, FileText, Truck, Clock, CheckCircle } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { tinhNgayHetHanBaoHanh } from '../../utils/dinh_dang';
+import { tinhNgayHetHanBaoHanh, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
   const { showToast } = useToast();
   const [customerName, setCustomerName] = useState(order.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(order.customerPhone || '');
   const [warrantyPeriod, setWarrantyPeriod] = useState(order.warrantyPeriod || '6 tháng');
+  const [isShipping, setIsShipping] = useState(Boolean(order.isShipping));
+  const [isDelivered, setIsDelivered] = useState(Boolean(order.isDelivered));
+  const [deliveryDate, setDeliveryDate] = useState(
+    order.deliveryDate ? String(order.deliveryDate).slice(0, 10) : ''
+  );
   const [warrantyExpiry, setWarrantyExpiry] = useState(
     order.warrantyExpiry ? String(order.warrantyExpiry).slice(0, 10) : ''
   );
   const [saleNote, setSaleNote] = useState(order.saleNote || '');
   const [isSaving, setIsSaving] = useState(false);
 
+  const calculateExpiry = (period, ship, deliv, dDate) => {
+    if (ship && !deliv) return '';
+    const baseDate = (ship && deliv) ? (dDate || getTodayDateString()) : order.saleDate;
+    return tinhNgayHetHanBaoHanh(baseDate, period) || '';
+  };
+
   const handleWarrantyPeriodChange = (val) => {
     setWarrantyPeriod(val);
-    const autoExpiry = tinhNgayHetHanBaoHanh(order.saleDate, val);
-    if (autoExpiry) {
-      setWarrantyExpiry(autoExpiry);
+    const auto = calculateExpiry(val, isShipping, isDelivered, deliveryDate);
+    if (auto) setWarrantyExpiry(auto);
+  };
+
+  const handleShippingChange = (checked) => {
+    setIsShipping(checked);
+    if (!checked) {
+      setIsDelivered(false);
+      setDeliveryDate('');
+      const auto = calculateExpiry(warrantyPeriod, false, false, '');
+      if (auto) setWarrantyExpiry(auto);
+    } else {
+      if (!isDelivered) {
+        setWarrantyExpiry('');
+      }
     }
   };
 
+  const handleDeliveredChange = (checked) => {
+    setIsDelivered(checked);
+    const newDate = checked && !deliveryDate ? getTodayDateString() : deliveryDate;
+    if (checked && !deliveryDate) {
+      setDeliveryDate(newDate);
+    }
+    const auto = calculateExpiry(warrantyPeriod, isShipping, checked, newDate);
+    setWarrantyExpiry(auto);
+  };
+
+  const handleDeliveryDateChange = (val) => {
+    setDeliveryDate(val);
+    if (isDelivered) {
+      const auto = calculateExpiry(warrantyPeriod, isShipping, true, val);
+      if (auto) setWarrantyExpiry(auto);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,13 +71,21 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
       return;
     }
 
+    if (isShipping && isDelivered && !deliveryDate) {
+      showToast('Vui lòng chọn ngày khách nhận hàng', 'warning');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await apiBaoHanh.updateMachineOrder(order.cycleId, {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
+        isShipping,
+        isDelivered: isShipping ? isDelivered : true,
+        deliveryDate: isShipping ? (isDelivered ? (deliveryDate || null) : null) : null,
         warrantyPeriod: warrantyPeriod.trim(),
-        warrantyExpiry: warrantyExpiry || null,
+        warrantyExpiry: isShipping && !isDelivered ? null : (warrantyExpiry || null),
         saleNote: saleNote.trim()
       });
       showToast('Cập nhật thông tin đơn máy thành công!', 'success');
@@ -52,7 +100,7 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
 
   return (
     <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1065 }} tabIndex="-1">
-      <div className="modal-dialog modal-dialog-centered">
+      <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content shadow border-0 rounded-4">
           <div className="modal-header bg-primary text-white py-3">
             <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
@@ -100,6 +148,74 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                   </div>
                 </div>
 
+                {/* --- KHỐI ĐƠN SHIP XA & NHẬN HÀNG --- */}
+                <div className="col-12">
+                  <div className="p-3 bg-light rounded-3 border">
+                    <div className="form-check form-switch d-flex align-items-center mb-2">
+                      <input
+                        className="form-check-input fs-5 mt-0 me-2"
+                        type="checkbox"
+                        role="switch"
+                        id="modalShippingSwitch"
+                        checked={isShipping}
+                        onChange={(e) => handleShippingChange(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <label className="form-check-label fw-bold text-dark d-flex align-items-center gap-2" htmlFor="modalShippingSwitch" style={{ cursor: 'pointer' }}>
+                        <Truck size={17} className="text-primary" />
+                        Đơn ship xa / Giao hàng đi tỉnh
+                      </label>
+                    </div>
+
+                    {isShipping && (
+                      <div className="mt-3 pt-3 border-top">
+                        <div className="row g-3 align-items-center">
+                          <div className="col-md-6">
+                            <div className="form-check form-switch d-flex align-items-center">
+                              <input
+                                className="form-check-input fs-5 mt-0 me-2"
+                                type="checkbox"
+                                role="switch"
+                                id="modalDeliveredSwitch"
+                                checked={isDelivered}
+                                onChange={(e) => handleDeliveredChange(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              <label className="form-check-label fw-bold text-dark" htmlFor="modalDeliveredSwitch" style={{ cursor: 'pointer' }}>
+                                Xác nhận khách đã nhận hàng
+                              </label>
+                            </div>
+                            <div className="text-muted small ms-4 ps-1 mt-1">
+                              {isDelivered ? 'Đã giao - Bảo hành tính từ ngày nhận' : 'Đang giao - Chờ khách nhận hàng'}
+                            </div>
+                          </div>
+
+                          <div className="col-md-6">
+                            {isDelivered ? (
+                              <div>
+                                <label className="form-label small fw-semibold text-dark mb-1">
+                                  Ngày khách nhận hàng <span className="text-danger">*</span>
+                                </label>
+                                <input
+                                  type="date"
+                                  className="form-control border-success"
+                                  value={deliveryDate}
+                                  onChange={(e) => handleDeliveryDateChange(e.target.value)}
+                                  required={isDelivered}
+                                />
+                              </div>
+                            ) : (
+                              <div className="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning px-3 py-2 rounded-2 text-wrap w-100 text-start">
+                                ⏳ <strong>Đang ở trạng thái Chờ:</strong> Thời gian bảo hành chưa được kích hoạt cho đến khi khách nhận máy.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="col-12 col-md-6">
                   <label className="form-label small fw-semibold text-secondary">Gói bảo hành</label>
                   <input
@@ -109,11 +225,15 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                     value={warrantyPeriod}
                     onChange={(e) => handleWarrantyPeriodChange(e.target.value)}
                   />
-
                 </div>
 
                 <div className="col-12 col-md-6">
-                  <label className="form-label small fw-semibold text-secondary">Ngày hết hạn bảo hành</label>
+                  <label className="form-label small fw-semibold text-secondary">
+                    Ngày hết hạn bảo hành
+                    {isShipping && !isDelivered && (
+                      <span className="badge bg-warning text-dark ms-2">Chờ nhận hàng</span>
+                    )}
+                  </label>
                   <div className="input-group">
                     <span className="input-group-text bg-white"><Calendar size={16} className="text-muted" /></span>
                     <input
@@ -121,8 +241,14 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                       className="form-control"
                       value={warrantyExpiry}
                       onChange={(e) => setWarrantyExpiry(e.target.value)}
+                      disabled={isShipping && !isDelivered}
                     />
                   </div>
+                  {isShipping && !isDelivered && (
+                    <div className="small text-muted mt-1">
+                      (Bảo hành sẽ tự động tính khi tích "Xác nhận khách đã nhận hàng")
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-12">

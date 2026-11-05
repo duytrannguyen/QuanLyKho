@@ -749,7 +749,69 @@ export default function TrangSuaChua() {
                   >
                     <Edit3 size={16} className="me-1" /> Chỉnh sửa hóa đơn này
                   </button>
-                  <button type="button" className="btn btn-outline-secondary d-flex align-items-center" onClick={() => window.print()}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary d-flex align-items-center"
+                    onClick={() => {
+                      const ord = selectedOrderDetail;
+                      const win = window.open('', '_blank', 'width=850,height=700');
+                      if (!win || !ord) return;
+                      const rowsHtml = (ord.items || []).map((it, idx) => `
+                        <tr>
+                          <td style="text-align:center">${idx + 1}</td>
+                          <td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small>${it.note}</small>` : ''}</td>
+                          <td style="text-align:center">${it.quantity || 1}</td>
+                          <td style="text-align:right">${formatCurrency(it.price)} đ</td>
+                          <td style="text-align:center">${it.warrantyPeriod || (it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH')}</td>
+                          <td style="text-align:center">${it.warrantyExpiry || '---'}</td>
+                        </tr>
+                      `).join('');
+                      win.document.write(`
+                        <html>
+                          <head>
+                            <title>Phiếu Dịch Vụ Sửa Chữa #${ord.orderCode}</title>
+                            <style>
+                              body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
+                              .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
+                              table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                              th, td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 13px; }
+                              th { background: #f1f5f9; }
+                            </style>
+                          </head>
+                          <body>
+                            <div class="header">
+                              <div>
+                                <h2 style="margin:0;color:#0d6efd;">QKSHOP.VN</h2>
+                                <div style="font-size:12px;color:#64748b;">Hotline: 0939 558 894 | Website: qkshop.vn</div>
+                              </div>
+                              <div style="text-align:right;font-size:13px;">
+                                <div>Mã phiếu: <strong>#${ord.orderCode}</strong></div>
+                                <div>Ngày lập: ${ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}</div>
+                              </div>
+                            </div>
+                            <h3 style="text-align:center;margin:12px 0;">PHIẾU BIÊN NHẬN & BẢO HÀNH DỊCH VỤ SỬA CHỮA</h3>
+                            <p style="font-size:14px;"><strong>Khách hàng:</strong> ${ord.customerName || '---'} &nbsp;|&nbsp; <strong>SĐT:</strong> ${ord.customerPhone || '---'} &nbsp;|&nbsp; <strong>Thiết bị:</strong> ${ord.deviceModel || '---'}</p>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>STT</th>
+                                  <th>Hạng mục dịch vụ / Linh kiện</th>
+                                  <th>SL</th>
+                                  <th>Đơn giá</th>
+                                  <th>Bảo hành</th>
+                                  <th>Hạn bảo hành</th>
+                                </tr>
+                              </thead>
+                              <tbody>${rowsHtml}</tbody>
+                            </table>
+                            <h4 style="text-align:right;margin-top:16px;color:#dc2626;">Tổng thanh toán: ${formatCurrency(ord.totalAmount)} đ</h4>
+                            <script>window.onload = () => { window.print(); };</script>
+                          </body>
+                        </html>
+                      `);
+                      win.document.close();
+                    }}
+                  >
                     <Printer size={16} className="me-1" /> In hóa đơn
                   </button>
                 </div>
@@ -821,7 +883,69 @@ export default function TrangSuaChua() {
                 </div>
               </div>
               <div className="modal-footer bg-light">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => window.print()}>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    const ord = completedOrder;
+                    const win = window.open('', '_blank', 'width=850,height=700');
+                    if (!win || !ord) return;
+                    const rowsHtml = (ord.items || []).map((it, idx) => `
+                      <tr>
+                        <td style="text-align:center">${idx + 1}</td>
+                        <td><strong>${it.serviceName || ''}</strong></td>
+                        <td style="text-align:center">${it.quantity || 1}</td>
+                        <td style="text-align:right">${formatCurrency(it.price)} đ</td>
+                        <td style="text-align:center">${it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH'}</td>
+                        <td style="text-align:center">${it.warrantyExpiry || '---'}</td>
+                      </tr>
+                    `).join('');
+                    win.document.write(`
+                      <html>
+                        <head>
+                          <title>Phiếu Dịch Vụ Sửa Chữa #${ord.orderCode}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
+                            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                            th, td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 13px; }
+                            th { background: #f1f5f9; }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="header">
+                            <div>
+                              <h2 style="margin:0;color:#0d6efd;">QKSHOP.VN</h2>
+                              <div style="font-size:12px;color:#64748b;">Hotline: 0939 558 894 | Website: qkshop.vn</div>
+                            </div>
+                            <div style="text-align:right;font-size:13px;">
+                              <div>Mã phiếu: <strong>#${ord.orderCode}</strong></div>
+                              <div>Ngày lập: ${new Date().toLocaleDateString('vi-VN')}</div>
+                            </div>
+                          </div>
+                          <h3 style="text-align:center;margin:12px 0;">PHIẾU BIÊN NHẬN & BẢO HÀNH DỊCH VỤ SỬA CHỮA</h3>
+                          <p style="font-size:14px;"><strong>Khách hàng:</strong> ${ord.customerName || '---'} &nbsp;|&nbsp; <strong>SĐT:</strong> ${ord.customerPhone || '---'} &nbsp;|&nbsp; <strong>Thiết bị:</strong> ${ord.deviceModel || '---'}</p>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>STT</th>
+                                <th>Hạng mục dịch vụ / Linh kiện</th>
+                                <th>SL</th>
+                                <th>Đơn giá</th>
+                                <th>Bảo hành</th>
+                                <th>Hạn bảo hành</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                          </table>
+                          <h4 style="text-align:right;margin-top:16px;color:#dc2626;">Tổng thanh toán: ${formatCurrency(ord.totalAmount)} đ</h4>
+                          <script>window.onload = () => { window.print(); };</script>
+                        </body>
+                      </html>
+                    `);
+                    win.document.close();
+                  }}
+                >
                   <Printer size={16} className="me-1" /> In phiếu biên nhận
                 </button>
                 <button type="button" className="btn btn-primary px-4" onClick={() => setCompletedOrder(null)}>

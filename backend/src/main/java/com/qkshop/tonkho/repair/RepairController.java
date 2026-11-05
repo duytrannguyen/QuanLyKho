@@ -42,6 +42,15 @@ public class RepairController {
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật đơn dịch vụ sửa chữa thành công", updated));
     }
 
+    @PutMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<RepairOrder>> updateOrderStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> payload) {
+        String status = payload.get("status");
+        RepairOrder updated = repairOrderService.updateOrderStatus(id, status);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật trạng thái đơn sửa chữa thành công", updated));
+    }
+
     @GetMapping("/services")
     public ResponseEntity<ApiResponse<List<RepairOrderItem>>> searchServices(
             @RequestParam(required = false) String keyword) {

@@ -34,7 +34,7 @@ public interface CrmOrderRepository extends JpaRepository<SalesOrder, Long> {
             COALESCE(SUM(CASE WHEN (s.orderStatus IS NULL OR (
                     LOWER(s.orderStatus) NOT LIKE '%hủy%' AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
                     AND LOWER(s.orderStatus) NOT LIKE '%trả%' AND LOWER(s.orderStatus) NOT LIKE '%cancel%'))
-                AND (s.transactionId NOT LIKE 'PK-KEM-%')
+                AND (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%')
                 THEN 1 ELSE 0 END), 0) AS totalOrders,
             COALESCE(SUM(CASE WHEN (s.orderStatus IS NULL OR (
                     LOWER(s.orderStatus) NOT LIKE '%hủy%' AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
@@ -61,14 +61,12 @@ public interface CrmOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     long countByCrmCustomerIdIsNull();
 
-    /** Đơn mới nhất của khách có tên (dùng làm tên hiển thị hồ sơ). */
     Optional<SalesOrder> findFirstByCrmCustomerIdAndCustomerNameIsNotNullAndCustomerNameNotOrderBySaleDateDescIdDesc(
             Long customerId, String emptyName);
 
     Optional<SalesOrder> findFirstByCrmCustomerIdAndCustomerTypeIsNotNullAndCustomerTypeNotOrderBySaleDateDescIdDesc(
             Long customerId, String emptyType);
 
-    /** Danh sách hóa đơn của khách, lọc tùy chọn theo loại đơn (cat rỗng = tất cả). */
     @Query("""
         SELECT s FROM SalesOrder s
         WHERE s.crmCustomerId = :customerId
@@ -85,6 +83,9 @@ public interface CrmOrderRepository extends JpaRepository<SalesOrder, Long> {
         ORDER BY s.saleDate DESC, s.id DESC
         """)
     Page<SalesOrder> findUnlinkedOrders(Pageable pageable);
+
+    @Query("SELECT s.id FROM SalesOrder s WHERE s.crmCustomerId IS NULL AND s.customerPhone IS NOT NULL AND TRIM(s.customerPhone) <> ''")
+    List<Long> findUnlinkedCandidateOrders();
 
     @Query("SELECT s.id FROM SalesOrder s WHERE s.crmCustomerId = :customerId")
     List<Long> findOrderIdsByCustomer(@Param("customerId") Long customerId);

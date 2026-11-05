@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tag, Printer, ChevronRight, ChevronLeft, Check } from 'lucide-react';
 import { apiCatalog, priceListApi } from '../../api';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatCurrency } from '../../utils/dinh_dang';
 import logoQK from '../../assets/qkshop_logo.jpg';
 
@@ -601,6 +602,7 @@ ${pagesHtml}
   };
 
   /* --- Xuất PDF JasperReports (pixel-perfect) --- */
+  const { showToast } = useToast();
   const handleExportPdf = async () => {
     if (items.length === 0) return;
     setLoadingPdf(true);
@@ -616,24 +618,12 @@ ${pagesHtml}
         }))
       };
 
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const res = await fetch(
-        `/api/pricelist/export-pdf`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify(payload)
-        }
-      );
-      if (!res.ok) throw new Error('Server trả về lỗi ' + res.status);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const blob = await priceListApi.exportPdf(payload);
+      const pdfBlob = blob instanceof Blob ? blob : new Blob([blob], { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfBlob);
       window.open(url, '_blank');
     } catch (err) {
-      alert('Lỗi khi tạo PDF: ' + err.message);
+      showToast('Lỗi khi tạo PDF: ' + (err.userMessage || err.message || 'Không thể kết xuất file PDF'), 'danger');
     } finally {
       setLoadingPdf(false);
     }

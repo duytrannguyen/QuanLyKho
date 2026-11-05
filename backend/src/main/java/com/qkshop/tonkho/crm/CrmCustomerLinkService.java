@@ -30,6 +30,7 @@ public class CrmCustomerLinkService {
 
     private final CrmCustomerRepository customerRepo;
     private final CrmOrderRepository orderRepo;
+    private final CrmCareNoteRepository careNoteRepo;
     private final PlatformTransactionManager transactionManager;
 
     private final AtomicBoolean rebuilding = new AtomicBoolean(false);
@@ -62,15 +63,19 @@ public class CrmCustomerLinkService {
     }
 
     /**
-     * Tính lại chỉ số khách từ DB. Khách không còn đơn nào sẽ bị xóa.
+     * Tính lại chỉ số khách từ DB. Khách không còn đơn nào sẽ bị xóa (xóa kèm ghi chú chăm sóc trước để không lỗi FK).
      * Phải được gọi trong một transaction đang hoạt động.
      */
+    @Transactional(rollbackFor = Exception.class)
     public void recalculateCustomer(Long customerId) {
         CrmCustomer customer = customerRepo.findById(customerId).orElse(null);
         if (customer == null) return;
 
         if (orderRepo.countByCrmCustomerId(customerId) == 0) {
-            customerRepo.delete(customer);
+            if (careNoteRepo != null) {
+                careNoteRepo.deleteByCustomerId(customerId);
+            }
+            customerRepo.deleteById(customerId);
             return;
         }
 
@@ -115,7 +120,7 @@ public class CrmCustomerLinkService {
             boolean hasNext = true;
             while (hasNext) {
                 final int currentPage = page;
-                int[] counters = new int[3]; // linked, unlinked, hasNext
+                int[] counters = new int[3];
                 tx.executeWithoutResult(status -> processRebuildPage(currentPage, phoneCache, affected, counters));
                 linked += counters[0];
                 unlinked += counters[1];

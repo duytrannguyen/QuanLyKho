@@ -575,7 +575,66 @@ export default function TrangBanPhuKien() {
                 </div>
               </div>
               <div className="modal-footer bg-light border-top">
-                <button type="button" className="btn btn-outline-secondary fw-medium d-flex align-items-center" onClick={() => window.print()}>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary fw-medium d-flex align-items-center"
+                  onClick={() => {
+                    const win = window.open('', '_blank', 'width=850,height=700');
+                    if (!win) return;
+                    const rowsHtml = (completedOrder.items || []).map((it, idx) => `
+                      <tr>
+                        <td style="text-align:center">${idx + 1}</td>
+                        <td><strong>${it.accessoryName || ''}</strong><br/><small>${it.sku || ''}</small></td>
+                        <td style="text-align:center">${it.quantity || 1}</td>
+                        <td style="text-align:center">${it.warrantyPeriod || (it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH')}</td>
+                        <td style="text-align:center">${it.warrantyExpiry || '---'}</td>
+                      </tr>
+                    `).join('');
+                    win.document.write(`
+                      <html>
+                        <head>
+                          <title>Phiếu Xuất Kho Phụ Kiện #${completedOrder.orderCode}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
+                            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+                            th, td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 13px; }
+                            th { background: #f1f5f9; }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="header">
+                            <div>
+                              <h2 style="margin:0;color:#0d6efd;">QKSHOP.VN</h2>
+                              <div style="font-size:12px;color:#64748b;">Hotline: 0939 558 894 | Website: qkshop.vn</div>
+                            </div>
+                            <div style="text-align:right;font-size:13px;">
+                              <div>Mã đơn: <strong>#${completedOrder.orderCode}</strong></div>
+                              <div>Ngày bán: ${formatDate(completedOrder.saleDate)}</div>
+                            </div>
+                          </div>
+                          <h3 style="text-align:center;margin:12px 0;">PHIẾU XUẤT BÁN & BẢO HÀNH PHỤ KIỆN</h3>
+                          <p style="font-size:14px;"><strong>Khách hàng:</strong> ${completedOrder.customerName || 'Khách vãng lai'} &nbsp;|&nbsp; <strong>SĐT:</strong> ${completedOrder.customerPhone || '---'}</p>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>STT</th>
+                                <th>Tên phụ kiện</th>
+                                <th>SL</th>
+                                <th>Bảo hành</th>
+                                <th>Hạn bảo hành</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                          </table>
+                          <h4 style="text-align:right;margin-top:16px;color:#dc2626;">Tổng thanh toán: ${formatCurrency(completedOrder.finalAmount != null ? completedOrder.finalAmount : completedOrder.totalAmount)} đ</h4>
+                          <script>window.onload = () => { window.print(); };</script>
+                        </body>
+                      </html>
+                    `);
+                    win.document.close();
+                  }}
+                >
                   <Printer size={18} className="me-2" /> In phiếu
                 </button>
                 <button type="button" className="btn btn-primary px-4 fw-bold" onClick={() => setCompletedOrder(null)}>

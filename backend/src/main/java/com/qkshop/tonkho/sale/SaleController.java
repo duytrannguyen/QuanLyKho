@@ -5,8 +5,6 @@ import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.InventoryCycleService;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
-import com.qkshop.tonkho.sale.SalesConfig;
-import com.qkshop.tonkho.sale.SalesConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +14,6 @@ import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/sale")
@@ -44,10 +41,10 @@ public class SaleController {
         if (query == null || query.trim().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng nhập tên máy hoặc số Serial.");
         }
-        
+
         ActiveInventory ai = inventoryCycleService.lookupSaleCandidate(query);
         Map<String, Object> result = mapActiveInventoryToSaleDTO(ai);
-        
+
         ApiResponse<Map<String, Object>> response = new ApiResponse<>();
         response.setSuccess(true);
         response.setData(result);
@@ -75,13 +72,13 @@ public class SaleController {
         result.put("intakeAt", ai.getIntakeAt());
         result.put("warrantyPeriod", ai.getWarrantyPeriod());
         result.put("warrantyExpiry", ai.getWarrantyExpiry());
-        
+
         if (ai.getConfig() != null) {
             com.qkshop.tonkho.sale.SalesConfig cfg = ai.getConfig();
             result.put("ram", cfg.getRamCode());
             result.put("ssd", cfg.getSsdCode());
             result.put("configDisplayName", cfg.getDisplayName());
-            
+
             if (cfg.getVariant() != null) {
                 com.qkshop.tonkho.catalog.VariantV2 var = cfg.getVariant();
                 result.put("cpuCode", var.getCpuCode());
@@ -114,7 +111,7 @@ public class SaleController {
     public ResponseEntity<ApiResponse<ClosedCycle>> submitSale(
             @RequestHeader(value = "X-Request-Id", required = false) String requestId,
             @RequestBody Map<String, Object> payload) {
-        
+
         if (requestId == null) {
             requestId = UUID.randomUUID().toString();
         }
@@ -126,7 +123,7 @@ public class SaleController {
             finalPrice = new BigDecimal(priceObj.toString());
         }
         String salesperson = (String) payload.get("salesperson");
-        if (salesperson == null) salesperson = "SYSTEM"; // Mock user
+        if (salesperson == null) salesperson = "SYSTEM";
 
         ClosedCycle closed = inventoryCycleService.submitSale(requestId, serialKey, finalPrice, salesperson, payload);
 
@@ -134,8 +131,41 @@ public class SaleController {
         response.setSuccess(true);
         response.setData(closed);
         response.setRequestId(requestId);
-        
+
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/shipping-orders")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getShippingOrders(
+            @RequestParam(required = false, defaultValue = "all") String status,
+            @RequestParam(required = false) String keyword) {
+
+        Boolean isDelivered = null;
+        if ("pending".equalsIgnoreCase(status)) {
+            isDelivered = false;
+        } else if ("delivered".equalsIgnoreCase(status)) {
+            isDelivered = true;
+        }
+
+        String cleanKeyword = (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null;
+
+        List<ClosedCycle> list = closedCycleRepository.findShippingOrders(isDelivered, cleanKeyword);
+        List<Map<String, Object>> mappedOrders = new java.util.ArrayList<>();
+        for (ClosedCycle cc : list) {
+            mappedOrders.add(mapClosedCycleToDetail(cc));
+        }
+
+        long total = closedCycleRepository.countByIsShippingTrue();
+        long pending = closedCycleRepository.countByIsShippingTrueAndIsDeliveredFalse();
+        long delivered = closedCycleRepository.countByIsShippingTrueAndIsDeliveredTrue();
+
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("total", total);
+        data.put("pending", pending);
+        data.put("delivered", delivered);
+        data.put("orders", mappedOrders);
+
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Lấy danh sách đơn ship thành công", data));
     }
 
     @GetMapping("/warranty")
@@ -143,7 +173,7 @@ public class SaleController {
         if (keyword == null || keyword.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("BAD_REQUEST", "Vui lòng nhập từ khóa"));
         }
-        
+
         String cleanKeyword = keyword.trim();
 
         // 1. Máy móc từ ClosedCycle
@@ -163,7 +193,6 @@ public class SaleController {
         });
 
         // 2. Phụ kiện: Gom nhóm theo từng hóa đơn bán phụ kiện (AccessoryOrder)
-        // Tìm kiếm cả theo thông tin hóa đơn (SĐT, tên, mã) và theo chi tiết món hàng (SKU, Serial, Tên phụ kiện)
         List<com.qkshop.tonkho.accessory.AccessoryOrder> directAccOrders = accessoryOrderRepository.searchOrders(cleanKeyword);
         List<com.qkshop.tonkho.accessory.AccessoryOrderItem> accItems = accessoryOrderItemRepository.searchWarrantyItems(cleanKeyword);
 
@@ -219,7 +248,6 @@ public class SaleController {
         }
 
         // 3. Dịch vụ sửa chữa: Gom nhóm theo từng hóa đơn sửa chữa (RepairOrder)
-        // Tìm kiếm cả theo thông tin hóa đơn và theo tên dịch vụ con
         List<com.qkshop.tonkho.repair.RepairOrder> directOrders = repairOrderRepository.searchOrders(cleanKeyword);
         List<com.qkshop.tonkho.repair.RepairOrderItem> repairItems = repairOrderItemRepository.searchWarrantyItems(cleanKeyword);
 
@@ -302,11 +330,36 @@ public class SaleController {
         if (payload.containsKey("customerPhone")) {
             cc.setCustomerPhone((String) payload.get("customerPhone"));
         }
+        if (payload.containsKey("paymentStatus")) {
+            cc.setPaymentStatus((String) payload.get("paymentStatus"));
+        }
+
+        if (payload.containsKey("isShipping")) {
+            Object sObj = payload.get("isShipping");
+            boolean isShip = sObj instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(sObj));
+            cc.setIsShipping(isShip);
+        }
+        if (payload.containsKey("isDelivered")) {
+            Object dObj = payload.get("isDelivered");
+            boolean isDeliv = dObj instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(dObj));
+            cc.setIsDelivered(isDeliv);
+        }
+        if (payload.containsKey("deliveryDate")) {
+            Object dtObj = payload.get("deliveryDate");
+            if (dtObj != null && !dtObj.toString().trim().isEmpty()) {
+                cc.setDeliveryDate(java.time.LocalDate.parse(dtObj.toString().trim()));
+            } else {
+                cc.setDeliveryDate(null);
+            }
+        }
+
         if (payload.containsKey("warrantyPeriod")) {
             String wp = (String) payload.get("warrantyPeriod");
             cc.setWarrantyPeriod(wp);
             if (!payload.containsKey("warrantyExpiry") && wp != null) {
-                java.time.LocalDate baseDate = cc.getSaleDate() != null ? cc.getSaleDate().toLocalDate() : java.time.LocalDate.now();
+                java.time.LocalDate baseDate = cc.getDeliveryDate() != null 
+                        ? cc.getDeliveryDate() 
+                        : (cc.getSaleDate() != null ? cc.getSaleDate().toLocalDate() : java.time.LocalDate.now());
                 cc.setWarrantyExpiry(calculateExpiryFromPeriod(baseDate, wp));
             }
         }
@@ -319,13 +372,21 @@ public class SaleController {
             }
         }
 
+        // Nếu là đơn ship nhưng chưa giao hàng đến khách: CHƯA kích hoạt bảo hành (hạn BH để trống)
+        if (Boolean.TRUE.equals(cc.getIsShipping()) && !Boolean.TRUE.equals(cc.getIsDelivered())) {
+            cc.setWarrantyExpiry(null);
+        } else if (Boolean.TRUE.equals(cc.getIsDelivered()) && cc.getWarrantyExpiry() == null && cc.getWarrantyPeriod() != null) {
+            java.time.LocalDate baseDate = cc.getDeliveryDate() != null ? cc.getDeliveryDate() : (cc.getSaleDate() != null ? cc.getSaleDate().toLocalDate() : java.time.LocalDate.now());
+            cc.setWarrantyExpiry(calculateExpiryFromPeriod(baseDate, cc.getWarrantyPeriod()));
+        }
+
         if (payload.containsKey("saleNote")) {
             cc.setSaleNote((String) payload.get("saleNote"));
         }
 
         ClosedCycle saved = closedCycleRepository.save(cc);
 
-        // Đồng bộ sang bảng SalesOrder để Dashboard Báo cáo Doanh số luôn khớp 100%
+        // Đồng bộ sang bảng SalesOrder và đơn phụ kiện bán kèm (PK-KEM-) nếu có
         try {
             salesOrderRepository.findByMatchedCycleId(cycleId)
                     .or(() -> salesOrderRepository.findBySerialKeysContaining(cc.getSerialKey()).stream().findFirst())
@@ -334,17 +395,98 @@ public class SaleController {
                         so.setCustomerPhone(cc.getCustomerPhone());
                         so.setWarrantyPeriod(cc.getWarrantyPeriod());
                         so.setWarrantyExpiry(cc.getWarrantyExpiry());
+                        so.setIsShipping(cc.getIsShipping());
+                        so.setIsDelivered(cc.getIsDelivered());
+                        so.setDeliveryDate(cc.getDeliveryDate());
+                        if (Boolean.TRUE.equals(cc.getIsShipping()) && !Boolean.TRUE.equals(cc.getIsDelivered())) {
+                            so.setOrderStatus("Chờ giao hàng");
+                        } else {
+                            so.setOrderStatus("Hoàn tất");
+                        }
                         so.setNote(cc.getSaleNote());
                         if (payload.containsKey("paymentStatus")) {
                             so.setPaymentStatus((String) payload.get("paymentStatus"));
                         }
                         salesOrderRepository.save(so);
                     });
+
+            if (payload.containsKey("customerName") || payload.containsKey("customerPhone") || payload.containsKey("paymentStatus")) {
+                String pkKemCode = "PK-KEM-" + cycleId.replace("CYC-", "");
+                accessoryOrderRepository.findByOrderCode(pkKemCode).ifPresent(accOrder -> {
+                    if (payload.containsKey("customerName")) {
+                        accOrder.setCustomerName(cc.getCustomerName());
+                    }
+                    if (payload.containsKey("customerPhone")) {
+                        accOrder.setCustomerPhone(cc.getCustomerPhone());
+                    }
+                    accessoryOrderRepository.save(accOrder);
+                });
+                salesOrderRepository.findByTransactionId(pkKemCode).ifPresent(accSo -> {
+                    if (payload.containsKey("customerName")) {
+                        accSo.setCustomerName(cc.getCustomerName());
+                    }
+                    if (payload.containsKey("customerPhone")) {
+                        accSo.setCustomerPhone(cc.getCustomerPhone());
+                    }
+                    if (payload.containsKey("paymentStatus")) {
+                        accSo.setPaymentStatus((String) payload.get("paymentStatus"));
+                    }
+                    salesOrderRepository.save(accSo);
+                });
+            }
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(SaleController.class).warn("Không thể đồng bộ SalesOrder từ updateMachineOrder: {}", e.getMessage());
         }
 
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật đơn máy thành công", mapClosedCycleToDetail(saved)));
+    }
+
+    @PutMapping("/order/{cycleId}/confirm-delivery")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> confirmDelivery(
+            @PathVariable String cycleId,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        ClosedCycle cc = closedCycleRepository.findByCycleId(cycleId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn máy với mã chu kỳ: " + cycleId));
+
+        java.time.LocalDate delDate = java.time.LocalDate.now();
+        if (payload != null && payload.containsKey("deliveryDate") && payload.get("deliveryDate") != null && !payload.get("deliveryDate").toString().isBlank()) {
+            try {
+                delDate = java.time.LocalDate.parse(payload.get("deliveryDate").toString().trim());
+            } catch (Exception e) {
+                delDate = java.time.LocalDate.now();
+            }
+        }
+
+        cc.setIsShipping(true);
+        cc.setIsDelivered(true);
+        cc.setDeliveryDate(delDate);
+
+        // Kích hoạt tính hạn bảo hành từ ngày nhận hàng
+        if (cc.getWarrantyPeriod() != null && !cc.getWarrantyPeriod().isBlank()) {
+            cc.setWarrantyExpiry(calculateExpiryFromPeriod(delDate, cc.getWarrantyPeriod()));
+        }
+
+        ClosedCycle saved = closedCycleRepository.save(cc);
+
+        // Đồng bộ SalesOrder
+        try {
+            final java.time.LocalDate finalDelDate = delDate;
+            salesOrderRepository.findByMatchedCycleId(cycleId)
+                    .or(() -> salesOrderRepository.findBySerialKeysContaining(cc.getSerialKey()).stream().findFirst())
+                    .ifPresent(so -> {
+                        so.setIsShipping(true);
+                        so.setIsDelivered(true);
+                        so.setDeliveryDate(finalDelDate);
+                        so.setOrderStatus("Hoàn tất");
+                        so.setWarrantyExpiry(saved.getWarrantyExpiry());
+                        salesOrderRepository.save(so);
+                    });
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(SaleController.class).warn("Không thể đồng bộ SalesOrder từ confirmDelivery: {}", e.getMessage());
+        }
+
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Xác nhận khách đã nhận hàng & kích hoạt bảo hành thành công", mapClosedCycleToDetail(saved)));
     }
 
     @PutMapping("/accessory-order/{orderId}")
@@ -393,7 +535,6 @@ public class SaleController {
                                     item.setWarrantyExpiry(null);
                                 }
                             } else if (newPeriod != null) {
-                                // Tự động tính hạn nếu không truyền trực tiếp warrantyExpiry
                                 java.time.LocalDate baseDate = order.getSaleDate() != null ? order.getSaleDate().toLocalDate() : java.time.LocalDate.now();
                                 item.setWarrantyExpiry(calculateExpiryFromPeriod(baseDate, newPeriod));
                             }
@@ -427,7 +568,6 @@ public class SaleController {
         if (baseDate == null) baseDate = java.time.LocalDate.now();
         return com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, period);
     }
-
 
     @PutMapping("/repair-order/{orderId}")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
@@ -494,7 +634,6 @@ public class SaleController {
             }
         }
 
-
         repairOrderRepository.save(order);
 
         // Đồng bộ sang bảng SalesOrder nếu có đơn
@@ -503,6 +642,10 @@ public class SaleController {
                     .ifPresent(so -> {
                         so.setCustomerName(order.getCustomerName());
                         so.setCustomerPhone(order.getCustomerPhone());
+                        if (payload.containsKey("deviceModel") && order.getDeviceModel() != null) {
+                            so.setModelName(order.getDeviceModel());
+                            so.setProductName("Sửa chữa: " + order.getDeviceModel());
+                        }
                         so.setNote(order.getNote());
                         so.setSalesperson(order.getTechnicianName());
                         salesOrderRepository.save(so);
@@ -589,7 +732,6 @@ public class SaleController {
         map.put("saleNote", cc.getSaleNote());
         map.put("pausedDays", cc.getPausedDays());
 
-        // Get salesperson from EventLog
         String salesperson = "Không rõ";
         if (cc.getCloseEventId() != null) {
             java.util.Optional<com.qkshop.tonkho.log.EventLog> eventOpt = eventLogRepository.findByEventId(cc.getCloseEventId());
@@ -599,7 +741,6 @@ public class SaleController {
         }
         map.put("salesperson", salesperson);
 
-        // Check if voided/returned
         boolean isVoided = false;
         java.util.Optional<com.qkshop.tonkho.machine.SerialRegistry> regOpt = serialRegistryRepository.findBySerialKey(cc.getSerialKey());
         if (regOpt.isPresent()) {
@@ -609,8 +750,10 @@ public class SaleController {
             }
         }
         map.put("isVoided", isVoided);
-        
-        // Detailed laptop specifications
+        map.put("isShipping", Boolean.TRUE.equals(cc.getIsShipping()));
+        map.put("isDelivered", Boolean.TRUE.equals(cc.getIsDelivered()));
+        map.put("deliveryDate", cc.getDeliveryDate());
+
         String configInfo = "";
         if (cc.getConfig() != null) {
             com.qkshop.tonkho.sale.SalesConfig cfg = cc.getConfig();
@@ -650,7 +793,7 @@ public class SaleController {
             configInfo += " (Nâng cấp: " + cc.getUpgradeNote() + ")";
         }
         map.put("configInfo", configInfo.isEmpty() ? "Không rõ cấu hình" : configInfo);
-        
+
         return map;
     }
 }

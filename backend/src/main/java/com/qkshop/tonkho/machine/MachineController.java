@@ -4,7 +4,6 @@ import com.qkshop.tonkho.machine.dto.BulkMachineImportRequest;
 import com.qkshop.tonkho.machine.dto.MachineImportRequest;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import com.qkshop.tonkho.inventory.ActiveInventory;
-import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.dto.ClosedCycleDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,7 @@ public class MachineController {
         return ResponseEntity.ok(ApiResponse.ok(detail));
     }
 
-    /** Tìm kiếm lịch sử máy đã đóng (dã bán, đã trả), trả ClosedCycleDTO đầy đủ */
+    /** Tìm kiếm lịch sử máy đã đóng (đã bán, đã trả), trả ClosedCycleDTO đầy đủ */
     @GetMapping("/searchHistory")
     public ResponseEntity<ApiResponse<Page<ClosedCycleDTO>>> searchHistory(
             @RequestParam(required = false) String query,
@@ -85,6 +84,13 @@ public class MachineController {
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Template_NhapMay.xlsx")
                 .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(resource);
+    }
+
+    /** Cập nhật giá hàng loạt cho danh sách serial */
+    @PutMapping("/bulk-price")
+    public ResponseEntity<ApiResponse<Integer>> updateBulkPrice(@RequestBody Map<String, Object> payload) {
+        int updatedCount = machineService.updateBulkPrice(payload);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật giá hàng loạt thành công", updatedCount));
     }
 
     /** Cập nhật thông tin máy (giá, ghi chú, trạng thái) */

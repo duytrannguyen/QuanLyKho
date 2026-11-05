@@ -21,6 +21,7 @@ public class CrmQueryService {
     private static final Set<String> SORTABLE = Set.of("lastOrderAt", "totalOrders", "totalSpent", "fullName", "firstOrderAt");
     private static final Set<String> CATEGORIES = Set.of("MACHINE", "ACCESSORY", "REPAIR");
     private static final int MAX_PAGE_SIZE = 100;
+    private static final int MAX_EXPORT_SIZE = 10000;
 
     private final CrmCustomerRepository customerRepo;
     private final CrmOrderRepository orderRepo;
@@ -37,11 +38,15 @@ public class CrmQueryService {
 
     @Transactional(readOnly = true)
     public PageResult<CustomerItem> searchCustomers(String keyword, String filterType, String sortBy, String direction, int page, int size) {
+        return searchCustomersInternal(keyword, filterType, sortBy, direction, page, size, MAX_PAGE_SIZE);
+    }
+
+    private PageResult<CustomerItem> searchCustomersInternal(String keyword, String filterType, String sortBy, String direction, int page, int size, int maxLimit) {
         String kw = normalizeKeyword(keyword);
         String ft = filterType == null ? "" : filterType.trim().toUpperCase(Locale.ROOT);
         String sortProp = SORTABLE.contains(sortBy) ? sortBy : "lastOrderAt";
         Sort.Direction dir = "asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        PageRequest pageable = PageRequest.of(Math.max(page, 0), clampSize(size),
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), clampSize(size, maxLimit),
                 Sort.by(dir, sortProp).and(Sort.by(Sort.Direction.DESC, "id")));
 
         LocalDate expiringBefore = LocalDate.now().plusDays(30);
@@ -135,7 +140,6 @@ public class CrmQueryService {
     public boolean isMachineRepurchased(SalesOrder order, MachineRepurchaseBatchContext ctx) {
         if (order == null) return false;
 
-        // 1. Kiểm tra trạng thái rõ ràng từ CSKH hoặc đơn hàng
         if ("DA_BAN_LAI".equalsIgnoreCase(order.getCareStatus()) || "VOIDED".equalsIgnoreCase(order.getCareStatus())) {
             return true;
         }
@@ -143,7 +147,6 @@ public class CrmQueryService {
             return true;
         }
 
-        // Nếu là đơn phụ kiện bán kèm PK-KEM-, kiểm tra theo serial máy chính
         if (order.getTransactionId() != null && order.getTransactionId().startsWith("PK-KEM-")) {
             String cycleKey = order.getTransactionId().substring("PK-KEM-".length()).trim();
             String serial = cycleKey.contains("::") ? cycleKey.split("::")[0].trim() : cycleKey;
@@ -165,7 +168,6 @@ public class CrmQueryService {
             }
         }
 
-        // Chỉ đối chiếu sâu với đơn máy móc
         boolean isMachine = "MACHINE".equalsIgnoreCase(order.getOrderCategory()) || order.getOrderCategory() == null;
         if (!isMachine) return false;
 
@@ -174,7 +176,6 @@ public class CrmQueryService {
             String normSerial = com.qkshop.tonkho.machine.SerialRegistry.normalizeSerialKey(serial);
 
             if (ctx != null) {
-                // a. Tra cứu in-memory trong batch context (O(1))
                 if (ctx.activeSerialKeys().contains(normSerial)) {
                     return true;
                 }
@@ -205,7 +206,6 @@ public class CrmQueryService {
                     }
                 }
             } else {
-                // Fallback khi gọi kiểm tra đơn lẻ
                 if (activeInventoryRepo.existsBySerialKey(normSerial)) {
                     return true;
                 }
@@ -258,6 +258,12 @@ public class CrmQueryService {
         return null;
     }
 
+    public static boolean isOfficeSegment(String segment) {
+        if (segment == null || segment.isBlank()) return false;
+        String lower = segment.toLowerCase(Locale.ROOT);
+        return lower.contains("văn phòng") || lower.contains("van phong") || lower.contains("office");
+    }
+
     private CareStatusEvaluation evaluateCareStatus(
             List<SalesOrder> orders,
             LocalDateTime sixMonthsAgo,
@@ -279,7 +285,6 @@ public class CrmQueryService {
             return new CareStatusEvaluation("NORMAL", "Chưa có giao dịch", null);
         }
 
-        // Bỏ qua các đơn phụ kiện bán kèm (PK-KEM-), chỉ đánh giá các đơn chính
         List<SalesOrder> primaryOrders = orders.stream()
                 .filter(o -> o.getTransactionId() == null || !o.getTransactionId().startsWith("PK-KEM-"))
                 .toList();
@@ -289,7 +294,6 @@ public class CrmQueryService {
         LocalDate today = LocalDate.now();
         java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        // Đếm số đơn hợp lệ còn sử dụng và số đơn máy đã bán lại cho shop
         int activeOrderCount = 0;
         int repurchasedCount = 0;
         for (SalesOrder o : evalOrders) {
@@ -301,7 +305,6 @@ public class CrmQueryService {
             }
         }
 
-        // Nếu tất cả đơn máy của khách đều đã bán lại cho shop (không còn máy nào đang sử dụng)
         if (activeOrderCount == 0 && repurchasedCount > 0) {
             return new CareStatusEvaluation("VOIDED", "Đã bán lại cho shop", null);
         }
@@ -309,7 +312,7 @@ public class CrmQueryService {
         // 1. Kiểm tra có đơn ĐANG HẸN KHÁCH không
         for (SalesOrder o : evalOrders) {
             if (isOrderCancelledOrReturned(o.getOrderStatus())) continue;
-            if (isMachineRepurchased(o, ctx)) continue; // Bỏ qua máy đã bán lại cho shop
+            if (isMachineRepurchased(o, ctx)) continue;
             if ("DANG_HEN".equalsIgnoreCase(o.getCareStatus())) {
                 String dateStr = o.getNextCareDate() != null ? ": " + o.getNextCareDate().format(dtf) : "";
                 return new CareStatusEvaluation("APPOINTMENT", "Đang hẹn khách" + dateStr, o.getNextCareDate());
@@ -319,20 +322,17 @@ public class CrmQueryService {
         // 2. Kiểm tra có đơn ĐẾN HẠN CHĂM SÓC (CARE_DUE) không
         for (SalesOrder o : evalOrders) {
             if (isOrderCancelledOrReturned(o.getOrderStatus())) continue;
-            if (isMachineRepurchased(o, ctx)) continue; // Bỏ qua máy đã bán lại cho shop
+            if (isMachineRepurchased(o, ctx)) continue;
             boolean isMachine = "MACHINE".equalsIgnoreCase(o.getOrderCategory()) || o.getOrderCategory() == null;
 
             if (isMachine) {
-                // Đã vệ sinh và đến hạn kỳ tới
                 if (o.getNextCareDate() != null && !o.getNextCareDate().isAfter(today)) {
                     return new CareStatusEvaluation("CARE_DUE", "Đến hạn vệ sinh máy", o.getNextCareDate());
                 }
-                // Chưa từng vệ sinh và quá 6/12 tháng
-                if (o.getNextCareDate() == null && o.getSaleDate() != null 
-                        && !"HOAN_TAT_1_LAN".equalsIgnoreCase(o.getCareStatus()) 
+                if (o.getNextCareDate() == null && o.getSaleDate() != null
+                        && !"HOAN_TAT_1_LAN".equalsIgnoreCase(o.getCareStatus())
                         && !"DA_VE_SINH".equalsIgnoreCase(o.getCareStatus())) {
-                    boolean isOffice = o.getSegment() != null && 
-                            (o.getSegment().toLowerCase().contains("văn phòng") || o.getSegment().toLowerCase().contains("van phong"));
+                    boolean isOffice = isOfficeSegment(o.getSegment());
                     if (isOffice && !o.getSaleDate().isAfter(twelveMonthsAgo)) {
                         return new CareStatusEvaluation("CARE_DUE", "Đến hạn vệ sinh (12 tháng)", null);
                     }
@@ -341,7 +341,6 @@ public class CrmQueryService {
                     }
                 }
             } else {
-                // Đơn phụ kiện/sửa chữa: sau 7 - 14 ngày chưa chăm sóc
                 if (!"HOAN_TAT_1_LAN".equalsIgnoreCase(o.getCareStatus()) && o.getSaleDate() != null) {
                     if (!o.getSaleDate().isAfter(sevenDaysAgo) && !o.getSaleDate().isBefore(fourteenDaysAgo)) {
                         return new CareStatusEvaluation("CARE_DUE", "Cần thăm hỏi sau mua (7-14 ngày)", null);
@@ -354,7 +353,7 @@ public class CrmQueryService {
         boolean hasCompleted = false;
         for (SalesOrder o : evalOrders) {
             if (isOrderCancelledOrReturned(o.getOrderStatus())) continue;
-            if (isMachineRepurchased(o, ctx)) continue; // Bỏ qua máy đã bán lại cho shop
+            if (isMachineRepurchased(o, ctx)) continue;
             if ("DA_VE_SINH".equalsIgnoreCase(o.getCareStatus()) || "HOAN_TAT_1_LAN".equalsIgnoreCase(o.getCareStatus())) {
                 hasCompleted = true;
                 break;
@@ -369,7 +368,7 @@ public class CrmQueryService {
 
     private boolean isOrderCancelledOrReturned(String status) {
         if (status == null) return false;
-        String s = status.toLowerCase();
+        String s = status.toLowerCase(Locale.ROOT);
         return s.contains("hủy") || s.contains("huỷ") || s.contains("trả") || s.contains("cancel");
     }
 
@@ -399,7 +398,6 @@ public class CrmQueryService {
         List<SalesOrder> allCustomerOrders = orderRepo.findByCrmCustomerIdOrderBySaleDateDescIdDesc(customerId);
         MachineRepurchaseBatchContext batchCtx = buildBatchContext(allCustomerOrders);
 
-        // 1. Phân loại các đơn phụ kiện bán kèm (bắt đầu bằng PK-KEM-) và đơn chính
         List<SalesOrder> accompanyingOrders = new ArrayList<>();
         List<SalesOrder> primaryOrders = new ArrayList<>();
 
@@ -411,13 +409,12 @@ public class CrmQueryService {
             }
         }
 
-        // 2. Ghép từng đơn phụ kiện bán kèm vào đơn bán máy tương ứng
-        Map<Long, OrderItem> accompanyingMap = new HashMap<>(); // key: machine order id -> accompanying OrderItem
+        Map<Long, OrderItem> accompanyingMap = new HashMap<>();
         Set<Long> matchedAccIds = new HashSet<>();
 
         for (SalesOrder acc : accompanyingOrders) {
             String accTxn = acc.getTransactionId();
-            String cycleKey = accTxn.substring("PK-KEM-".length()).trim(); // ví dụ: MP2SATYL::1
+            String cycleKey = accTxn.substring("PK-KEM-".length()).trim();
 
             SalesOrder matchedMachine = null;
             for (SalesOrder m : primaryOrders) {
@@ -443,7 +440,6 @@ public class CrmQueryService {
             }
         }
 
-        // 3. Xây dựng danh sách OrderItem đã ghép
         List<OrderItem> combinedList = new ArrayList<>();
 
         for (SalesOrder o : primaryOrders) {
@@ -452,14 +448,12 @@ public class CrmQueryService {
             combinedList.add(OrderItem.from(o, accItem, voided));
         }
 
-        // Nếu có đơn PK-KEM nào mồ côi (không tìm thấy máy), giữ lại để không mất
         for (SalesOrder acc : accompanyingOrders) {
             if (!matchedAccIds.contains(acc.getId())) {
                 combinedList.add(OrderItem.from(acc, null, false));
             }
         }
 
-        // 4. Lọc theo danh mục nếu người dùng chọn
         List<OrderItem> filteredList;
         if (cat.isEmpty()) {
             filteredList = combinedList;
@@ -468,7 +462,6 @@ public class CrmQueryService {
                     .filter(i -> "MACHINE".equalsIgnoreCase(i.orderCategory()))
                     .toList();
         } else if ("ACCESSORY".equals(cat)) {
-            // Danh mục phụ kiện: hiển thị đơn phụ kiện độc lập hoặc phụ kiện mồ côi
             filteredList = combinedList.stream()
                     .filter(i -> "ACCESSORY".equalsIgnoreCase(i.orderCategory()))
                     .toList();
@@ -480,7 +473,6 @@ public class CrmQueryService {
             filteredList = combinedList;
         }
 
-        // 5. Phân trang
         int totalElements = filteredList.size();
         int pageSize = clampSize(size);
         int totalPages = (int) Math.ceil((double) totalElements / pageSize);
@@ -543,16 +535,13 @@ public class CrmQueryService {
         long expired = customerRepo.countWarrantyExpired();
         long careDue = customerRepo.countCareDue(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, fourteenDaysAgo);
         long appointments = customerRepo.countAppointments();
-        long completed = customerRepo.countCareCompleted(sixMonthsAgo, sevenDaysAgo, fourteenDaysAgo);
+        long completed = customerRepo.countCareCompleted(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, fourteenDaysAgo);
 
         CrmSummary res = new CrmSummary(total, unlinked, expiring, expired, careDue, careDue, appointments, completed);
         summaryCache = new CachedData<>(res, System.currentTimeMillis() + 15_000);
         return res;
     }
 
-    /**
-     * Cập nhật thông tin hồ sơ khách hàng.
-     */
     @Transactional(rollbackFor = Exception.class)
     public CustomerItem updateCustomer(Long id, UpdateCustomerRequest req) {
         CrmCustomer c = customerRepo.findById(id)
@@ -571,10 +560,6 @@ public class CrmQueryService {
         return CustomerItem.from(c);
     }
 
-    /**
-     * Gán thủ công một đơn chưa xác định khách bằng cách bổ sung SĐT (và tên) cho đơn đó.
-     * Việc gắn khách được thực hiện tự động sau khi lưu.
-     */
     @Transactional(rollbackFor = Exception.class)
     public void assignOrder(AssignOrderRequest request) {
         String phone = PhoneNormalizer.normalize(request.phone());
@@ -593,9 +578,6 @@ public class CrmQueryService {
         invalidateCache();
     }
 
-    /**
-     * Lấy danh sách lịch sử tương tác chăm sóc khách hàng, hỗ trợ lọc theo đơn hàng cụ thể.
-     */
     @Transactional(readOnly = true)
     public List<CareNoteItem> getCareNotes(Long customerId) {
         return getCareNotes(customerId, null);
@@ -617,12 +599,6 @@ public class CrmQueryService {
                 .toList();
     }
 
-    /**
-     * Thêm một ghi chú chăm sóc khách hàng mới (bắt buộc gắn liền với 1 đơn hàng cụ thể).
-     * Tự động cập nhật tiến trình chăm sóc cho đơn hàng:
-     * - Hóa đơn Bán Máy (MACHINE): hỗ trợ xác nhận khách đã đến vệ sinh máy định kỳ (tính lại chu kỳ tiếp theo +6 tháng).
-     * - Hóa đơn khác (ACCESSORY, REPAIR): hỗ trợ hoàn tất chăm sóc sau mua 1 lần (không lặp lại chu kỳ định kỳ).
-     */
     @Transactional(rollbackFor = Exception.class)
     public CareNoteItem addCareNote(Long customerId, CreateCareNoteRequest req, String username) {
         CrmCustomer c = customerRepo.findById(customerId)
@@ -636,56 +612,49 @@ public class CrmQueryService {
         SalesOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn với mã " + orderId));
 
-        String txnId = req.orderTransactionId() != null && !req.orderTransactionId().isBlank() 
-                ? req.orderTransactionId().trim() 
+        String txnId = req.orderTransactionId() != null && !req.orderTransactionId().isBlank()
+                ? req.orderTransactionId().trim()
                 : order.getTransactionId();
-        String prodName = req.orderProductName() != null && !req.orderProductName().isBlank() 
-                ? req.orderProductName().trim() 
+        String prodName = req.orderProductName() != null && !req.orderProductName().isBlank()
+                ? req.orderProductName().trim()
                 : order.getProductName();
 
-        String outcome = req.careOutcome() != null && !req.careOutcome().isBlank() 
-                ? req.careOutcome().trim() 
+        String outcome = req.careOutcome() != null && !req.careOutcome().isBlank()
+                ? req.careOutcome().trim()
                 : "GENERAL_NOTE";
 
         LocalDate nextCycle = req.nextCycleDate();
 
-        // 1. Cập nhật tiến trình cho đơn hàng (SalesOrder)
         order.setLastCareDate(LocalDate.now());
         order.setCareCount((order.getCareCount() == null ? 0 : order.getCareCount()) + 1);
 
         boolean isMachine = "MACHINE".equalsIgnoreCase(order.getOrderCategory()) || order.getOrderCategory() == null;
 
         if ("MACHINE_REPURCHASED".equalsIgnoreCase(outcome)) {
-            // Khách hàng đã bán lại máy cho shop -> Hủy hiệu lực bảo hành & chấm dứt lịch nhắc CSKH định kỳ
             order.setCareStatus("DA_BAN_LAI");
             order.setNextCareDate(null);
             nextCycle = null;
         } else if (isMachine) {
             if ("MAINTENANCE_COMPLETED".equalsIgnoreCase(outcome)) {
-                // Khách hàng ĐÃ ĐẾN vệ sinh máy tại shop:
-                // Cập nhật ngày bảo dưỡng vừa thực hiện và tính lại chu kỳ tiếp theo (mặc định +6 tháng từ hôm nay)
                 order.setLastMaintenanceDate(LocalDate.now());
                 LocalDate cycleDate = nextCycle != null ? nextCycle : LocalDate.now().plusMonths(6);
                 order.setNextCareDate(cycleDate);
                 order.setCareStatus("DA_VE_SINH");
                 nextCycle = cycleDate;
             } else if ("APPOINTMENT_SET".equalsIgnoreCase(outcome) || req.followUpDate() != null) {
-                // Đang hẹn lịch bảo dưỡng / kiểm tra máy
                 order.setCareStatus("DANG_HEN");
                 if (req.followUpDate() != null) {
                     order.setNextCareDate(req.followUpDate());
                 }
             } else {
-                // Ghi chú chăm sóc thông thường
                 if (order.getCareStatus() == null) {
                     order.setCareStatus("DANG_CHAM_SOC");
                 }
             }
         } else {
-            // Hóa đơn phụ kiện hoặc sửa chữa: chăm sóc 1 lần duy nhất sau bàn giao
             if ("ONE_TIME_COMPLETED".equalsIgnoreCase(outcome)) {
                 order.setCareStatus("HOAN_TAT_1_LAN");
-                order.setNextCareDate(null); // Không lặp lại nhắc nhở
+                order.setNextCareDate(null);
             } else if ("APPOINTMENT_SET".equalsIgnoreCase(outcome) || req.followUpDate() != null) {
                 order.setCareStatus("DANG_HEN");
                 if (req.followUpDate() != null) {
@@ -700,7 +669,6 @@ public class CrmQueryService {
 
         orderRepo.save(order);
 
-        // 2. Tạo bản ghi nhật ký chăm sóc CrmCareNote
         CrmCareNote note = CrmCareNote.builder()
                 .customer(c)
                 .interactionType(req.interactionType().trim())
@@ -720,11 +688,11 @@ public class CrmQueryService {
     }
 
     /**
-     * Xuất danh sách khách hàng ra file Excel theo bộ lọc hiện tại.
+     * Xuất danh sách khách hàng ra file Excel theo bộ lọc hiện tại (không bị giới hạn ở 100 dòng).
      */
     @Transactional(readOnly = true)
     public org.springframework.core.io.ByteArrayResource generateCustomersExcel(String keyword, String filterType, String sortBy, String direction) {
-        PageResult<CustomerItem> page = searchCustomers(keyword, filterType, sortBy, direction, 0, 3000);
+        PageResult<CustomerItem> page = searchCustomersInternal(keyword, filterType, sortBy, direction, 0, MAX_EXPORT_SIZE, MAX_EXPORT_SIZE);
         List<CustomerItem> list = page.items();
 
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
@@ -960,12 +928,15 @@ public class CrmQueryService {
         if (keyword == null) return "";
         String kw = keyword.trim();
         String digits = kw.replaceAll("[\\s.\\-]", "");
-        // Nếu người dùng nhập toàn số (SĐT) thì bỏ khoảng trắng/dấu chấm để khớp phone_normalized
         return digits.matches("\\d+") ? digits : kw;
     }
 
     private static int clampSize(int size) {
+        return clampSize(size, MAX_PAGE_SIZE);
+    }
+
+    private static int clampSize(int size, int maxLimit) {
         if (size <= 0) return 20;
-        return Math.min(size, MAX_PAGE_SIZE);
+        return Math.min(size, maxLimit);
     }
 }

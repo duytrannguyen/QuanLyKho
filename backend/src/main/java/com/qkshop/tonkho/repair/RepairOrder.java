@@ -43,6 +43,10 @@ public class RepairOrder {
     @Builder.Default
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
+    @Column(name = "status", length = 50)
+    @Builder.Default
+    private String status = "COMPLETED";
+
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
@@ -60,6 +64,9 @@ public class RepairOrder {
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        if (this.status == null || this.status.isBlank()) {
+            this.status = "COMPLETED";
+        }
     }
 
     @PreUpdate

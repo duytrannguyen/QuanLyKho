@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, History, Package, Search, X } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import axiosClient from '../../api/axiosClient';
+import { apiPhuKien } from '../../api';
 
 export default function TrangLichSuBanPhuKien() {
   const [history, setHistory] = useState([]);
@@ -22,15 +22,15 @@ export default function TrangLichSuBanPhuKien() {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const res = await axiosClient.get('/accessory/history');
+      const res = await apiPhuKien.getHistory();
       if (res.success) {
         setHistory(res.data || []);
       } else {
-        showToast('Lỗi tải dữ liệu lịch sử', 'error');
+        showToast('Lỗi tải dữ liệu lịch sử', 'danger');
       }
     } catch (error) {
       console.error(error);
-      showToast('Lỗi kết nối máy chủ', 'error');
+      showToast('Lỗi kết nối máy chủ', 'danger');
     } finally {
       setLoading(false);
     }

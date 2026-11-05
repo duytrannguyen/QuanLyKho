@@ -1,8 +1,6 @@
 package com.qkshop.tonkho.system;
 
 import com.qkshop.tonkho.core.dto.ApiResponse;
-import com.qkshop.tonkho.system.SystemConfig;
-import com.qkshop.tonkho.system.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,14 +25,14 @@ public class SystemController {
 
     /** Lấy tất cả thông tin config (kèm mô tả) */
     @GetMapping("/config/details")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<List<SystemConfig>>> getConfigDetails() {
         return ResponseEntity.ok(ApiResponse.ok(systemConfigService.listAll()));
     }
 
     /** Cập nhật 1 cấu hình */
     @PutMapping("/config/{key}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<SystemConfig>> updateConfig(
             @PathVariable String key,
             @RequestBody Map<String, String> payload) {
@@ -44,9 +42,9 @@ public class SystemController {
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thành công", updated));
     }
 
-    /** Chuẩn hóa và làm sạch dữ liệu danh mục & kho máy (Chỉ Admin) */
+    /** Chuẩn hóa và làm sạch dữ liệu danh mục & kho máy (Chỉ Admin hoặc quyền quản trị hệ thống) */
     @PostMapping("/maintenance/cleanup")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<String>> cleanUpDirtyData() {
         String result = dataMaintenanceService.cleanUpDirtyData();
         return ResponseEntity.ok(ApiResponse.okWithMessage(result, result));

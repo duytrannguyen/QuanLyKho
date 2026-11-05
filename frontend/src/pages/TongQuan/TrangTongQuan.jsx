@@ -4,14 +4,19 @@ import {
   Eye, ShoppingBag, ClipboardCheck, AlertTriangle,
   PackagePlus, Search, RefreshCw, ArrowRight
 } from 'lucide-react';
-import { dashboardApi } from '../../api';
+import { dashboardApi, syncApi } from '../../api';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatEventType } from '../../utils/dinh_dang';
 
 export default function TrangTongQuan() {
+  const { showToast } = useToast();
   const [summary, setSummary] = useState(null);
   const [priorities, setPriorities] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [syncSettings, setSyncSettings] = useState(null);
+  const [latestSync, setLatestSync] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -20,19 +25,37 @@ export default function TrangTongQuan() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [sumRes, priRes, actRes] = await Promise.allSettled([
+      const [sumRes, priRes, actRes, setRes, latRes] = await Promise.allSettled([
         dashboardApi.getSummary(),
         dashboardApi.getPriorities(),
         dashboardApi.getRecentActivity(),
+        syncApi.getSyncSettings(),
+        syncApi.getLatestStatus(),
       ]);
 
       if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
       if (priRes.status === 'fulfilled') setPriorities(priRes.value.data);
       if (actRes.status === 'fulfilled') setActivities(actRes.value.data || []);
+      if (setRes.status === 'fulfilled') setSyncSettings(setRes.value.data);
+      if (latRes.status === 'fulfilled') setLatestSync(latRes.value.data);
     } catch (err) {
       console.error('TongQuan load error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      await syncApi.run('MANUAL');
+      showToast('Đã thực hiện đồng bộ Google Sheet thành công!', 'success');
+      await loadData();
+    } catch (err) {
+      showToast(err.userMessage || err.message || 'Lỗi khi đồng bộ Google Sheet', 'danger');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -68,10 +91,26 @@ export default function TrangTongQuan() {
 
       {/* Health Status */}
       <div className="row g-3 mb-4">
-        <HealthItem dotClass="bg-success" label="DataSale" value="Đã kết nối đọc" />
-        <HealthItem dotClass="bg-warning" label="Đồng bộ bán hàng" value="Thủ công có kiểm soát" />
-        <HealthItem dotClass="bg-success" label="Lần đồng bộ" value={new Date().toLocaleString('vi-VN')} />
-        <HealthItem dotClass="bg-secondary" label="Tự động" value="Chưa kích hoạt" />
+        <HealthItem
+          dotClass={syncSettings?.enabled ? 'bg-success' : 'bg-secondary'}
+          label="Google Sheet"
+          value={syncSettings?.enabled ? 'Đã kết nối' : 'Đang tắt kết nối'}
+        />
+        <HealthItem
+          dotClass="bg-warning"
+          label="Đồng bộ bán hàng"
+          value={syncSettings?.cronEnabled ? 'Tự động & Thủ công' : 'Thủ công có kiểm soát'}
+        />
+        <HealthItem
+          dotClass="bg-success"
+          label="Lần đồng bộ gần nhất"
+          value={latestSync?.finishedAt ? new Date(latestSync.finishedAt).toLocaleString('vi-VN') : 'Chưa có lượt chạy'}
+        />
+        <HealthItem
+          dotClass={syncSettings?.cronEnabled ? 'bg-success' : 'bg-secondary'}
+          label="Lịch tự động"
+          value={syncSettings?.cronEnabled ? 'Đang kích hoạt' : 'Chưa kích hoạt'}
+        />
       </div>
 
       {/* Priority Tasks + Quick Actions */}
@@ -85,7 +124,7 @@ export default function TrangTongQuan() {
                 <span className="badge rounded-circle bg-danger d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P0</span>
                 <span className="fw-medium text-dark">{prio.p0_data_errors} lỗi dữ liệu đang mở</span>
               </div>
-              <button className="btn btn-sm btn-outline-primary">Xử lý</button>
+              <Link to="/doi-soat" className="btn btn-sm btn-outline-primary">Xử lý</Link>
             </div>
             
             <div className="d-flex align-items-center justify-content-between border-bottom pb-3 mb-3">
@@ -101,7 +140,7 @@ export default function TrangTongQuan() {
                 <span className="badge rounded-circle bg-info text-dark d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P2</span>
                 <span className="fw-medium text-dark">{prio.p2_without_price} máy chưa có giá bán</span>
               </div>
-              <button className="btn btn-sm btn-outline-primary">Xử lý</button>
+              <Link to="/tra-cuu" className="btn btn-sm btn-outline-primary">Xử lý</Link>
             </div>
           </div>
         </div>
@@ -129,9 +168,13 @@ export default function TrangTongQuan() {
                 </Link>
               </div>
               <div className="col-6">
-                <button className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2" onClick={loadData}>
-                  <RefreshCw size={28} className="text-primary" />
-                  <span className="fw-medium text-dark">Đồng bộ ngay</span>
+                <button
+                  className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2"
+                  onClick={handleManualSync}
+                  disabled={syncing}
+                >
+                  <RefreshCw size={28} className={`text-primary ${syncing ? 'spin-animation' : ''}`} />
+                  <span className="fw-medium text-dark">{syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</span>
                 </button>
               </div>
             </div>

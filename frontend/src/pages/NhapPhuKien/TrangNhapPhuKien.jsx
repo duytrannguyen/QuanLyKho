@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { apiNhapKho } from '../../api';
-import axiosClient from '../../api/axiosClient';
+import { useNavigate } from 'react-router-dom';
+import { apiNhapKho, apiPhuKien } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatCurrency, parseCurrency } from '../../utils/dinh_dang';
-import { PackagePlus, RefreshCcw, Search } from 'lucide-react';
+import { PackagePlus, RefreshCcw, Search, ArrowLeft } from 'lucide-react';
 
 // Giả lập biến đếm bên ngoài component để giữ giá trị (sau này Back-end sẽ cấp)
 let skuCounters = {
@@ -21,6 +21,7 @@ const removeAccents = (str) => {
 
 export default function TrangNhapPhuKien() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [importType, setImportType] = useState('NEW'); // 'NEW' hoặc 'EXISTING'
   const [existingAccessories, setExistingAccessories] = useState([]);
@@ -41,16 +42,16 @@ export default function TrangNhapPhuKien() {
     // Tải danh sách phụ kiện có sẵn để nhập thêm
     const fetchAccessories = async () => {
       try {
-        const res = await axiosClient.get('/accessory/all');
+        const res = await apiPhuKien.getAll();
         if (res.success) {
-          setExistingAccessories(res.data);
+          setExistingAccessories(res.data || []);
           
           // Cập nhật lại bộ đếm SKU dựa trên dữ liệu thực tế từ DB
           const dbCounters = {
             CHUOT: 0, BANPHIM: 0, BALO: 0, SAC: 0, TAINGHE: 0, KHAC: 0
           };
           
-          res.data.forEach(acc => {
+          (res.data || []).forEach(acc => {
             if (acc.sku && acc.sku.startsWith('PK-')) {
               const parts = acc.sku.split('-');
               if (parts.length === 3) {
@@ -104,10 +105,20 @@ export default function TrangNhapPhuKien() {
     return `PK-${code}-${suffix}`;
   };
 
-  const handleCategoryChange = (val) => {
+  const handleCategoryChange = async (val) => {
     const code = getCategoryCode(val);
-    const newSku = generateSKU(code, false);
-    setForm(prev => ({ ...prev, category: val, sku: newSku }));
+    const fallbackSku = generateSKU(code, false);
+    setForm(prev => ({ ...prev, category: val, sku: fallbackSku }));
+    if (code) {
+      try {
+        const res = await apiPhuKien.getNextSku(code);
+        if (res?.data) {
+          setForm(prev => ({ ...prev, sku: res.data }));
+        }
+      } catch {
+        // Giữ fallbackSku nếu offline
+      }
+    }
   };
 
   const handleChange = (field, value) => {
@@ -196,9 +207,18 @@ export default function TrangNhapPhuKien() {
 
   return (
     <div className="container-fluid p-0">
-      <div className="d-flex align-items-center mb-4">
-        <PackagePlus className="text-primary me-2" size={28} />
-        <h4 className="fw-bold mb-0 text-dark">Nhập Phụ Kiện</h4>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="d-flex align-items-center">
+          <PackagePlus className="text-primary me-2" size={28} />
+          <h4 className="fw-bold mb-0 text-dark">Nhập Phụ Kiện</h4>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline-secondary rounded-pill px-3 d-flex align-items-center gap-2"
+          onClick={() => navigate('/ton-kho-phu-kien')}
+        >
+          <ArrowLeft size={16} /> Về Tồn Kho Phụ Kiện
+        </button>
       </div>
 
       <div className="row">

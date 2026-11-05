@@ -22,6 +22,7 @@ const TrangNhatKyHoatDong = React.lazy(() => import('./pages/NhatKyHoatDong/Tran
 const TrangCaiDatHeThong = React.lazy(() => import('./pages/CaiDatHeThong/TrangCaiDatHeThong'));
 const TrangQuanLyMaMay = React.lazy(() => import('./pages/QuanLyMaMay/TrangQuanLyMaMay'));
 const TrangBangGia = React.lazy(() => import('./pages/BangGia/TrangBangGia'));
+const TrangDonShip = React.lazy(() => import('./pages/DonShip/TrangDonShip'));
 const TrangKiemTraBaoHanh = React.lazy(() => import('./pages/KiemTraBaoHanh/TrangKiemTraBaoHanh'));
 const TrangNhapPhuKien = React.lazy(() => import('./pages/NhapPhuKien/TrangNhapPhuKien'));
 const TrangTonKhoPhuKien = React.lazy(() => import('./pages/TonKhoPhuKien/TrangTonKhoPhuKien'));
@@ -107,6 +108,7 @@ function AppRoutes() {
           <Route path="tra-cuu" element={<ProtectedRoute permission="SEARCH_INVENTORY"><TrangTimKiemTonKho /></ProtectedRoute>} />
           <Route path="quan-ly-ma-may" element={<ProtectedRoute permission="MANAGE_MACHINE_CODES"><TrangQuanLyMaMay /></ProtectedRoute>} />
           <Route path="ban-may" element={<ProtectedRoute permission="SALE_MACHINE"><TrangBanHang /></ProtectedRoute>} />
+          <Route path="don-ship" element={<ProtectedRoute permission="SALE_MACHINE"><TrangDonShip /></ProtectedRoute>} />
           <Route path="ban-phu-kien" element={<ProtectedRoute permission="SALE_ACCESSORY"><TrangBanPhuKien /></ProtectedRoute>} />
           <Route path="lich-su-ban-phu-kien" element={<ProtectedRoute permission="ACCESSORY_HISTORY"><TrangLichSuBanPhuKien /></ProtectedRoute>} />
           <Route path="dich-vu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangSuaChua /></ProtectedRoute>} />

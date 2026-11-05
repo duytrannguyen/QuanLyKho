@@ -180,13 +180,6 @@ export default function TrangCaiDatHeThong() {
                 <Users size={20} />
                 Người dùng & Phân quyền
               </button>
-              <button 
-                className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'datasale' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
-                onClick={() => setActiveTab('datasale')}
-              >
-                <Database size={20} />
-                Tích hợp DataSale
-              </button>
             </div>
           </div>
         </div>
@@ -485,50 +478,6 @@ export default function TrangCaiDatHeThong() {
                     )}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* ================= TAB DATASALE ================= */}
-            {activeTab === 'datasale' && (
-              <div>
-                <h4 className="fw-bold text-dark border-bottom pb-3 mb-4">Tích hợp DataSale</h4>
-                
-                <div className="mb-4">
-                  <h6 className="fw-bold text-dark mb-1">DataSale API Endpoint</h6>
-                  <p className="small text-secondary mb-2">Đường dẫn API của hệ thống DataSale để đối soát tồn kho.</p>
-                  <input type="text" className="form-control" 
-                         value={config.datasale_endpoint || ''}
-                         onChange={e => handleConfigChange('datasale_endpoint', e.target.value)} />
-                </div>
-
-                <div className="mb-4">
-                  <h6 className="fw-bold text-dark mb-1">API Key</h6>
-                  <p className="small text-secondary mb-2">Khóa bảo mật để kết nối. Không chia sẻ khóa này.</p>
-                  <input type="password" className="form-control" 
-                         value={config.datasale_apikey || ''}
-                         onChange={e => handleConfigChange('datasale_apikey', e.target.value)} />
-                </div>
-
-                <div className="mb-4">
-                  <h6 className="fw-bold text-dark mb-1">Lịch đồng bộ tự động</h6>
-                  <p className="small text-secondary mb-2">Cấu hình thời gian chạy đối soát định kỳ tự động.</p>
-                  <select className="form-select w-50" 
-                          value={config.datasale_sync_schedule || 'none'}
-                          onChange={e => handleConfigChange('datasale_sync_schedule', e.target.value)}>
-                    <option value="none">Tắt tự động</option>
-                    <option value="hourly">Mỗi giờ</option>
-                    <option value="daily">Mỗi ngày lúc 00:00</option>
-                    <option value="weekly">Mỗi tuần</option>
-                  </select>
-                </div>
-
-                <div className="d-flex gap-3">
-                  <button className="btn btn-primary" disabled={saving}
-                          onClick={() => handleSaveConfig(['datasale_endpoint', 'datasale_apikey', 'datasale_sync_schedule'])}>
-                    {saving ? 'Đang lưu...' : 'Cập nhật cấu hình'}
-                  </button>
-                  <button className="btn btn-outline-secondary" onClick={() => showToast('Tính năng đang phát triển', 'info')}>Kiểm tra kết nối</button>
-                </div>
               </div>
             )}
 

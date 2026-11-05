@@ -1,6 +1,9 @@
 package com.qkshop.tonkho.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qkshop.tonkho.inspection.InspectionRequestRepository;
+import com.qkshop.tonkho.inspection.InspectionRequestStatus;
+import com.qkshop.tonkho.inspection.dto.InspectionRequest;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.log.EventLog;
@@ -18,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
@@ -34,6 +38,7 @@ public class StateTransitionService {
     private final SerialRegistryRepository serialRegistryRepo;
     private final ClosedCycleRepository closedCycleRepo;
     private final EventLogRepository eventLogRepo;
+    private final InspectionRequestRepository inspectionRequestRepo;
     private final ObjectMapper objectMapper;
 
     /**
@@ -42,12 +47,13 @@ public class StateTransitionService {
     @Transactional
     public ActiveInventory transitionToReady(String cycleId, String actor, String notes) {
         ActiveInventory inventory = getActiveInventory(cycleId);
-        
+
         if (inventory.getState() != CycleState.NEEDS_INSPECTION) {
             throw new IllegalStateException("Chỉ có thể chuyển sang READY từ trạng thái NEEDS_INSPECTION");
         }
 
         inventory.setState(CycleState.READY);
+        inventory.setReadyAt(LocalDateTime.now());
         if (inventory.getLastPausedAt() != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(inventory.getLastPausedAt(), LocalDateTime.now());
             inventory.setPausedDays((inventory.getPausedDays() != null ? inventory.getPausedDays() : 0) + days);
@@ -71,7 +77,25 @@ public class StateTransitionService {
     @Transactional
     public ClosedCycle transitionToClosed(String cycleId, CloseType closeType, String externalRefId, String actor, String notes) {
         ActiveInventory inventory = getActiveInventory(cycleId);
-        
+
+        // Đóng hoặc xóa các yêu cầu kiểm tra đang mở của chu kỳ này để không còn phiếu mồ côi
+        if (inspectionRequestRepo != null) {
+            List<InspectionRequest> requests = inspectionRequestRepo.findByCycleId(cycleId);
+            if (requests != null && !requests.isEmpty()) {
+                for (InspectionRequest req : requests) {
+                    if (req.getStatus() == InspectionRequestStatus.OPEN
+                            || req.getStatus() == InspectionRequestStatus.IN_PROGRESS
+                            || req.getStatus() == InspectionRequestStatus.RECHECK_REQUESTED) {
+                        req.setStatus(closeType == CloseType.SALE
+                                ? InspectionRequestStatus.PASSED
+                                : InspectionRequestStatus.REJECTED_RETURNED);
+                        req.setCompletedAt(LocalDateTime.now());
+                        inspectionRequestRepo.save(req);
+                    }
+                }
+            }
+        }
+
         // Tạo EventLog trước để lấy eventId
         EventLog event = EventLog.builder()
                 .eventId("EVT-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8))
@@ -85,7 +109,7 @@ public class StateTransitionService {
                 .actor(actor)
                 .notes(notes)
                 .build();
-                
+
         // Tính chốt pausedDays nếu đang paused
         Long finalPausedDays = inventory.getPausedDays() != null ? inventory.getPausedDays() : 0L;
         if (inventory.getState() == CycleState.NEEDS_INSPECTION && inventory.getLastPausedAt() != null) {
@@ -109,7 +133,7 @@ public class StateTransitionService {
                 .closeReason(notes)
                 .pausedDays(finalPausedDays)
                 .build();
-        
+
         closedCycle = closedCycleRepo.save(closedCycle);
 
         // Xóa khỏi ActiveInventory

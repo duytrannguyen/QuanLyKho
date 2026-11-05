@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.*;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -98,7 +97,6 @@ public class PartService {
         Part part;
         boolean isNew = false;
 
-        // Nếu có truyền SKU, kiểm tra xem đã có trong hệ thống chưa
         if (sku != null && !sku.trim().isEmpty()) {
             String cleanSku = sku.trim();
             Optional<Part> existingOpt = partRepository.findBySku(cleanSku);
@@ -155,7 +153,6 @@ public class PartService {
 
         Part saved = partRepository.save(part);
 
-        // Ghi lại lịch sử nhập kho linh kiện
         PartHistory history = PartHistory.builder()
                 .sku(saved.getSku())
                 .name(saved.getName())
@@ -206,7 +203,6 @@ public class PartService {
             part.setNote((String) payload.get("note"));
         }
 
-        // Nếu cập nhật số lượng trực tiếp
         if (payload.containsKey("quantity")) {
             int newQty = parseInteger(payload.get("quantity"), part.getQuantity());
             if (newQty != part.getQuantity()) {
@@ -248,7 +244,7 @@ public class PartService {
 
         Part part = partOpt.get();
         if (part.getQuantity() < quantity) {
-            throw new IllegalStateException("Linh kiện " + part.getName() + " (SKU: " + part.getSku() 
+            throw new IllegalStateException("Linh kiện " + part.getName() + " (SKU: " + part.getSku()
                     + ") không đủ số lượng trong kho (Còn: " + part.getQuantity() + ", Yêu cầu: " + quantity + ")");
         }
 
@@ -289,15 +285,15 @@ public class PartService {
 
         Part part = partOpt.get();
         if (part.getQuantity() < quantity) {
-            throw new IllegalStateException("Linh kiện nâng cấp " + part.getName() + " (SKU: " + part.getSku() 
+            throw new IllegalStateException("Linh kiện nâng cấp " + part.getName() + " (SKU: " + part.getSku()
                     + ") không đủ số lượng trong kho (Còn: " + part.getQuantity() + ", Yêu cầu: " + quantity + ")");
         }
 
         part.setQuantity(part.getQuantity() - quantity);
         partRepository.save(part);
 
-        String warrantyNote = (machineWarranty != null && !machineWarranty.isBlank()) 
-                ? " (Bảo hành theo máy: " + machineWarranty + ")" 
+        String warrantyNote = (machineWarranty != null && !machineWarranty.isBlank())
+                ? " (Bảo hành theo máy: " + machineWarranty + ")"
                 : "";
 
         PartHistory history = PartHistory.builder()
@@ -325,10 +321,21 @@ public class PartService {
 
     public String generateNextSku(String category) {
         String catCode = normalizeCategoryCode(category);
-        long count = partRepository.findAll().stream()
-                .filter(p -> p.getSku() != null && p.getSku().startsWith("LK-" + catCode + "-"))
-                .count();
-        return String.format("LK-%s-%04d", catCode, count + 1);
+        String prefix = "LK-" + catCode + "-";
+        int maxSeq = partRepository.findAll().stream()
+                .map(Part::getSku)
+                .filter(s -> s != null && s.toUpperCase().startsWith(prefix))
+                .mapToInt(s -> {
+                    try {
+                        String numPart = s.substring(prefix.length()).replaceAll("[^0-9]", "");
+                        return numPart.isEmpty() ? 0 : Integer.parseInt(numPart);
+                    } catch (Exception e) {
+                        return 0;
+                    }
+                })
+                .max()
+                .orElse(0);
+        return String.format("LK-%s-%04d", catCode, maxSeq + 1);
     }
 
     private String normalizeCategoryCode(String category) {

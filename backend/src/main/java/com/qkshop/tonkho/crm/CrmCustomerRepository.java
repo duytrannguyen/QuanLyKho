@@ -70,29 +70,36 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                   AND (
                       ( (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
                         AND (
-                            (s.nextCareDate IS NOT NULL AND s.nextCareDate <= CURRENT_DATE)
+                            (s.nextCareDate IS NOT NULL AND s.nextCareDate <= CURRENT_DATE AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DANG_HEN', 'DA_BAN_LAI', 'VOIDED')))
                             OR
                             (s.nextCareDate IS NULL 
-                             AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED'))
+                             AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                              AND (
-                                 ( (LOWER(s.segment) LIKE '%văn phòng%' OR LOWER(s.segment) LIKE '%van phong%') AND s.saleDate <= :twelveMonthsAgo )
+                                 ( (LOWER(s.segment) LIKE '%văn phòng%' OR LOWER(s.segment) LIKE '%van phong%' OR LOWER(s.segment) LIKE '%office%') AND s.saleDate <= :twelveMonthsAgo )
                                  OR
-                                 ( (s.segment IS NULL OR (LOWER(s.segment) NOT LIKE '%văn phòng%' AND LOWER(s.segment) NOT LIKE '%van phong%')) AND s.saleDate <= :sixMonthsAgo )
+                                 ( (s.segment IS NULL OR (LOWER(s.segment) NOT LIKE '%văn phòng%' AND LOWER(s.segment) NOT LIKE '%van phong%' AND LOWER(s.segment) NOT LIKE '%office%')) AND s.saleDate <= :sixMonthsAgo )
                              )
                             )
                         )
                       )
                       OR
                       ( (s.orderCategory IN ('ACCESSORY', 'REPAIR'))
-                        AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED'))
+                        AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                         AND s.saleDate <= :sevenDaysAgo
                         AND s.saleDate >= :fourteenDaysAgo
                       )
                   )
-                  AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED'))
+                  AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                   AND LOWER(s.orderStatus) NOT LIKE '%hủy%'
                   AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
                   AND LOWER(s.orderStatus) NOT LIKE '%trả%'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s_hen 
+                WHERE s_hen.crmCustomerId = c.id 
+                  AND s_hen.careStatus = 'DANG_HEN'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%hủy%'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%huỷ%'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%trả%'
             ))
             OR (:filterType = 'APPOINTMENT_SET' AND EXISTS (
                 SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s 
@@ -111,6 +118,13 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                   AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
                   AND LOWER(s.orderStatus) NOT LIKE '%trả%'
             ) AND NOT EXISTS (
+                SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s_hen 
+                WHERE s_hen.crmCustomerId = c.id 
+                  AND s_hen.careStatus = 'DANG_HEN'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%hủy%'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%huỷ%'
+                  AND LOWER(s_hen.orderStatus) NOT LIKE '%trả%'
+            ) AND NOT EXISTS (
                 SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s2 
                 WHERE s2.crmCustomerId = c.id 
                   AND (
@@ -119,14 +133,18 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                             (s2.nextCareDate IS NOT NULL AND s2.nextCareDate <= CURRENT_DATE)
                             OR
                             (s2.nextCareDate IS NULL 
-                             AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED'))
-                             AND (s2.saleDate <= :sixMonthsAgo)
+                             AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
+                             AND (
+                                 ( (LOWER(s2.segment) LIKE '%văn phòng%' OR LOWER(s2.segment) LIKE '%van phong%' OR LOWER(s2.segment) LIKE '%office%') AND s2.saleDate <= :twelveMonthsAgo )
+                                 OR
+                                 ( (s2.segment IS NULL OR (LOWER(s2.segment) NOT LIKE '%văn phòng%' AND LOWER(s2.segment) NOT LIKE '%van phong%' AND LOWER(s2.segment) NOT LIKE '%office%')) AND s2.saleDate <= :sixMonthsAgo )
+                             )
                             )
                         )
                       )
                       OR
                       ( (s2.orderCategory IN ('ACCESSORY', 'REPAIR'))
-                        AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED'))
+                        AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                         AND s2.saleDate <= :sevenDaysAgo AND s2.saleDate >= :fourteenDaysAgo
                       )
                   )
@@ -188,29 +206,37 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
               AND (
                   ( (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
                     AND (
-                        (s.nextCareDate IS NOT NULL AND s.nextCareDate <= CURRENT_DATE)
+                        (s.nextCareDate IS NOT NULL AND s.nextCareDate <= CURRENT_DATE AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DANG_HEN', 'DA_BAN_LAI', 'VOIDED')))
                         OR
                         (s.nextCareDate IS NULL 
-                         AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED'))
+                         AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                          AND (
-                             ( (LOWER(s.segment) LIKE '%văn phòng%' OR LOWER(s.segment) LIKE '%van phong%') AND s.saleDate <= :twelveMonthsAgo )
+                             ( (LOWER(s.segment) LIKE '%văn phòng%' OR LOWER(s.segment) LIKE '%van phong%' OR LOWER(s.segment) LIKE '%office%') AND s.saleDate <= :twelveMonthsAgo )
                              OR
-                             ( (s.segment IS NULL OR (LOWER(s.segment) NOT LIKE '%văn phòng%' AND LOWER(s.segment) NOT LIKE '%van phong%')) AND s.saleDate <= :sixMonthsAgo )
+                             ( (s.segment IS NULL OR (LOWER(s.segment) NOT LIKE '%văn phòng%' AND LOWER(s.segment) NOT LIKE '%van phong%' AND LOWER(s.segment) NOT LIKE '%office%')) AND s.saleDate <= :sixMonthsAgo )
                          )
                         )
                     )
                   )
                   OR
                   ( (s.orderCategory IN ('ACCESSORY', 'REPAIR'))
-                    AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED'))
+                    AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                     AND s.saleDate <= :sevenDaysAgo
                     AND s.saleDate >= :fourteenDaysAgo
                   )
               )
-              AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED'))
+              AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
               AND LOWER(s.orderStatus) NOT LIKE '%hủy%'
               AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
               AND LOWER(s.orderStatus) NOT LIKE '%trả%'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s_hen 
+            WHERE s_hen.crmCustomerId = c.id 
+              AND s_hen.careStatus = 'DANG_HEN'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%hủy%'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%huỷ%'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%trả%'
         )
         """)
     long countCareDue(
@@ -243,6 +269,13 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
               AND LOWER(s.orderStatus) NOT LIKE '%huỷ%'
               AND LOWER(s.orderStatus) NOT LIKE '%trả%'
         ) AND NOT EXISTS (
+            SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s_hen 
+            WHERE s_hen.crmCustomerId = c.id 
+              AND s_hen.careStatus = 'DANG_HEN'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%hủy%'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%huỷ%'
+              AND LOWER(s_hen.orderStatus) NOT LIKE '%trả%'
+        ) AND NOT EXISTS (
             SELECT 1 FROM com.qkshop.tonkho.salesreport.SalesOrder s2 
             WHERE s2.crmCustomerId = c.id 
               AND (
@@ -251,14 +284,18 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                         (s2.nextCareDate IS NOT NULL AND s2.nextCareDate <= CURRENT_DATE)
                         OR
                         (s2.nextCareDate IS NULL 
-                         AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED'))
-                         AND (s2.saleDate <= :sixMonthsAgo)
+                         AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_VE_SINH', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
+                         AND (
+                             ( (LOWER(s2.segment) LIKE '%văn phòng%' OR LOWER(s2.segment) LIKE '%van phong%' OR LOWER(s2.segment) LIKE '%office%') AND s2.saleDate <= :twelveMonthsAgo )
+                             OR
+                             ( (s2.segment IS NULL OR (LOWER(s2.segment) NOT LIKE '%văn phòng%' AND LOWER(s2.segment) NOT LIKE '%van phong%' AND LOWER(s2.segment) NOT LIKE '%office%')) AND s2.saleDate <= :sixMonthsAgo )
+                         )
                         )
                     )
                   )
                   OR
                   ( (s2.orderCategory IN ('ACCESSORY', 'REPAIR'))
-                    AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED'))
+                    AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                     AND s2.saleDate <= :sevenDaysAgo AND s2.saleDate >= :fourteenDaysAgo
                   )
               )
@@ -270,6 +307,7 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
         """)
     long countCareCompleted(
             @Param("sixMonthsAgo") LocalDateTime sixMonthsAgo,
+            @Param("twelveMonthsAgo") LocalDateTime twelveMonthsAgo,
             @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo,
             @Param("fourteenDaysAgo") LocalDateTime fourteenDaysAgo);
 }

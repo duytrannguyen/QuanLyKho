@@ -1,5 +1,6 @@
 package com.qkshop.tonkho.repair;
 
+import com.qkshop.tonkho.salesreport.SourceNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -8,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +24,7 @@ public class RepairOrderService {
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
     private final com.qkshop.tonkho.part.PartService partService;
     private final com.qkshop.tonkho.part.PartRepository partRepository;
+    private final com.qkshop.tonkho.part.PartHistoryRepository partHistoryRepository;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     public List<RepairOrder> getAllOrders(String keyword) {
@@ -83,6 +84,7 @@ public class RepairOrderService {
                 .createdDate(createdDate)
                 .technicianName(payload.get("technicianName") != null ? payload.get("technicianName").toString().trim() : null)
                 .note(payload.get("note") != null ? payload.get("note").toString().trim() : null)
+                .status("COMPLETED")
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
@@ -120,34 +122,7 @@ public class RepairOrderService {
 
             String sku = (String) itemReq.get("sku");
             if (sku != null && !sku.trim().isEmpty()) {
-                String cleanSku = sku.trim();
-                boolean deductedInParts = partService.deductForRepair(
-                        cleanSku, quantity, price, orderCode, customerName, customerPhone, deviceModel, order.getTechnicianName());
-                if (!deductedInParts) {
-                    var accOpt = accessoryRepository.findBySku(cleanSku);
-                    if (accOpt.isPresent()) {
-                        var acc = accOpt.get();
-                        if (acc.getQuantity() < quantity) {
-                            throw new IllegalStateException("Linh kiện/phụ kiện " + acc.getName() + " (SKU: " + cleanSku 
-                                    + ") không đủ số lượng tồn kho (Còn: " + acc.getQuantity() + ", Yêu cầu: " + quantity + ")");
-                        }
-                        acc.setQuantity(acc.getQuantity() - quantity);
-                        accessoryRepository.save(acc);
-
-                        com.qkshop.tonkho.accessory.AccessoryHistory hist = new com.qkshop.tonkho.accessory.AccessoryHistory();
-                        hist.setSku(cleanSku);
-                        hist.setName(acc.getName());
-                        hist.setQuantity(quantity);
-                        hist.setPrice(price);
-                        hist.setAction("REPAIR_USE");
-                        hist.setNote("Sử dụng cho đơn sửa chữa: " + orderCode + " (" + deviceModel + ")");
-                        hist.setCustomerName(customerName);
-                        hist.setCustomerPhone(customerPhone);
-                        accessoryHistoryRepository.save(hist);
-                    } else {
-                        log.warn("Không tìm thấy linh kiện/phụ kiện với SKU {} khi tạo đơn sửa chữa", cleanSku);
-                    }
-                }
+                deductItemStock(sku.trim(), quantity, price, orderCode, customerName.trim(), customerPhone.trim(), deviceModel.trim(), order.getTechnicianName());
             }
 
             RepairOrderItem item = RepairOrderItem.builder()
@@ -177,6 +152,7 @@ public class RepairOrderService {
     @Transactional(rollbackFor = Exception.class)
     public RepairOrder updateRepairOrder(Long id, Map<String, Object> payload) {
         RepairOrder order = getOrderById(id);
+        boolean wasCancelled = "CANCELLED".equalsIgnoreCase(order.getStatus());
 
         String customerName = (String) payload.get("customerName");
         String customerPhone = (String) payload.get("customerPhone");
@@ -213,6 +189,25 @@ public class RepairOrderService {
 
         List<Map<String, Object>> itemsReq = (List<Map<String, Object>>) payload.get("services");
         if (itemsReq != null) {
+            // 1. Hoàn kho các linh kiện / phụ kiện của danh sách cũ trước khi xóa (nếu đơn chưa bị hủy)
+            if (!wasCancelled && order.getItems() != null) {
+                for (RepairOrderItem oldItem : order.getItems()) {
+                    if (oldItem.getSku() != null && !oldItem.getSku().trim().isEmpty()) {
+                        int oldQty = oldItem.getQuantity() != null ? oldItem.getQuantity() : 1;
+                        restoreItemStock(
+                                oldItem.getSku().trim(),
+                                oldQty,
+                                oldItem.getPrice(),
+                                order.getOrderCode(),
+                                order.getCustomerName(),
+                                order.getCustomerPhone(),
+                                "Hoàn kho do cập nhật phiếu sửa chữa " + order.getOrderCode(),
+                                order.getTechnicianName()
+                        );
+                    }
+                }
+            }
+
             order.getItems().clear();
             BigDecimal totalAmount = BigDecimal.ZERO;
             LocalDate baseDate = order.getCreatedDate().toLocalDate();
@@ -247,6 +242,18 @@ public class RepairOrderService {
                 }
 
                 String itemSku = (String) itemReq.get("sku");
+                if (!wasCancelled && itemSku != null && !itemSku.trim().isEmpty()) {
+                    deductItemStock(
+                            itemSku.trim(),
+                            quantity,
+                            price,
+                            order.getOrderCode(),
+                            order.getCustomerName(),
+                            order.getCustomerPhone(),
+                            order.getDeviceModel(),
+                            order.getTechnicianName()
+                    );
+                }
 
                 RepairOrderItem item = RepairOrderItem.builder()
                         .serviceName(serviceName.trim())
@@ -270,6 +277,141 @@ public class RepairOrderService {
         return saved;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public RepairOrder updateOrderStatus(Long id, String newStatus) {
+        if (newStatus == null || newStatus.trim().isEmpty()) {
+            throw new IllegalArgumentException("Trạng thái đơn sửa chữa không được để trống");
+        }
+        RepairOrder order = getOrderById(id);
+        String cleanNewStatus = newStatus.trim().toUpperCase();
+        String currentStatus = order.getStatus() != null ? order.getStatus().trim().toUpperCase() : "COMPLETED";
+
+        if (cleanNewStatus.equals(currentStatus)) {
+            return order;
+        }
+
+        if ("CANCELLED".equals(cleanNewStatus) && !"CANCELLED".equals(currentStatus)) {
+            // Chuyển sang CANCELLED -> hoàn kho toàn bộ linh kiện/phụ kiện
+            if (order.getItems() != null) {
+                for (RepairOrderItem item : order.getItems()) {
+                    if (item.getSku() != null && !item.getSku().trim().isEmpty()) {
+                        int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+                        restoreItemStock(
+                                item.getSku().trim(),
+                                qty,
+                                item.getPrice(),
+                                order.getOrderCode(),
+                                order.getCustomerName(),
+                                order.getCustomerPhone(),
+                                "Hoàn kho do hủy phiếu sửa chữa " + order.getOrderCode(),
+                                order.getTechnicianName()
+                        );
+                    }
+                }
+            }
+        } else if (!"CANCELLED".equals(cleanNewStatus) && "CANCELLED".equals(currentStatus)) {
+            // Khôi phục từ CANCELLED sang trạng thái hoạt động/hoàn tất -> trừ kho lại
+            if (order.getItems() != null) {
+                for (RepairOrderItem item : order.getItems()) {
+                    if (item.getSku() != null && !item.getSku().trim().isEmpty()) {
+                        int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+                        deductItemStock(
+                                item.getSku().trim(),
+                                qty,
+                                item.getPrice(),
+                                order.getOrderCode(),
+                                order.getCustomerName(),
+                                order.getCustomerPhone(),
+                                order.getDeviceModel(),
+                                order.getTechnicianName()
+                        );
+                    }
+                }
+            }
+        }
+
+        order.setStatus(cleanNewStatus);
+        RepairOrder saved = repairOrderRepository.save(order);
+        syncRepairOrderToSalesOrder(saved);
+        return saved;
+    }
+
+    private void deductItemStock(String cleanSku, int quantity, BigDecimal price, String orderCode,
+                                 String customerName, String customerPhone, String deviceModel, String technicianName) {
+        boolean deductedInParts = partService.deductForRepair(
+                cleanSku, quantity, price, orderCode, customerName, customerPhone, deviceModel, technicianName);
+        if (!deductedInParts) {
+            var accOpt = accessoryRepository.findBySku(cleanSku);
+            if (accOpt.isPresent()) {
+                var acc = accOpt.get();
+                if (acc.getQuantity() < quantity) {
+                    throw new IllegalStateException("Linh kiện/phụ kiện " + acc.getName() + " (SKU: " + cleanSku
+                            + ") không đủ số lượng tồn kho (Còn: " + acc.getQuantity() + ", Yêu cầu: " + quantity + ")");
+                }
+                acc.setQuantity(acc.getQuantity() - quantity);
+                accessoryRepository.save(acc);
+
+                com.qkshop.tonkho.accessory.AccessoryHistory hist = new com.qkshop.tonkho.accessory.AccessoryHistory();
+                hist.setSku(cleanSku);
+                hist.setName(acc.getName());
+                hist.setQuantity(quantity);
+                hist.setPrice(price);
+                hist.setAction("REPAIR_USE");
+                hist.setNote("Sử dụng cho đơn sửa chữa: " + orderCode + " (" + deviceModel + ")");
+                hist.setCustomerName(customerName);
+                hist.setCustomerPhone(customerPhone);
+                accessoryHistoryRepository.save(hist);
+            } else {
+                log.warn("Không tìm thấy linh kiện/phụ kiện với SKU {} khi xử lý đơn sửa chữa", cleanSku);
+            }
+        }
+    }
+
+    private void restoreItemStock(String cleanSku, int oldQty, BigDecimal price, String orderCode,
+                                  String customerName, String customerPhone, String note, String technicianName) {
+        var partOpt = partRepository.findBySku(cleanSku);
+        if (partOpt.isPresent()) {
+            var part = partOpt.get();
+            part.setQuantity((part.getQuantity() != null ? part.getQuantity() : 0) + oldQty);
+            partRepository.save(part);
+
+            if (partHistoryRepository != null) {
+                com.qkshop.tonkho.part.PartHistory ph = com.qkshop.tonkho.part.PartHistory.builder()
+                        .sku(cleanSku)
+                        .name(part.getName())
+                        .quantity(oldQty)
+                        .price(price)
+                        .action("RETURN")
+                        .orderCode(orderCode)
+                        .customerName(customerName)
+                        .customerPhone(customerPhone)
+                        .note(note)
+                        .createdBy(technicianName != null ? technicianName : "Hệ thống")
+                        .build();
+                partHistoryRepository.save(ph);
+            }
+            return;
+        }
+
+        var accOpt = accessoryRepository.findBySku(cleanSku);
+        if (accOpt.isPresent()) {
+            var acc = accOpt.get();
+            acc.setQuantity(acc.getQuantity() + oldQty);
+            accessoryRepository.save(acc);
+
+            com.qkshop.tonkho.accessory.AccessoryHistory hist = new com.qkshop.tonkho.accessory.AccessoryHistory();
+            hist.setSku(cleanSku);
+            hist.setName(acc.getName());
+            hist.setQuantity(oldQty);
+            hist.setPrice(price);
+            hist.setAction("RETURN");
+            hist.setNote(note);
+            hist.setCustomerName(customerName);
+            hist.setCustomerPhone(customerPhone);
+            accessoryHistoryRepository.save(hist);
+        }
+    }
+
     private void syncRepairOrderToSalesOrder(RepairOrder order) {
         if (salesOrderRepository == null) return;
         try {
@@ -287,18 +429,20 @@ public class RepairOrderService {
                             .transactionId(txnId)
                             .build());
 
+            boolean isCancelled = "CANCELLED".equalsIgnoreCase(order.getStatus());
+
             so.setSaleDate(sDate);
             so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
             so.setCustomerName(order.getCustomerName());
             so.setCustomerPhone(order.getCustomerPhone());
             so.setCustomerType("Khách sửa chữa");
             so.setFirstSource("Cửa hàng");
-            so.setLastSource("Cửa hàng");
-            so.setNormalizedSource("Khách mang máy đến");
+            so.setLastSource("Khách mang máy đến");
+            so.setNormalizedSource(SourceNormalizer.normalizeSource("Cửa hàng", "Khách mang máy đến"));
             so.setInboxType("Đơn mua thẳng");
             so.setIsStudent(false);
-            so.setOrderStatus("Hoàn tất");
-            so.setPaymentStatus("Đã thanh toán");
+            so.setOrderStatus(isCancelled ? "Đã hủy" : "Hoàn tất");
+            so.setPaymentStatus(isCancelled ? "Đã hủy" : "Đã thanh toán");
             so.setProductName("Sửa chữa " + order.getDeviceModel() + ": " + servicesSummary);
             so.setBrand("SỬA CHỮA");
             so.setSeries("Dịch vụ sửa chữa");
@@ -307,7 +451,7 @@ public class RepairOrderService {
             so.setConfigSummary(servicesSummary);
             so.setGrossRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
             so.setDiscount(BigDecimal.ZERO);
-            so.setNetRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
+            so.setNetRevenue(isCancelled ? BigDecimal.ZERO : (order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO));
             so.setNote(order.getNote());
             so.setSalesperson(order.getTechnicianName());
             so.setOrigin("WEB_APP");
@@ -323,7 +467,6 @@ public class RepairOrderService {
         if (baseDate == null) baseDate = LocalDate.now();
         return com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, period);
     }
-
 
     public List<RepairOrderItem> searchServiceItems(String keyword) {
         List<RepairOrderItem> list;

@@ -1,10 +1,14 @@
 package com.qkshop.tonkho.intake;
+
 import com.qkshop.tonkho.inspection.InspectionService;
 import com.qkshop.tonkho.sync.IdempotencyService;
 import com.qkshop.tonkho.catalog.CatalogService;
 import com.qkshop.tonkho.machine.SerialRegistryRepository;
 import com.qkshop.tonkho.log.EventLogRepository;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
+import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.inventory.ClosedCycleRepository;
+import com.qkshop.tonkho.core.enums.CloseType;
 import com.qkshop.tonkho.core.enums.SourceType;
 import com.qkshop.tonkho.core.enums.SegmentCode;
 import com.qkshop.tonkho.inspection.InspectionRequestType;
@@ -20,16 +24,23 @@ import com.qkshop.tonkho.sync.CommandLedger;
 import com.qkshop.tonkho.catalog.Brand;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.machine.dto.BulkMachineImportRequest;
+import com.qkshop.tonkho.machine.dto.MachineImportRequest;
+import com.qkshop.tonkho.salesreport.SalesOrder;
+import com.qkshop.tonkho.salesreport.SalesOrderRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.qkshop.tonkho.machine.dto.MachineImportRequest;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,15 +59,18 @@ public class IntakeService {
     private final CatalogService catalogService;
     private final SerialRegistryRepository serialRegistryRepo;
     private final ActiveInventoryRepository activeInventoryRepo;
+    private final ClosedCycleRepository closedCycleRepo;
+    private final SalesOrderRepository salesOrderRepo;
     private final EventLogRepository eventLogRepo;
     private final ObjectMapper objectMapper;
     private final InspectionService inspectionService;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * Nhập một máy mới.
      * Kiểm tra idempotency, validate khóa ngoại và serial.
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActiveInventory createInventoryCycle(MachineImportRequest payload, String requestId, String actor) {
         // 1. Idempotency check
         Optional<CommandLedger> existingCommand = idempotencyService.checkAndGet(requestId);
@@ -65,10 +79,9 @@ public class IntakeService {
                 throw new IllegalArgumentException("IDEMPOTENCY_CONFLICT: Request ID đã được dùng cho payload khác");
             }
             try {
-                // Return previous result
                 String resultJson = existingCommand.get().getResultData();
                 ActiveInventory result = objectMapper.readValue(resultJson, ActiveInventory.class);
-                return result; // Or handle idempotent replay correctly in controller
+                return result;
             } catch (Exception e) {
                 log.error("Lỗi parse idempotent result", e);
             }
@@ -109,7 +122,7 @@ public class IntakeService {
                             .serialDisplay(payload.getSerial().trim())
                             .brandId(brand.getBrandId())
                             .build());
-            
+
             String cycleId = "CYC-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
             CycleState initialState = CycleState.NEEDS_INSPECTION;
             LocalDateTime readyAt = null;
@@ -144,13 +157,15 @@ public class IntakeService {
                 }
             }
 
+            // Nếu là Khách đổi/trả (CUSTOMER_RETURN), đồng bộ chu kỳ đóng gần nhất & SalesOrder tương ứng
+            if (intakeType == IntakeType.CUSTOMER_RETURN) {
+                reconcileCustomerReturn(serialKey, cycleId);
+            }
+
             registry.setCurrentCycleId(cycleId);
             registry.setCurrentConfig(config);
             registry.setCurrentState(initialState);
             registry = serialRegistryRepo.save(registry);
-
-
-
 
             LocalDateTime intakeAt = LocalDateTime.now();
             if (payload.getImportDate() != null && !payload.getImportDate().trim().isEmpty()) {
@@ -162,8 +177,6 @@ public class IntakeService {
             }
 
             String wp = payload.getWarrantyPeriod() != null ? payload.getWarrantyPeriod().trim() : null;
-            // Gói bảo hành được cửa hàng gán cho máy; thời gian bảo hành sẽ tính khi máy được bán cho khách (saleDate).
-            // Nếu có warrantyExpiry truyền trực tiếp từ frontend (ví dụ chọn bảo hành hãng và nhập ngày), ưu tiên dùng.
             java.time.LocalDate fixedCompanyExpiry = payload.getWarrantyExpiry();
             if (fixedCompanyExpiry == null) {
                 fixedCompanyExpiry = com.qkshop.tonkho.salesreport.SourceNormalizer.extractSpecificDate(wp);
@@ -226,10 +239,59 @@ public class IntakeService {
         }
     }
 
+    private void reconcileCustomerReturn(String serialKey, String newCycleId) {
+        if (closedCycleRepo == null) return;
+        try {
+            ClosedCycle closedCycle = closedCycleRepo.findTopBySerialKeyOrderByClosedAtDesc(serialKey)
+                    .orElseGet(() -> closedCycleRepo.findBySerialKeyOrderByClosedAtDesc(serialKey).stream()
+                            .findFirst()
+                            .orElse(null));
+
+            if (closedCycle != null) {
+                closedCycle.setCloseType(CloseType.CUSTOMER_RETURN);
+                closedCycle.setCloseReason("Khách trả máy - nhập lại kho với chu kỳ " + newCycleId);
+                closedCycleRepo.save(closedCycle);
+            }
+
+            if (salesOrderRepo != null) {
+                Optional<SalesOrder> matchedSo = Optional.empty();
+                if (closedCycle != null && closedCycle.getCycleId() != null) {
+                    matchedSo = salesOrderRepo.findByMatchedCycleId(closedCycle.getCycleId());
+                }
+                if (matchedSo.isEmpty()) {
+                    matchedSo = salesOrderRepo.findBySerialKeysContaining(serialKey).stream()
+                            .filter(s -> s.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(s.getOrderCategory()))
+                            .max(Comparator.comparing(
+                                    (SalesOrder s) -> s.getSaleDate() != null ? s.getSaleDate() : LocalDateTime.MIN)
+                                    .thenComparing(s -> s.getId() != null ? s.getId() : 0L));
+                }
+
+                matchedSo.ifPresent(so -> {
+                    so.setOrderStatus("Trả hàng");
+                    so.setNetRevenue(BigDecimal.ZERO);
+                    so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newCycleId);
+                    salesOrderRepo.save(so);
+                });
+
+                if (closedCycle != null && closedCycle.getCycleId() != null) {
+                    String pkKemTxnId = "PK-KEM-" + closedCycle.getCycleId().replace("CYC-", "");
+                    salesOrderRepo.findByTransactionId(pkKemTxnId).ifPresent(accSo -> {
+                        accSo.setOrderStatus("Trả hàng");
+                        accSo.setNetRevenue(BigDecimal.ZERO);
+                        accSo.setNote((accSo.getNote() != null ? accSo.getNote() + " | " : "") + "Khách trả máy kèm phụ kiện - nhập lại kho " + newCycleId);
+                        salesOrderRepo.save(accSo);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể đồng bộ trạng thái trả hàng cho serial {}: {}", serialKey, e.getMessage());
+        }
+    }
+
     /**
      * Nhập lô nhiều máy cùng cấu hình.
+     * Mỗi máy chạy trong một transaction độc lập (REQUIRES_NEW) để 1 serial lỗi không làm hỏng các máy khác.
      */
-    @Transactional
     public java.util.Map<String, Object> createInventoryCyclesBatch(BulkMachineImportRequest payload, String batchRequestId, String actor) {
         // Idempotency check cho cả lô
         Optional<CommandLedger> existingCommand = idempotencyService.checkAndGet(batchRequestId);
@@ -248,10 +310,15 @@ public class IntakeService {
         List<String> failed = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
+        TransactionTemplate txTemplate = null;
+        if (transactionManager != null) {
+            txTemplate = new TransactionTemplate(transactionManager);
+            txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
+
         for (String rawSerial : payload.getSerials()) {
             try {
                 MachineImportRequest singleReq = payload.getCommonConfig();
-                // Copy properties from commonConfig
                 MachineImportRequest req = MachineImportRequest.builder()
                         .serial(rawSerial.trim())
                         .brand(singleReq.getBrand())
@@ -273,14 +340,16 @@ public class IntakeService {
                         .warrantyExpiry(singleReq.getWarrantyExpiry())
                         .build();
 
-                // Tạo sub-requestId cho từng máy để tracking, nhưng vẫn trong 1 transaction lớn
                 String subRequestId = batchRequestId + "-" + rawSerial.trim();
-                createInventoryCycle(req, subRequestId, actor);
+                if (txTemplate != null) {
+                    txTemplate.executeWithoutResult(status -> createInventoryCycle(req, subRequestId, actor));
+                } else {
+                    createInventoryCycle(req, subRequestId, actor);
+                }
                 success.add(rawSerial);
             } catch (Exception e) {
                 failed.add(rawSerial);
                 errors.add(rawSerial + ": " + e.getMessage());
-                // Không throw exception để tiếp tục các máy khác
             }
         }
 

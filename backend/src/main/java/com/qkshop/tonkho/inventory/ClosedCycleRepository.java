@@ -1,6 +1,5 @@
 package com.qkshop.tonkho.inventory;
 
-import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.core.enums.CloseType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +12,7 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     Optional<ClosedCycle> findByCycleId(String cycleId);
     List<ClosedCycle> findBySerialKey(String serialKey);
     List<ClosedCycle> findBySerialKeyOrderByClosedAtDesc(String serialKey);
+    Optional<ClosedCycle> findTopBySerialKeyOrderByClosedAtDesc(String serialKey);
     List<ClosedCycle> findBySerialKeyInOrderByClosedAtDesc(java.util.Collection<String> serialKeys);
     List<ClosedCycle> findByCloseType(CloseType closeType);
 
@@ -47,6 +47,31 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
            "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
            "  AND (:modelLineId IS NULL OR m.modelLineId = :modelLineId)")
     List<ClosedCycle> findFilteredExported(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
+
+    @Query("SELECT cc FROM ClosedCycle cc " +
+           "LEFT JOIN cc.config c LEFT JOIN c.variant v LEFT JOIN v.platform p " +
+           "LEFT JOIN p.modelLine m " +
+           "LEFT JOIN m.brand b " +
+           "WHERE cc.intakeAt >= :from AND cc.intakeAt <= :to " +
+           "  AND (:brandId IS NULL OR b.brandId = :brandId) " +
+           "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
+           "  AND (:modelLineId IS NULL OR m.modelLineId = :modelLineId)")
+    List<ClosedCycle> findFilteredImported(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
+
+    @Query("SELECT cc FROM ClosedCycle cc WHERE cc.isShipping = true " +
+           "AND (:isDelivered IS NULL OR cc.isDelivered = :isDelivered) " +
+           "AND (:keyword IS NULL OR :keyword = '' OR " +
+           "     LOWER(cc.serialKey) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "     cc.customerPhone LIKE CONCAT('%', :keyword, '%') OR " +
+           "     LOWER(cc.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "     LOWER(cc.sourceReference) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "     LOWER(cc.cycleId) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY cc.saleDate DESC, cc.id DESC")
+    List<ClosedCycle> findShippingOrders(@Param("isDelivered") Boolean isDelivered, @Param("keyword") String keyword);
+
+    long countByIsShippingTrue();
+    long countByIsShippingTrueAndIsDeliveredFalse();
+    long countByIsShippingTrueAndIsDeliveredTrue();
 
     List<ClosedCycle> findAll(org.springframework.data.domain.Sort sort);
 }

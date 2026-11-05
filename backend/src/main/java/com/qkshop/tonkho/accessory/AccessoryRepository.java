@@ -9,7 +9,9 @@ import java.util.List;
 @Repository
 public interface AccessoryRepository extends JpaRepository<Accessory, Long> {
     Optional<Accessory> findBySku(String sku);
-    
+
     // Tìm các phụ kiện còn hàng
     List<Accessory> findByQuantityGreaterThan(Integer quantity);
+
+    List<Accessory> findAllByOrderByCreatedAtDesc();
 }

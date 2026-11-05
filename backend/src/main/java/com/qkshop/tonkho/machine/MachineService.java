@@ -24,9 +24,11 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -53,6 +55,7 @@ public class MachineService {
     private final StateTransitionService stateTransitionService;
     private final CatalogService catalogService;
     private final com.qkshop.tonkho.catalog.BrandRepository brandRepository;
+    private final PlatformTransactionManager transactionManager;
     @Lazy
     private final com.qkshop.tonkho.intake.IntakeService intakeService;
 
@@ -83,6 +86,7 @@ public class MachineService {
     /**
      * Tìm kiếm lịch sử — tất cả ActiveInventory + ClosedCycle, trả DTO đầy đủ thông tin.
      */
+    @Transactional(readOnly = true)
     public Page<ClosedCycleDTO> searchHistory(String query, String brand, String segment, String status, int page, int size) {
         List<ClosedCycleDTO> combined = new ArrayList<>();
         Map<String, String> brandMap = brandRepository.findAll().stream()
@@ -111,85 +115,107 @@ public class MachineService {
             }
         }
 
-        // 1. Máy đang trong kho (Active)
+        List<ActiveInventory> actives = Collections.emptyList();
         if (includeActive) {
-            List<ActiveInventory> actives = targetState != null 
+            actives = targetState != null
                     ? activeInventoryRepository.findByState(targetState)
                     : activeInventoryRepository.findAll();
-            for (ActiveInventory ai : actives) {
-                String brandId = serialRegistryRepository.findBySerialKey(ai.getSerialKey())
-                        .map(sr -> sr.getBrandId()).orElse(null);
-                
-                String brandName = brandId != null ? brandMap.get(brandId) : null;
-                if (brandName == null && ai.getConfig() != null && ai.getConfig().getVariant() != null
-                        && ai.getConfig().getVariant().getPlatform() != null
-                        && ai.getConfig().getVariant().getPlatform().getModelLine() != null
-                        && ai.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
-                    brandName = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
-                    if (brandId == null) {
-                        brandId = ai.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
-                    }
-                }
-                
-                String configName = null;
-                if (ai.getConfig() != null) {
-                    configName = ai.getConfig().getDisplayName();
-                }
-                
-                long days = 0;
-                if (ai.getIntakeAt() != null) {
-                    days = ChronoUnit.DAYS.between(ai.getIntakeAt(), LocalDateTime.now());
-                    long paused = ai.getPausedDays() != null ? ai.getPausedDays() : 0;
-                    if (ai.getLastPausedAt() != null) {
-                        paused += ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
-                    }
-                    days = Math.max(0, days - paused);
-                }
+        }
 
-                combined.add(ClosedCycleDTO.builder()
-                        .cycleId(ai.getCycleId())
-                        .serialKey(ai.getSerialKey())
-                        .sourceModelText(ai.getSourceModelText())
-                        .configId(ai.getConfig() != null ? ai.getConfig().getConfigId() : null)
-                        .configDisplayName(configName)
-                        .intakeType(ai.getIntakeType() != null ? ai.getIntakeType().name() : null)
-                        .state(ai.getState() != null ? ai.getState().name() : null)
-                        .intakeAt(ai.getIntakeAt())
-                        .salePriceSnapshot(ai.getSalePrice())
-                        .note(ai.getNote())
-                        .warrantyPeriod(ai.getWarrantyPeriod())
-                        .warrantyExpiry(ai.getWarrantyExpiry())
-                        .brandId(brandId)
-                        .brandName(brandName)
-                        .storageDays(days)
-                        .build());
+        List<ClosedCycle> closeds = Collections.emptyList();
+        if (includeClosed) {
+            closeds = targetCloseType != null
+                    ? closedCycleRepository.findByCloseType(targetCloseType)
+                    : closedCycleRepository.findAll();
+        }
+
+        // Batch-fetch SerialRegistry một lần duy nhất thay vì N+1 query trên từng dòng
+        Set<String> allSerialKeys = new HashSet<>();
+        for (ActiveInventory ai : actives) {
+            if (ai.getSerialKey() != null) allSerialKeys.add(ai.getSerialKey());
+        }
+        for (ClosedCycle cc : closeds) {
+            if (cc.getSerialKey() != null) allSerialKeys.add(cc.getSerialKey());
+        }
+
+        Map<String, SerialRegistry> srMap = allSerialKeys.isEmpty()
+                ? Collections.emptyMap()
+                : serialRegistryRepository.findBySerialKeyIn(new ArrayList<>(allSerialKeys)).stream()
+                        .collect(Collectors.toMap(SerialRegistry::getSerialKey, sr -> sr, (a, b) -> a));
+
+        // 1. Máy đang trong kho (Active)
+        for (ActiveInventory ai : actives) {
+            SerialRegistry sr = srMap.get(ai.getSerialKey());
+            String brandId = sr != null ? sr.getBrandId() : null;
+            String brandName = brandId != null ? brandMap.get(brandId) : null;
+            String segName = null;
+
+            if (ai.getConfig() != null && ai.getConfig().getVariant() != null
+                    && ai.getConfig().getVariant().getPlatform() != null
+                    && ai.getConfig().getVariant().getPlatform().getModelLine() != null) {
+                var ml = ai.getConfig().getVariant().getPlatform().getModelLine();
+                if (ml.getSegmentCode() != null) {
+                    segName = ml.getSegmentCode().name();
+                }
+                if (ml.getBrand() != null) {
+                    if (brandName == null) brandName = ml.getBrand().getBrandName();
+                    if (brandId == null) brandId = ml.getBrand().getBrandId();
+                }
             }
+
+            String configName = ai.getConfig() != null ? ai.getConfig().getDisplayName() : null;
+
+            long days = 0;
+            if (ai.getIntakeAt() != null) {
+                days = ChronoUnit.DAYS.between(ai.getIntakeAt(), LocalDateTime.now());
+                long paused = ai.getPausedDays() != null ? ai.getPausedDays() : 0;
+                if (ai.getLastPausedAt() != null) {
+                    paused += ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
+                }
+                days = Math.max(0, days - paused);
+            }
+
+            combined.add(ClosedCycleDTO.builder()
+                    .cycleId(ai.getCycleId())
+                    .serialKey(ai.getSerialKey())
+                    .sourceModelText(ai.getSourceModelText())
+                    .configId(ai.getConfig() != null ? ai.getConfig().getConfigId() : null)
+                    .configDisplayName(configName)
+                    .intakeType(ai.getIntakeType() != null ? ai.getIntakeType().name() : null)
+                    .state(ai.getState() != null ? ai.getState().name() : null)
+                    .intakeAt(ai.getIntakeAt())
+                    .salePriceSnapshot(ai.getSalePrice())
+                    .note(ai.getNote())
+                    .warrantyPeriod(ai.getWarrantyPeriod())
+                    .warrantyExpiry(ai.getWarrantyExpiry())
+                    .brandId(brandId)
+                    .brandName(brandName)
+                    .segment(segName)
+                    .storageDays(days)
+                    .build());
         }
 
         // 2. Máy đã đóng (Closed)
-        if (includeClosed) {
-            List<ClosedCycle> closeds = targetCloseType != null
-                    ? closedCycleRepository.findByCloseType(targetCloseType)
-                    : closedCycleRepository.findAll();
         for (ClosedCycle cc : closeds) {
-            String brandId = serialRegistryRepository.findBySerialKey(cc.getSerialKey())
-                    .map(sr -> sr.getBrandId()).orElse(null);
-
+            SerialRegistry sr = srMap.get(cc.getSerialKey());
+            String brandId = sr != null ? sr.getBrandId() : null;
             String brandName = brandId != null ? brandMap.get(brandId) : null;
-            if (brandName == null && cc.getConfig() != null && cc.getConfig().getVariant() != null
+            String segName = null;
+
+            if (cc.getConfig() != null && cc.getConfig().getVariant() != null
                     && cc.getConfig().getVariant().getPlatform() != null
-                    && cc.getConfig().getVariant().getPlatform().getModelLine() != null
-                    && cc.getConfig().getVariant().getPlatform().getModelLine().getBrand() != null) {
-                brandName = cc.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandName();
-                if (brandId == null) {
-                    brandId = cc.getConfig().getVariant().getPlatform().getModelLine().getBrand().getBrandId();
+                    && cc.getConfig().getVariant().getPlatform().getModelLine() != null) {
+                var ml = cc.getConfig().getVariant().getPlatform().getModelLine();
+                if (ml.getSegmentCode() != null) {
+                    segName = ml.getSegmentCode().name();
+                }
+                if (ml.getBrand() != null) {
+                    if (brandName == null) brandName = ml.getBrand().getBrandName();
+                    if (brandId == null) brandId = ml.getBrand().getBrandId();
                 }
             }
 
-            String configName = null;
-            if (cc.getConfig() != null) {
-                configName = cc.getConfig().getDisplayName();
-            }
+            String configName = cc.getConfig() != null ? cc.getConfig().getDisplayName() : null;
 
             long days = 0;
             if (cc.getIntakeAt() != null && cc.getClosedAt() != null) {
@@ -216,9 +242,9 @@ public class MachineService {
                     .warrantyExpiry(cc.getWarrantyExpiry())
                     .brandId(brandId)
                     .brandName(brandName)
+                    .segment(segName)
                     .storageDays(days)
                     .build());
-            }
         }
 
         // 3. Sắp xếp: Ưu tiên closedAt (nếu có) giảm dần, sau đó đến intakeAt giảm dần
@@ -249,6 +275,11 @@ public class MachineService {
                             || (dto.getBrandId() != null && dto.getBrandId().equalsIgnoreCase(brand))
                             || (dto.getSourceModelText() != null && dto.getSourceModelText().toLowerCase().contains(b));
                     if (!matchBrand) return false;
+                }
+                if (StringUtils.hasText(segment) && !"Tất cả".equalsIgnoreCase(segment)) {
+                    String seg = segment.trim().toUpperCase();
+                    boolean matchSegment = dto.getSegment() != null && dto.getSegment().equalsIgnoreCase(seg);
+                    if (!matchSegment) return false;
                 }
                 if (StringUtils.hasText(status) && !"Tất cả".equalsIgnoreCase(status)) {
                     if (status.equalsIgnoreCase("ACTIVE_ONLY")) {
@@ -290,6 +321,43 @@ public class MachineService {
     }
 
     // ==================== UPDATE ====================
+
+    /**
+     * Cập nhật giá bán hàng loạt cho danh sách serial.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int updateBulkPrice(Map<String, Object> payload) {
+        if (payload == null) {
+            throw new IllegalArgumentException("Dữ liệu cập nhật giá không hợp lệ");
+        }
+        Object serialsObj = payload.get("serials");
+        if (!(serialsObj instanceof List<?> rawList) || rawList.isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng chọn ít nhất 1 máy để cập nhật giá");
+        }
+        Object priceObj = payload.get("price");
+        BigDecimal newPrice = null;
+        if (priceObj != null && !priceObj.toString().trim().isEmpty()) {
+            String clean = priceObj.toString().replaceAll("[^0-9.]", "").trim();
+            if (!clean.isEmpty()) {
+                newPrice = new BigDecimal(clean);
+            }
+        }
+
+        int updatedCount = 0;
+        for (Object item : rawList) {
+            if (item == null) continue;
+            String key = SerialRegistry.normalizeSerialKey(item.toString());
+            if (key == null || key.isEmpty()) continue;
+            Optional<ActiveInventory> aiOpt = activeInventoryRepository.findBySerialKey(key);
+            if (aiOpt.isPresent()) {
+                ActiveInventory ai = aiOpt.get();
+                ai.setSalePrice(newPrice);
+                activeInventoryRepository.save(ai);
+                updatedCount++;
+            }
+        }
+        return updatedCount;
+    }
 
     /**
      * Cập nhật thông tin máy — chỉ thao tác trên ActiveInventory (V2).
@@ -376,11 +444,12 @@ public class MachineService {
                         serialRegistryRepository.save(sr);
                     });
                 }
-                case "DA_BAN", "HUY_TRA", "CLOSED" -> {
-                    CloseType type = CloseType.CANCEL;
-                    if (statusStr.equals("DA_BAN")) type = CloseType.SALE;
-                    stateTransitionService.transitionToClosed(ai.getCycleId(), type, "UPDATE_API", username, updates.get("notes") != null ? updates.get("notes").toString() : "");
-                    return ai; // transitionToClosed already saves and handles everything, so we return here to avoid saving ActiveInventory again
+                case "DA_BAN" -> {
+                    throw new IllegalArgumentException("Vui lòng thực hiện xuất bán máy qua màn hình Bán Hàng để ghi nhận đầy đủ hóa đơn và doanh thu.");
+                }
+                case "HUY_TRA", "CLOSED" -> {
+                    stateTransitionService.transitionToClosed(ai.getCycleId(), CloseType.CANCEL, "UPDATE_API", username, updates.get("notes") != null ? updates.get("notes").toString() : "");
+                    return ai; // transitionToClosed already saves and handles everything
                 }
             }
         }
@@ -479,14 +548,14 @@ public class MachineService {
             throw new IllegalStateException("Máy có serial '" + serial + "' đã có lịch sử chu kỳ trong hệ thống. Không thể xóa cứng để bảo vệ tính toàn vẹn dữ liệu.");
         }
 
-        // Xóa InspectionRequest liên quan
-        List<InspectionRequest> requests = inspectionRequestRepository.findByCycleId(
-                activeInventoryRepository.findBySerialKey(key)
-                        .map(ActiveInventory::getCycleId).orElse("N/A"));
-        inspectionRequestRepository.deleteAll(requests);
-
-        // Xóa ActiveInventory
-        activeInventoryRepository.findBySerialKey(key).ifPresent(activeInventoryRepository::delete);
+        // Xóa tất cả InspectionRequest liên quan đến chu kỳ của máy
+        activeInventoryRepository.findBySerialKey(key).ifPresent(ai -> {
+            List<InspectionRequest> requests = inspectionRequestRepository.findByCycleId(ai.getCycleId());
+            if (!requests.isEmpty()) {
+                inspectionRequestRepository.deleteAll(requests);
+            }
+            activeInventoryRepository.delete(ai);
+        });
 
         // Xóa SerialRegistry
         serialRegistryRepository.findBySerialKey(key).ifPresent(serialRegistryRepository::delete);
@@ -496,10 +565,12 @@ public class MachineService {
 
     // ==================== BULK ====================
 
-    @Transactional
     public Map<String, Object> importBulkMachines(BulkMachineImportRequest bulkRequest, String username) {
         List<String> successSerials = new ArrayList<>();
         List<Map<String, String>> errorSerials = new ArrayList<>();
+
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         for (String serial : bulkRequest.getSerials()) {
             String trimmedSerial = serial.trim();
@@ -526,7 +597,7 @@ public class MachineService {
                     .build();
 
             try {
-                importSingleMachine(singleRequest, username);
+                txTemplate.executeWithoutResult(status -> importSingleMachine(singleRequest, username));
                 successSerials.add(trimmedSerial);
             } catch (com.qkshop.tonkho.exception.DuplicateSerialException e) {
                 errorSerials.add(Map.of("serial", trimmedSerial, "error", "Trùng lặp serial"));
@@ -544,10 +615,12 @@ public class MachineService {
         return result;
     }
 
-    @Transactional
     public Map<String, Object> importBulkFromExcel(org.springframework.web.multipart.MultipartFile file, String username) {
         List<String> successSerials = new ArrayList<>();
         List<Map<String, String>> errorSerials = new ArrayList<>();
+
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         try (java.io.InputStream is = file.getInputStream();
              org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(is)) {
@@ -562,7 +635,10 @@ public class MachineService {
 
                 try {
                     String serial = getCellValueAsString(currentRow.getCell(0));
-                    if (serial == null || serial.trim().isEmpty()) continue;
+                    if (serial == null || serial.trim().isEmpty()) {
+                        rowNumber++;
+                        continue;
+                    }
 
                     MachineImportRequest req = MachineImportRequest.builder()
                             .serial(serial.trim())
@@ -582,7 +658,7 @@ public class MachineService {
                             .warrantyPeriod(getCellValueAsString(currentRow.getCell(14)))
                             .build();
 
-                    importSingleMachine(req, username);
+                    txTemplate.executeWithoutResult(status -> importSingleMachine(req, username));
                     successSerials.add(serial.trim());
 
                 } catch (com.qkshop.tonkho.exception.DuplicateSerialException e) {
@@ -623,7 +699,10 @@ public class MachineService {
 
                 try {
                     String serial = getCellValueAsString(currentRow.getCell(0));
-                    if (serial == null || serial.trim().isEmpty()) continue;
+                    if (serial == null || serial.trim().isEmpty()) {
+                        rowNumber++;
+                        continue;
+                    }
                     String trimmedSerial = serial.trim();
 
                     if (seenSerials.contains(trimmedSerial)) {

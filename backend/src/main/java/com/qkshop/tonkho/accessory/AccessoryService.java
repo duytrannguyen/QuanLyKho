@@ -5,9 +5,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +21,146 @@ public class AccessoryService {
     private final AccessoryOrderItemRepository accessoryOrderItemRepository;
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
+
+    public List<Accessory> getAllAccessories(String keyword, String category, String stockFilter) {
+        List<Accessory> list = accessoryRepository.findAllByOrderByCreatedAtDesc();
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String kw = keyword.trim().toLowerCase();
+            list = list.stream()
+                    .filter(a -> (a.getName() != null && a.getName().toLowerCase().contains(kw))
+                            || (a.getSku() != null && a.getSku().toLowerCase().contains(kw))
+                            || (a.getCategory() != null && a.getCategory().toLowerCase().contains(kw)))
+                    .toList();
+        }
+
+        if (category != null && !category.trim().isEmpty() && !"ALL".equalsIgnoreCase(category.trim()) && !"Tất cả".equalsIgnoreCase(category.trim())) {
+            String cat = category.trim();
+            list = list.stream()
+                    .filter(a -> a.getCategory() != null && a.getCategory().equalsIgnoreCase(cat))
+                    .toList();
+        }
+
+        if (stockFilter != null && !stockFilter.trim().isEmpty() && !"ALL".equalsIgnoreCase(stockFilter.trim())) {
+            switch (stockFilter.trim().toUpperCase()) {
+                case "IN_STOCK":
+                    list = list.stream().filter(a -> a.getQuantity() != null && a.getQuantity() > 0).toList();
+                    break;
+                case "LOW_STOCK":
+                    list = list.stream().filter(a -> a.getQuantity() != null && a.getQuantity() > 0 && a.getQuantity() <= 5).toList();
+                    break;
+                case "OUT_OF_STOCK":
+                    list = list.stream().filter(a -> a.getQuantity() == null || a.getQuantity() <= 0).toList();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return list;
+    }
+
+    public String generateNextSku(String category) {
+        String cleanCat = normalizeCategoryCode(category);
+        String prefix = "PK-" + cleanCat + "-";
+        int maxSuffix = accessoryRepository.findAll().stream()
+                .map(Accessory::getSku)
+                .filter(s -> s != null && s.startsWith(prefix))
+                .mapToInt(s -> {
+                    try {
+                        String numPart = s.substring(prefix.length()).trim();
+                        if (numPart.matches("\\d{1,6}")) {
+                            return Integer.parseInt(numPart);
+                        }
+                    } catch (Exception ignored) {}
+                    return 0;
+                })
+                .max()
+                .orElse(0);
+        return String.format("%s%04d", prefix, maxSuffix + 1);
+    }
+
+    private String normalizeCategoryCode(String category) {
+        if (category == null || category.trim().isEmpty()) {
+            return "KHAC";
+        }
+        String clean = Normalizer.normalize(category.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .replace('đ', 'd').replace('Đ', 'D')
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]", "");
+        return clean.isEmpty() ? "KHAC" : clean;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Accessory updateAccessory(Long id, Map<String, Object> payload) {
+        Accessory accessory = accessoryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phụ kiện với ID: " + id));
+
+        if (payload.containsKey("name")) {
+            String name = payload.get("name") != null ? payload.get("name").toString().trim() : "";
+            if (!name.isEmpty()) {
+                accessory.setName(name);
+            }
+        }
+        if (payload.containsKey("category")) {
+            String category = payload.get("category") != null ? payload.get("category").toString().trim() : "";
+            if (!category.isEmpty()) {
+                accessory.setCategory(category.toUpperCase());
+            }
+        }
+        if (payload.containsKey("price")) {
+            Object priceObj = payload.get("price");
+            if (priceObj != null && !priceObj.toString().trim().isEmpty()) {
+                String cleanPrice = priceObj.toString().replaceAll("[^0-9.]", "").trim();
+                if (!cleanPrice.isEmpty()) {
+                    accessory.setPrice(new BigDecimal(cleanPrice));
+                }
+            }
+        }
+        if (payload.containsKey("defaultWarrantyMonths")) {
+            Integer dwm = parseInteger(payload.get("defaultWarrantyMonths"), accessory.getDefaultWarrantyMonths());
+            accessory.setDefaultWarrantyMonths(dwm != null ? dwm : 0);
+        }
+
+        if (payload.containsKey("quantity") && payload.get("quantity") != null) {
+            int oldQty = accessory.getQuantity() != null ? accessory.getQuantity() : 0;
+            int newQty = parseInteger(payload.get("quantity"), oldQty);
+            if (newQty != oldQty) {
+                int delta = newQty - oldQty;
+                accessory.setQuantity(newQty);
+
+                AccessoryHistory history = new AccessoryHistory();
+                history.setSku(accessory.getSku());
+                history.setName(accessory.getName());
+                history.setQuantity(delta);
+                history.setPrice(accessory.getPrice());
+                history.setAction("ADJUST");
+                String customNote = payload.get("note") != null ? payload.get("note").toString().trim() : "";
+                history.setNote(!customNote.isEmpty() ? customNote : "Điều chỉnh tồn kho / Cập nhật thông tin");
+                accessoryHistoryRepository.save(history);
+            }
+        }
+
+        return accessoryRepository.save(accessory);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteAccessory(Long id) {
+        Accessory accessory = accessoryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phụ kiện với ID: " + id));
+
+        AccessoryHistory history = new AccessoryHistory();
+        history.setSku(accessory.getSku());
+        history.setName(accessory.getName());
+        history.setQuantity(accessory.getQuantity() != null ? accessory.getQuantity() : 0);
+        history.setPrice(accessory.getPrice());
+        history.setAction("DELETE");
+        history.setNote("Xóa phụ kiện khỏi danh mục kho");
+        accessoryHistoryRepository.save(history);
+
+        accessoryRepository.delete(accessory);
+    }
 
     /**
      * Tạo đơn xuất bán phụ kiện (hỗ trợ nhiều loại, mỗi loại thời hạn bảo hành riêng)
@@ -232,7 +372,8 @@ public class AccessoryService {
             so.setOrigin("WEB_APP");
             so.setOrderCategory("ACCESSORY");
             if (txnId.startsWith("PK-KEM-")) {
-                so.setMatchedCycleId(txnId.substring("PK-KEM-".length()));
+                String rawCycle = txnId.substring("PK-KEM-".length());
+                so.setMatchedCycleId(rawCycle.startsWith("CYC-") ? rawCycle : "CYC-" + rawCycle);
             }
 
             salesOrderRepo.save(so);
@@ -248,6 +389,29 @@ public class AccessoryService {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Phân giải đơn giá thực tế của phụ kiện bán kèm (không phải quà tặng).
+     * Nếu payload không gửi price hoặc price <= 0, fallback về giá niêm yết của phụ kiện trong kho.
+     */
+    public BigDecimal resolvePaidAccessoryPrice(Map<String, Object> req, Accessory accessory) {
+        Object pObj = req != null ? req.get("price") : null;
+        if (pObj != null && !pObj.toString().trim().isEmpty()) {
+            try {
+                String clean = pObj.toString().replaceAll("[^0-9.]", "").trim();
+                if (!clean.isEmpty()) {
+                    BigDecimal parsed = new BigDecimal(clean);
+                    if (parsed.compareTo(BigDecimal.ZERO) > 0) {
+                        return parsed;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (accessory == null && req != null && req.get("sku") != null) {
+            accessory = accessoryRepository.findBySku(req.get("sku").toString().trim()).orElse(null);
+        }
+        return (accessory != null && accessory.getPrice() != null) ? accessory.getPrice() : BigDecimal.ZERO;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -296,20 +460,7 @@ public class AccessoryService {
 
             // Phân biệt 2 loại: Quà tặng mặc định (0đ) vs Phụ kiện bán kèm ngoài mặc định (Có tính phí)
             boolean isGift = Boolean.TRUE.equals(req.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(req.get("isGift")));
-            BigDecimal price = BigDecimal.ZERO;
-
-            if (!isGift) {
-                Object pObj = req.get("price");
-                if (pObj != null) {
-                    try {
-                        price = new BigDecimal(pObj.toString().replaceAll("[^0-9.]", ""));
-                    } catch (Exception e) {
-                        price = accessory.getPrice() != null ? accessory.getPrice() : BigDecimal.ZERO;
-                    }
-                } else {
-                    price = accessory.getPrice() != null ? accessory.getPrice() : BigDecimal.ZERO;
-                }
-            }
+            BigDecimal price = isGift ? BigDecimal.ZERO : resolvePaidAccessoryPrice(req, accessory);
 
             // Ghi lại lịch sử bán
             AccessoryHistory history = new AccessoryHistory();
@@ -371,11 +522,7 @@ public class AccessoryService {
         Map<String, Integer> categoryCounters = new java.util.HashMap<>();
         
         for (Accessory accessory : accessories) {
-            String category = accessory.getCategory();
-            if (category == null || category.trim().isEmpty()) {
-                category = "KHAC";
-            }
-            category = category.toUpperCase().replaceAll("[^A-Z0-9]", "");
+            String category = normalizeCategoryCode(accessory.getCategory());
             
             categoryCounters.put(category, categoryCounters.getOrDefault(category, 0) + 1);
             int count = categoryCounters.get(category);

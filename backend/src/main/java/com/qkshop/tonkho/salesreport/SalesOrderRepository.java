@@ -14,7 +14,12 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     Optional<SalesOrder> findByTransactionId(String transactionId);
 
-    Optional<SalesOrder> findByMatchedCycleId(String matchedCycleId);
+    @Query("SELECT s FROM SalesOrder s WHERE s.matchedCycleId = :matchedCycleId AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL) ORDER BY s.id DESC")
+    List<SalesOrder> findMachineOrdersByMatchedCycleId(@Param("matchedCycleId") String matchedCycleId);
+
+    default Optional<SalesOrder> findByMatchedCycleId(String matchedCycleId) {
+        return findMachineOrdersByMatchedCycleId(matchedCycleId).stream().findFirst();
+    }
 
     List<SalesOrder> findBySerialKeysContaining(String serialKey);
 
@@ -42,17 +47,19 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     /**
      * Thống kê KPI tổng quan trong một khoảng thời gian cho các đơn hợp lệ
-     * (order_status = 'Hoàn tất', payment_status = 'Đã thanh toán', net_revenue > 0)
+     * (order_status = 'Hoàn tất', payment_status = 'Đã thanh toán', net_revenue > 0).
+     * Loại trừ đơn phụ kiện bán kèm máy (PK-KEM-%) khỏi tổng số đơn để không bị đếm trùng.
      */
     @Query("""
         SELECT
-            COUNT(s) AS totalOrders,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS totalOrders,
             COALESCE(SUM(s.netRevenue), 0) AS totalNetRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS totalGrossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount,
-            COALESCE(SUM(CASE WHEN LOWER(s.customerType) LIKE '%đầu%' THEN 1 ELSE 0 END), 0) AS firstTimeCustomerCount,
-            COALESCE(SUM(CASE WHEN LOWER(s.customerType) LIKE '%cũ%' OR LOWER(s.customerType) LIKE '%trước%' THEN 1 ELSE 0 END), 0) AS returningCustomerCount,
-            COALESCE(SUM(CASE WHEN s.isStudent = true THEN 1 ELSE 0 END), 0) AS studentCount
+            COALESCE(SUM(CASE WHEN (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%') AND LOWER(s.customerType) LIKE '%đầu%' THEN 1 ELSE 0 END), 0) AS firstTimeCustomerCount,
+            COALESCE(SUM(CASE WHEN (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%') AND (LOWER(s.customerType) LIKE '%cũ%' OR LOWER(s.customerType) LIKE '%trước%') THEN 1 ELSE 0 END), 0) AS returningCustomerCount,
+            COALESCE(SUM(CASE WHEN (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%') AND s.isStudent = true THEN 1 ELSE 0 END), 0) AS studentCount,
+            COALESCE(SUM(CASE WHEN s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL THEN 1 ELSE 0 END), 0) AS soldMachineCount
         FROM SalesOrder s
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
@@ -67,7 +74,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("""
         SELECT
             FUNCTION('DATE_FORMAT', s.saleDate, '%Y-%m-%d') AS saleDateStr,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue
         FROM SalesOrder s
         WHERE s.saleDate >= :start AND s.saleDate <= :end
@@ -80,7 +87,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     List<DailyRevenueAggregate> getDailyRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /**
-     * Top model bán chạy nhất theo doanh thu / số đơn.
+     * Top model bán chạy nhất theo doanh thu / số đơn (chỉ tính ngành hàng Máy móc).
      */
     @Query("""
         SELECT
@@ -94,6 +101,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
           AND s.netRevenue > 0
+          AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.modelName
         ORDER BY totalRevenue DESC
     """)
@@ -105,7 +113,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("""
         SELECT
             COALESCE(NULLIF(s.normalizedSource, ''), 'Chưa rõ') AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
@@ -120,7 +128,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     List<GroupAggregate> getRevenueBySource(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /**
-     * Cơ cấu theo Hãng máy.
+     * Cơ cấu theo Hãng máy (chỉ tính ngành hàng Máy móc).
      */
     @Query("""
         SELECT
@@ -134,13 +142,14 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
           AND s.netRevenue > 0
+          AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.brand
         ORDER BY totalRevenue DESC
     """)
     List<GroupAggregate> getBrandMix(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /**
-     * Cơ cấu theo Series máy.
+     * Cơ cấu theo Series máy (chỉ tính ngành hàng Máy móc).
      */
     @Query("""
         SELECT
@@ -154,13 +163,14 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
           AND s.netRevenue > 0
+          AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.series
         ORDER BY orderCount DESC
     """)
     List<GroupAggregate> getSeriesMix(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /**
-     * Cơ cấu theo Phân khúc.
+     * Cơ cấu theo Phân khúc (chỉ tính ngành hàng Máy móc).
      */
     @Query("""
         SELECT
@@ -174,6 +184,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
           AND s.netRevenue > 0
+          AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.segment
         ORDER BY totalRevenue DESC
     """)
@@ -185,7 +196,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("""
         SELECT
             COALESCE(NULLIF(TRIM(s.firstSource), ''), 'Chưa rõ') AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
@@ -205,7 +216,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("""
         SELECT
             COALESCE(NULLIF(TRIM(s.inboxType), ''), 'Đơn mua thẳng') AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
@@ -229,7 +240,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
                 WHEN TRIM(LOWER(s.customerType)) LIKE '%cũ%' OR TRIM(LOWER(s.customerType)) LIKE '%quen%' THEN 'Khách cũ'
                 ELSE 'Chưa rõ'
             END AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
@@ -258,7 +269,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
                 WHEN s.isStudent = false THEN 'Đi làm / Khác'
                 ELSE 'Chưa rõ'
             END AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
@@ -279,6 +290,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     /**
      * Cơ cấu theo Ngành hàng (Máy móc / Phụ kiện / Sửa chữa).
+     * Loại trừ đơn phụ kiện bán kèm máy (PK-KEM-%) khỏi số đơn Phụ kiện lẻ, nhưng vẫn cộng đầy đủ doanh thu phụ kiện.
      */
     @Query("""
         SELECT
@@ -287,7 +299,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
                 WHEN s.orderCategory = 'REPAIR' THEN 'Dịch vụ sửa chữa'
                 ELSE 'Máy móc'
             END AS groupName,
-            COUNT(s) AS orderCount,
+            COALESCE(SUM(CASE WHEN s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%' THEN 1 ELSE 0 END), 0) AS orderCount,
             COALESCE(SUM(s.netRevenue), 0) AS totalRevenue,
             COALESCE(SUM(s.grossRevenue), 0) AS grossRevenue,
             COALESCE(SUM(s.discount), 0) AS totalDiscount
