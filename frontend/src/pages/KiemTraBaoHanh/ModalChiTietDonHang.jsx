@@ -1,13 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
-  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck
+  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench
 } from 'lucide-react';
+import { apiSuaChua } from '../../api';
 import { getCleanWarrantyType } from '../../utils/dinh_dang';
 
 export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery }) {
   const [copiedKey, setCopiedKey] = useState(null);
+  const [repairHistory, setRepairHistory] = useState([]);
+  const [isLoadingRepairs, setIsLoadingRepairs] = useState(false);
+
+  useEffect(() => {
+    if (order?.serialKey) {
+      setIsLoadingRepairs(true);
+      apiSuaChua.getOrdersBySerial(order.serialKey)
+        .then(res => {
+          setRepairHistory(res.data?.data || res.data || []);
+        })
+        .catch(err => {
+          console.error('Lỗi lấy lịch sử sửa chữa theo serial:', err);
+          setRepairHistory([]);
+        })
+        .finally(() => setIsLoadingRepairs(false));
+    }
+  }, [order?.serialKey]);
 
   if (!order) return null;
 
@@ -517,6 +535,44 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                         </div>
                       )}
 
+                      {(order.shippingCarrier || order.trackingCode || order.shippingAddress || order.codAmount > 0) && (
+                        <div className="p-3 rounded-3 bg-white border">
+                          <div className="small fw-bold text-dark mb-2 d-flex align-items-center gap-1">
+                            <Truck size={14} className="text-primary" /> Thông tin vận đơn & Giao nhận
+                          </div>
+                          {order.shippingCarrier && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Đơn vị vận chuyển:</span>
+                              <span className="fw-semibold text-dark">{order.shippingCarrier}</span>
+                            </div>
+                          )}
+                          {order.trackingCode && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Mã vận đơn:</span>
+                              <span className="fw-bold text-primary font-monospace">{order.trackingCode}</span>
+                            </div>
+                          )}
+                          {order.shippingAddress && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Địa chỉ:</span>
+                              <span className="fw-medium text-dark text-end ms-2">{order.shippingAddress}</span>
+                            </div>
+                          )}
+                          {order.depositAmount > 0 && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Đã đặt cọc:</span>
+                              <span className="fw-semibold text-success">{formatMoney(order.depositAmount)}</span>
+                            </div>
+                          )}
+                          {order.codAmount > 0 && (
+                            <div className="d-flex justify-content-between small">
+                              <span className="text-muted">Thu hộ COD:</span>
+                              <span className="fw-bold text-danger">{formatMoney(order.codAmount)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <div className="d-flex justify-content-between align-items-center">
                         <span className="text-muted small">Mã chu kỳ (Cycle):</span>
                         <div className="d-flex align-items-center gap-1 font-monospace small bg-white px-2 py-1 rounded border">
@@ -754,6 +810,87 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   </div>
                 </div>
 
+                {/* Lịch sử Sửa chữa & Tiếp nhận Bảo hành của máy */}
+                <div className="card border-0 shadow-sm rounded-4">
+                  <div className="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                    <h6 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                      <Wrench size={18} className="text-warning-emphasis" />
+                      Lịch sử Tiếp nhận Sửa Chữa & Bảo Hành (RMA)
+                    </h6>
+                    <span className="badge bg-light text-secondary border font-monospace">
+                      Serial: {order.serialKey}
+                    </span>
+                  </div>
+                  <div className="card-body p-4">
+                    {isLoadingRepairs ? (
+                      <div className="text-center py-3 text-muted">
+                        <div className="spinner-border spinner-border-sm text-primary me-2"></div>
+                        <span>Đang kiểm tra lịch sử sửa chữa...</span>
+                      </div>
+                    ) : repairHistory.length === 0 ? (
+                      <div className="text-center py-4 bg-light rounded-3 border border-dashed">
+                        <ShieldCheck size={32} className="text-success mb-2 opacity-75" />
+                        <div className="fw-semibold text-dark">Chưa có lịch sử sửa chữa / bảo hành</div>
+                        <small className="text-muted">Chiếc máy này chưa từng phát sinh bảo hành hoặc sửa chữa tại cửa hàng.</small>
+                      </div>
+                    ) : (
+                      <div className="d-flex flex-column gap-3">
+                        {repairHistory.map((rep) => (
+                          <div key={rep.id} className="p-3 rounded-3 border bg-light">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div className="d-flex align-items-center gap-2">
+                                <span className="badge bg-primary fw-bold font-monospace">{rep.orderCode}</span>
+                                <span className="small text-muted">{formatDate(rep.createdDate)}</span>
+                              </div>
+                              <span className={`badge rounded-pill px-2 py-1 small ${
+                                rep.status === 'COMPLETED' ? 'bg-success' :
+                                rep.status === 'IN_REPAIR' ? 'bg-info text-dark' :
+                                rep.status === 'CANCELLED' ? 'bg-danger' : 'bg-warning text-dark'
+                              }`}>
+                                {rep.status === 'COMPLETED' ? 'Đã hoàn tất & Giao khách' :
+                                 rep.status === 'IN_REPAIR' ? 'Đang sửa chữa' :
+                                 rep.status === 'CANCELLED' ? 'Hủy phiếu' : 'Mới tiếp nhận máy'}
+                              </span>
+                            </div>
+
+                            {rep.intakeCondition && (
+                              <div className="small text-dark mb-1">
+                                <strong>Tình trạng lúc nhận:</strong> {rep.intakeCondition}
+                              </div>
+                            )}
+                            {rep.accessoriesReceived && (
+                              <div className="small text-muted mb-2">
+                                <strong>Phụ kiện kèm:</strong> {rep.accessoriesReceived}
+                              </div>
+                            )}
+
+                            {rep.items && rep.items.length > 0 && (
+                              <div className="bg-white rounded border p-2 mt-2">
+                                <div className="small fw-bold text-secondary mb-1">Dịch vụ & Linh kiện thực hiện:</div>
+                                <ul className="mb-0 ps-3 small text-dark">
+                                  {rep.items.map((it, idx) => (
+                                    <li key={idx}>
+                                      <strong>{it.serviceName}</strong> (SL: {it.quantity || 1})
+                                      {it.price > 0 && ` - ${formatMoney(it.price)}`}
+                                      {it.warrantyPeriod && ` • BH: ${it.warrantyPeriod}`}
+                                      {it.warrantyExpiry && ` (Đến: ${formatDate(it.warrantyExpiry)})`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                              <span className="small text-muted">KTV: <strong>{rep.technicianName || 'QKShop'}</strong></span>
+                              <span className="fw-bold text-danger">{formatMoney(rep.totalAmount)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
             </div>
@@ -765,17 +902,28 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             <div className="text-muted small">
               Nhấp nút <strong>"In phiếu"</strong> để in phiếu xuất kho kiêm bảo hành cho khách hàng.
             </div>
-            <div className="d-flex gap-2">
+            <div className="d-flex flex-wrap gap-2">
               <button 
                 type="button" 
-                className="btn btn-outline-secondary px-4 rounded-pill" 
+                className="btn btn-outline-secondary px-3 rounded-pill" 
                 onClick={onClose}
               >
                 Đóng
               </button>
+              <button
+                type="button"
+                className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
+                onClick={() => {
+                  window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
+                }}
+                title="Tạo phiếu dịch vụ tiếp nhận bảo hành máy này"
+              >
+                <ShieldCheck size={16} />
+                <span>Tiếp nhận Bảo hành (RMA)</span>
+              </button>
               <button 
                 type="button" 
-                className="btn btn-primary px-4 rounded-pill d-flex align-items-center gap-2 shadow-sm"
+                className="btn btn-primary px-3 rounded-pill d-flex align-items-center gap-2 shadow-sm"
                 onClick={handlePrint}
               >
                 <Printer size={16} />

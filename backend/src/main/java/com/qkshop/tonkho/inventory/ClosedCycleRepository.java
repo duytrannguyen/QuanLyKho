@@ -59,6 +59,7 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     List<ClosedCycle> findFilteredImported(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
 
     @Query("SELECT cc FROM ClosedCycle cc WHERE cc.isShipping = true " +
+           "AND cc.closeType = com.qkshop.tonkho.core.enums.CloseType.SALE " +
            "AND (:isDelivered IS NULL OR cc.isDelivered = :isDelivered) " +
            "AND (:keyword IS NULL OR :keyword = '' OR " +
            "     LOWER(cc.serialKey) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
@@ -69,9 +70,21 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
            "ORDER BY cc.saleDate DESC, cc.id DESC")
     List<ClosedCycle> findShippingOrders(@Param("isDelivered") Boolean isDelivered, @Param("keyword") String keyword);
 
-    long countByIsShippingTrue();
-    long countByIsShippingTrueAndIsDeliveredFalse();
-    long countByIsShippingTrueAndIsDeliveredTrue();
+    long countByIsShippingTrueAndCloseType(CloseType closeType);
+    long countByIsShippingTrueAndIsDeliveredFalseAndCloseType(CloseType closeType);
+    long countByIsShippingTrueAndIsDeliveredTrueAndCloseType(CloseType closeType);
+
+    default long countByIsShippingTrue() {
+        return countByIsShippingTrueAndCloseType(CloseType.SALE);
+    }
+
+    default long countByIsShippingTrueAndIsDeliveredFalse() {
+        return countByIsShippingTrueAndIsDeliveredFalseAndCloseType(CloseType.SALE);
+    }
+
+    default long countByIsShippingTrueAndIsDeliveredTrue() {
+        return countByIsShippingTrueAndIsDeliveredTrueAndCloseType(CloseType.SALE);
+    }
 
     List<ClosedCycle> findAll(org.springframework.data.domain.Sort sort);
 }

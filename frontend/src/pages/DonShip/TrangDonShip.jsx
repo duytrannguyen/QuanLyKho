@@ -33,6 +33,14 @@ export default function TrangDonShip() {
   const [confirmDeliveryDate, setConfirmDeliveryDate] = useState(getTodayDateString());
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
 
+  // Return modal state
+  const [returningOrder, setReturningOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState('Khách từ chối nhận hàng / Hoàn hàng về kho');
+  const [returnState, setReturnState] = useState('READY');
+  const [restoreAccessories, setRestoreAccessories] = useState(true);
+  const [restoreUpgradeParts, setRestoreUpgradeParts] = useState(true);
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
   // Tải danh sách đơn ship
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
@@ -95,6 +103,40 @@ export default function TrangDonShip() {
       showToast(err.userMessage || err.message || 'Lỗi khi xác nhận giao hàng', 'danger');
     } finally {
       setIsSubmittingDelivery(false);
+    }
+  };
+
+  // Xử lý hoàn hàng / hủy giao
+  const handleOpenReturn = (order) => {
+    setReturningOrder(order);
+    setReturnReason('Khách từ chối nhận hàng / Hoàn hàng về kho');
+    setReturnState('READY');
+    setRestoreAccessories(true);
+    setRestoreUpgradeParts(true);
+  };
+
+  const handleReturnSubmit = async (e) => {
+    e?.preventDefault();
+    if (!returningOrder) return;
+
+    setIsSubmittingReturn(true);
+    try {
+      await apiBaoHanh.returnShippingOrder(returningOrder.cycleId, {
+        reason: returnReason,
+        returnState,
+        restoreAccessories,
+        restoreUpgradeParts
+      });
+      showToast(`Đã hoàn đơn hàng ${returningOrder.cycleId}! Máy đã được nhập lại kho.`, 'success');
+      setReturningOrder(null);
+      if (selectedOrder && selectedOrder.cycleId === returningOrder.cycleId) {
+        setSelectedOrder(null);
+      }
+      fetchOrders();
+    } catch (err) {
+      showToast(err.userMessage || err.message || 'Lỗi khi hoàn đơn hàng', 'danger');
+    } finally {
+      setIsSubmittingReturn(false);
     }
   };
 
@@ -376,10 +418,20 @@ export default function TrangDonShip() {
                             </span>
                           </td>
 
-                          {/* Khách hàng & SĐT */}
+                          {/* Khách hàng & SĐT & Vận đơn */}
                           <td className="py-3">
                             <div className="fw-semibold text-dark">{order.customerName || 'Khách lẻ'}</div>
                             <div className="small text-muted">{order.customerPhone || '—'}</div>
+                            {(order.shippingCarrier || order.trackingCode) && (
+                              <div className="small text-primary mt-1 font-monospace" style={{ fontSize: '11px' }}>
+                                🚚 {order.shippingCarrier || 'Vận chuyển'} {order.trackingCode ? `[${order.trackingCode}]` : ''}
+                              </div>
+                            )}
+                            {order.codAmount > 0 && (
+                              <div className="small text-danger fw-semibold" style={{ fontSize: '11px' }}>
+                                COD: {formatCurrency(order.codAmount)}đ
+                              </div>
+                            )}
                           </td>
 
                           {/* Ngày gửi / Ngày bán */}
@@ -433,15 +485,26 @@ export default function TrangDonShip() {
                           <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
                             <div className="d-inline-flex align-items-center gap-1 justify-content-end">
                               {activeTab === 'PENDING' && (
-                                <button
-                                  type="button"
-                                  className="btn btn-sm btn-success py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm rounded-pill"
-                                  onClick={() => handleOpenConfirm(order)}
-                                  title="Xác nhận khách đã nhận hàng & Kích hoạt bảo hành"
-                                >
-                                  <Truck size={13} />
-                                  <span>Đã nhận</span>
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-success py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm rounded-pill"
+                                    onClick={() => handleOpenConfirm(order)}
+                                    title="Xác nhận khách đã nhận hàng & Kích hoạt bảo hành"
+                                  >
+                                    <Truck size={13} />
+                                    <span>Đã nhận</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill"
+                                    onClick={() => handleOpenReturn(order)}
+                                    title="Khách từ chối nhận hàng / Hủy giao / Hoàn hàng về kho"
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Hoàn hàng</span>
+                                  </button>
+                                </>
                               )}
 
                               <button
@@ -612,6 +675,130 @@ export default function TrangDonShip() {
                       <CheckCircle2 size={16} />
                     )}
                     <span>Xác nhận & Kích hoạt BH</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hoàn hàng / Hủy giao */}
+      {returningOrder && (
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow">
+              <div className="modal-header bg-danger bg-opacity-10 border-0 p-4">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="p-2 bg-danger bg-opacity-25 text-danger rounded-3">
+                    <RotateCcw size={20} />
+                  </div>
+                  <h5 className="modal-title fw-bold text-danger m-0">Xác Nhận Hoàn Hàng / Giao Thất Bại</h5>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setReturningOrder(null)}
+                  disabled={isSubmittingReturn}
+                ></button>
+              </div>
+
+              <form onSubmit={handleReturnSubmit}>
+                <div className="modal-body p-4">
+                  <div className="alert alert-warning py-2 px-3 small rounded-3 mb-3">
+                    Thao tác này sẽ hủy giao đơn hàng, chuyển trạng thái chu kỳ sang <strong>CUSTOMER_RETURN</strong> và tự động đưa máy trở lại kho hoạt động.
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">Máy & Serial</label>
+                    <div className="p-2.5 bg-light rounded-3 border">
+                      <div className="fw-bold text-dark">{returningOrder.sourceModelText || 'Không rõ dòng máy'}</div>
+                      <div className="font-monospace small text-primary fw-bold mt-0.5">Serial: {returningOrder.serialKey}</div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
+                      Lý do hoàn hàng <span className="text-danger">*</span>
+                    </label>
+                    <textarea
+                      className="form-control rounded-3"
+                      rows="2"
+                      value={returnReason}
+                      onChange={(e) => setReturnReason(e.target.value)}
+                      placeholder="VD: Khách đổi ý, bom hàng, không liên lạc được..."
+                      required
+                    ></textarea>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
+                      Trạng thái nhập lại kho
+                    </label>
+                    <select
+                      className="form-select rounded-3"
+                      value={returnState}
+                      onChange={(e) => setReturnState(e.target.value)}
+                    >
+                      <option value="READY">Sẵn sàng bán lại ngay (READY)</option>
+                      <option value="NEEDS_INSPECTION">Cần kiểm tra / Test lại máy (NEEDS_INSPECTION)</option>
+                    </select>
+                  </div>
+
+                  <div className="p-3 bg-light rounded-3 border mb-2">
+                    <div className="form-check mb-2">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="restoreAccCheck"
+                        checked={restoreAccessories}
+                        onChange={(e) => setRestoreAccessories(e.target.checked)}
+                      />
+                      <label className="form-check-label small fw-semibold text-dark" htmlFor="restoreAccCheck">
+                        Hoàn kho các phụ kiện / quà tặng kèm theo đơn
+                      </label>
+                    </div>
+
+                    <div className="form-check mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="restorePartsCheck"
+                        checked={restoreUpgradeParts}
+                        onChange={(e) => setRestoreUpgradeParts(e.target.checked)}
+                      />
+                      <label className="form-check-label small fw-semibold text-dark" htmlFor="restorePartsCheck">
+                        Hoàn kho các linh kiện đã nâng cấp (RAM/SSD)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer border-0 p-4 pt-0">
+                  <button
+                    type="button"
+                    className="btn btn-light rounded-pill px-4 fw-medium"
+                    onClick={() => setReturningOrder(null)}
+                    disabled={isSubmittingReturn}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-danger rounded-pill px-4 fw-medium d-inline-flex align-items-center gap-2 shadow-sm"
+                    disabled={isSubmittingReturn}
+                  >
+                    {isSubmittingReturn ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm" role="status"></span>
+                        <span>Đang xử lý...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw size={16} />
+                        <span>Xác nhận hoàn kho</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

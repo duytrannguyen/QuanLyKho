@@ -7,6 +7,7 @@ import com.qkshop.tonkho.sync.ReconciliationService;
 import com.qkshop.tonkho.sync.SalesSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -88,6 +89,7 @@ public class SyncController {
     }
 
     @PostMapping("/issues/{issueId}/approve-return")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE') or hasAuthority('ORDER_RETURN')")
     public ResponseEntity<ApiResponse<DataIssue>> approveReturn(
             @PathVariable String issueId,
             @RequestBody(required = false) Map<String, String> payload,
@@ -99,6 +101,7 @@ public class SyncController {
     }
 
     @GetMapping("/settings")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getSyncSettings() {
         Map<String, Object> settings = new java.util.HashMap<>();
         settings.put("enabled", Boolean.parseBoolean(systemConfigService.getConfig("GSHEET_SYNC_ENABLED", String.valueOf(googleSheetProperties.isEnabled()))));
@@ -110,6 +113,7 @@ public class SyncController {
     }
 
     @PostMapping("/settings")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateSyncSettings(
             @RequestBody Map<String, Object> payload) {
         if (payload.containsKey("enabled")) {

@@ -76,15 +76,33 @@ public class RepairOrderService {
         // Sinh mã hóa đơn chuẩn 10 ký tự: SC + STT 4 số trong tháng + ddMM 4 số (Ví dụ: SC00010111)
         String orderCode = invoiceCodeService.generateRepairInvoiceCode(createdDate);
 
+        String initialStatus = payload.get("status") != null && !payload.get("status").toString().trim().isEmpty()
+                ? payload.get("status").toString().trim().toUpperCase()
+                : "RECEIVED";
+
+        String deviceSerial = payload.get("deviceSerial") != null ? payload.get("deviceSerial").toString().trim() : null;
+        String intakeCondition = payload.get("intakeCondition") != null ? payload.get("intakeCondition").toString().trim() : null;
+        String accessoriesReceived = payload.get("accessoriesReceived") != null ? payload.get("accessoriesReceived").toString().trim() : null;
+        LocalDate promisedDate = null;
+        if (payload.get("promisedDate") != null && !payload.get("promisedDate").toString().trim().isEmpty()) {
+            try {
+                promisedDate = LocalDate.parse(payload.get("promisedDate").toString().trim());
+            } catch (Exception ignored) {}
+        }
+
         RepairOrder order = RepairOrder.builder()
                 .orderCode(orderCode)
                 .customerName(customerName.trim())
                 .customerPhone(customerPhone.trim())
                 .deviceModel(deviceModel.trim())
+                .deviceSerial(deviceSerial)
+                .intakeCondition(intakeCondition)
+                .accessoriesReceived(accessoriesReceived)
+                .promisedDate(promisedDate)
                 .createdDate(createdDate)
                 .technicianName(payload.get("technicianName") != null ? payload.get("technicianName").toString().trim() : null)
                 .note(payload.get("note") != null ? payload.get("note").toString().trim() : null)
-                .status("COMPLETED")
+                .status(initialStatus)
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
@@ -173,6 +191,31 @@ public class RepairOrderService {
         }
         if (payload.containsKey("note")) {
             order.setNote((String) payload.get("note"));
+        }
+        if (payload.containsKey("deviceSerial")) {
+            order.setDeviceSerial((String) payload.get("deviceSerial"));
+        }
+        if (payload.containsKey("intakeCondition")) {
+            order.setIntakeCondition((String) payload.get("intakeCondition"));
+        }
+        if (payload.containsKey("accessoriesReceived")) {
+            order.setAccessoriesReceived((String) payload.get("accessoriesReceived"));
+        }
+        if (payload.containsKey("promisedDate")) {
+            Object pdObj = payload.get("promisedDate");
+            if (pdObj != null && !pdObj.toString().trim().isEmpty()) {
+                try {
+                    order.setPromisedDate(LocalDate.parse(pdObj.toString().trim()));
+                } catch (Exception ignored) {}
+            } else {
+                order.setPromisedDate(null);
+            }
+        }
+        if (payload.containsKey("status") && payload.get("status") != null) {
+            String newStatus = payload.get("status").toString().trim().toUpperCase();
+            if (!newStatus.equals(order.getStatus())) {
+                updateOrderStatus(order.getId(), newStatus);
+            }
         }
 
         Object dateObj = payload.get("createdDate");
@@ -430,6 +473,7 @@ public class RepairOrderService {
                             .build());
 
             boolean isCancelled = "CANCELLED".equalsIgnoreCase(order.getStatus());
+            boolean isCompleted = "COMPLETED".equalsIgnoreCase(order.getStatus());
 
             so.setSaleDate(sDate);
             so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
@@ -441,17 +485,28 @@ public class RepairOrderService {
             so.setNormalizedSource(SourceNormalizer.normalizeSource("Cửa hàng", "Khách mang máy đến"));
             so.setInboxType("Đơn mua thẳng");
             so.setIsStudent(false);
-            so.setOrderStatus(isCancelled ? "Đã hủy" : "Hoàn tất");
-            so.setPaymentStatus(isCancelled ? "Đã hủy" : "Đã thanh toán");
+            if (isCancelled) {
+                so.setOrderStatus("Đã hủy");
+                so.setPaymentStatus("Đã hủy");
+                so.setNetRevenue(BigDecimal.ZERO);
+            } else if (isCompleted) {
+                so.setOrderStatus("Hoàn tất");
+                so.setPaymentStatus("Đã thanh toán");
+                so.setNetRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
+            } else {
+                so.setOrderStatus("Đang tiếp nhận/sửa");
+                so.setPaymentStatus("Chưa thanh toán");
+                so.setNetRevenue(BigDecimal.ZERO);
+            }
             so.setProductName("Sửa chữa " + order.getDeviceModel() + ": " + servicesSummary);
             so.setBrand("SỬA CHỮA");
             so.setSeries("Dịch vụ sửa chữa");
             so.setSegment("SUA_CHUA");
             so.setModelName(order.getDeviceModel());
+            so.setSerialKeys(order.getDeviceSerial());
             so.setConfigSummary(servicesSummary);
             so.setGrossRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
             so.setDiscount(BigDecimal.ZERO);
-            so.setNetRevenue(isCancelled ? BigDecimal.ZERO : (order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO));
             so.setNote(order.getNote());
             so.setSalesperson(order.getTechnicianName());
             so.setOrigin("WEB_APP");
@@ -466,6 +521,11 @@ public class RepairOrderService {
     public static LocalDate calculateExpiryFromPeriod(LocalDate baseDate, String period) {
         if (baseDate == null) baseDate = LocalDate.now();
         return com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, period);
+    }
+
+    public List<RepairOrder> getOrdersBySerial(String serial) {
+        if (serial == null || serial.trim().isEmpty()) return java.util.Collections.emptyList();
+        return repairOrderRepository.findByDeviceSerialIgnoreCaseOrderByCreatedDateDesc(serial.trim());
     }
 
     public List<RepairOrderItem> searchServiceItems(String keyword) {

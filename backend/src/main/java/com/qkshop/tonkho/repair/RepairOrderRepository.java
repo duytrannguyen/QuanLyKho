@@ -24,6 +24,9 @@ public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> 
            "OR LOWER(r.customerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(r.orderCode) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(r.deviceModel) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR (r.deviceSerial IS NOT NULL AND LOWER(r.deviceSerial) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "ORDER BY r.createdDate DESC")
     List<RepairOrder> searchOrders(@Param("keyword") String keyword);
+
+    List<RepairOrder> findByDeviceSerialIgnoreCaseOrderByCreatedDateDesc(String deviceSerial);
 }

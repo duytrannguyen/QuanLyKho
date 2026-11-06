@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 
-// 1. DATA ĐÃ ĐƯỢC KHÔI PHỤC ĐẦY ĐỦ 100%
+// 1. DATA ĐÃ ĐƯỢC SẮP XẾP LẠI NHÓM HỢP LÍ & ĐẦY ĐỦ 100% CHỨC NĂNG
 const navGroups = [
   {
     title: 'TỔNG QUAN & BÁO CÁO',
@@ -22,9 +22,9 @@ const navGroups = [
     items: [
       { path: '/ban-may', label: 'Bán máy (POS)', icon: ShoppingCart, permission: 'SALE_MACHINE' },
       { path: '/ban-phu-kien', label: 'Bán phụ kiện lẻ', icon: ShoppingBag, permission: 'SALE_ACCESSORY' },
-      { path: '/dich-vu-sua-chua', label: 'Dịch vụ sửa chữa', icon: Wrench, permission: 'SERVICE_REPAIR' },
-      { path: '/don-ship', label: 'Đơn ship & Giao hàng', icon: Truck, permission: 'SALE_MACHINE' },
-      { path: '/bao-hanh', label: 'Tra cứu đơn & Bảo hành', icon: ShieldCheck, permission: 'WARRANTY_CHECK' },
+      { path: '/don-ship', label: 'Đơn ship & Giao hàng', icon: Truck, permission: 'SHIP_MANAGE' },
+      { path: '/dich-vu-sua-chua', label: 'Tiếp nhận sửa chữa', icon: Wrench, permission: 'SERVICE_REPAIR' },
+      { path: '/tra-cuu-sua-chua', label: 'Tra cứu phiếu sửa chữa', icon: Search, permission: 'SERVICE_VIEW' },
       { path: '/bang-gia', label: 'Bảng giá niêm yết', icon: Tag, permission: 'PRICING_VIEW' },
     ]
   },
@@ -40,13 +40,17 @@ const navGroups = [
   {
     title: 'LINH KIỆN & PHỤ KIỆN',
     items: [
-      { path: '/ton-kho-linh-kien', label: 'Kho linh kiện', icon: Cpu, permission: 'INVENTORY_PART' },
+      { path: '/nhap-phu-kien', label: 'Nhập kho phụ kiện', icon: PackagePlus, permission: 'IMPORT_ACCESSORY' },
       { path: '/ton-kho-phu-kien', label: 'Kho phụ kiện', icon: Package, permission: 'INVENTORY_ACCESSORY' },
+      { path: '/lich-su-ban-phu-kien', label: 'Lịch sử bán phụ kiện', icon: History, permission: 'ACCESSORY_HISTORY' },
+      { path: '/nhap-linh-kien', label: 'Nhập kho linh kiện', icon: PackagePlus, permission: 'IMPORT_PART' },
+      { path: '/ton-kho-linh-kien', label: 'Kho linh kiện', icon: Cpu, permission: 'INVENTORY_PART' },
     ]
   },
   {
-    title: 'CHĂM SÓC KHÁCH HÀNG',
+    title: 'BẢO HÀNH & CRM',
     items: [
+      { path: '/bao-hanh', label: 'Tra cứu đơn & Bảo hành', icon: ShieldCheck, permission: 'WARRANTY_CHECK' },
       { path: '/khach-hang', label: 'Khách hàng (CRM)', icon: Users, permission: 'CRM_VIEW' },
       { path: '/khach-hang/het-han-bao-hanh', label: 'Máy hết hạn bảo hành', icon: Clock, permission: 'CRM_VIEW' },
     ]
@@ -56,7 +60,7 @@ const navGroups = [
     items: [
       { path: '/doi-soat', label: 'Đối soát Google Sheet', icon: RefreshCw, permission: 'SYNC_MANAGE' },
       { path: '/nhat-ky', label: 'Nhật ký hoạt động', icon: FileText, permission: 'LOGS_VIEW' },
-      { path: '/he-thong', label: 'Cấu hình & Phân quyền', icon: Settings, permission: 'SYSTEM_MANAGE' },
+      { path: '/he-thong', label: 'Cấu hình & Phân quyền', icon: Settings, permission: 'SYSTEM_MANAGE|USER_MANAGE' },
     ]
   }
 ];
@@ -81,7 +85,7 @@ const SidebarHeader = ({ isCollapsed, isMobile, setMobileOpen }) => (
   </div>
 );
 
-// 3. NAV ITEM (Fix lệch tâm & khối active chuẩn vuông)
+// 3. NAV ITEM
 const NavItem = ({ item, isCollapsed, isMobile, setMobileOpen }) => {
   const { path, label, icon: Icon } = item;
   
@@ -119,7 +123,7 @@ const NavItem = ({ item, isCollapsed, isMobile, setMobileOpen }) => {
   );
 };
 
-// 4. NAV GROUP (Tách vạch ngăn khi thu nhỏ)
+// 4. NAV GROUP
 const NavGroup = ({ group, isActive, onToggle, isCollapsed, isMobile, setMobileOpen }) => {
   const showContent = isCollapsed || isActive;
 
@@ -174,6 +178,7 @@ export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileO
   const { hasPermission } = useAuth();
   const location = useLocation();
 
+  // Accordion Độc quyền: Mở sẵn nhóm chứa trang hiện tại
   const [activeGroup, setActiveGroup] = useState(() => {
     const currentGroup = navGroups.find(g => g.items.some(item => item.path === location.pathname || (item.path !== '/' && location.pathname.startsWith(item.path))));
     return currentGroup ? currentGroup.title : navGroups[0].title;
@@ -182,7 +187,7 @@ export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileO
   useEffect(() => {
     if (!collapsed) {
        const currentGroup = navGroups.find(g => g.items.some(item => item.path === location.pathname || (item.path !== '/' && location.pathname.startsWith(item.path))));
-       if (currentGroup && activeGroup !== currentGroup.title) {
+       if (currentGroup) {
            setActiveGroup(currentGroup.title);
        }
     }

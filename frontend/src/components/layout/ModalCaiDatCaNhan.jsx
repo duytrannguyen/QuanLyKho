@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, User, Lock, Shield, Sliders, Check, Eye, EyeOff, 
-  Mail, KeyRound, Bell, Volume2, VolumeX, Sparkles, AlertCircle, Layers
+  Mail, KeyRound, Bell, Volume2, VolumeX, Sparkles, AlertCircle, Layers, Search
 } from 'lucide-react';
 import { userApi } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
@@ -43,6 +43,7 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
   // Danh sách quyền & metadata
   const [permissionsList, setPermissionsList] = useState([]);
   const [loadingPerms, setLoadingPerms] = useState(false);
+  const [permSearch, setPermSearch] = useState('');
 
   // Tùy chọn giao diện & âm thanh
   const [preferences, setPreferences] = useState(() => {
@@ -160,12 +161,24 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
   };
 
   // Gom nhóm quyền hạn
-  const groupedPermissions = {};
-  permissionsList.forEach(perm => {
-    const gName = perm.group || 'Khác';
-    if (!groupedPermissions[gName]) groupedPermissions[gName] = [];
-    groupedPermissions[gName].push(perm);
-  });
+  const groupedPermissions = useMemo(() => {
+    const q = (permSearch || '').trim().toLowerCase();
+    const filtered = (permissionsList || []).filter(p => {
+      if (!q) return true;
+      return (p.name && p.name.toLowerCase().includes(q)) ||
+             (p.code && p.code.toLowerCase().includes(q)) ||
+             (p.group && p.group.toLowerCase().includes(q)) ||
+             (p.description && p.description.toLowerCase().includes(q));
+    });
+
+    const groups = {};
+    filtered.forEach(perm => {
+      const gName = perm.group || 'Khác';
+      if (!groups[gName]) groups[gName] = [];
+      groups[gName].push(perm);
+    });
+    return groups;
+  }, [permissionsList, permSearch]);
 
   const initials = (profileData.fullName || user.username || 'U')
     .split(' ')
@@ -498,14 +511,26 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
             {/* TAB 3: QUYỀN HẠN CỦA TÔI */}
             {activeTab === 'permissions' && (
               <div>
-                <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                   <div>
                     <h6 className="fw-bold text-dark m-0">Danh sách quyền hạn được cấp</h6>
                     <p className="text-secondary small m-0">Tài khoản của bạn được phép thao tác các chức năng có đánh dấu xanh</p>
                   </div>
-                  <span className="badge bg-primary fs-6 px-3 py-1.5 rounded-pill">
-                    {userPermCount} quyền thao tác
-                  </span>
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="input-group input-group-sm" style={{ width: '220px' }}>
+                      <span className="input-group-text bg-white"><Search size={14} /></span>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="Tìm quyền của tôi..." 
+                        value={permSearch}
+                        onChange={e => setPermSearch(e.target.value)}
+                      />
+                    </div>
+                    <span className="badge bg-primary fs-6 px-3 py-1.5 rounded-pill text-nowrap">
+                      {userPermCount} quyền thao tác
+                    </span>
+                  </div>
                 </div>
 
                 {isAdmin && (
@@ -517,9 +542,15 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
                   </div>
                 )}
 
-                <div className="row g-3">
-                  {Object.entries(groupedPermissions).map(([groupName, perms]) => (
-                    <div className="col-md-6" key={groupName}>
+                {Object.keys(groupedPermissions).length === 0 ? (
+                  <div className="text-center py-5 text-muted">
+                    <Search size={32} className="opacity-50 mb-2" />
+                    <div>Không tìm thấy quyền nào phù hợp với "{permSearch}"</div>
+                  </div>
+                ) : (
+                  <div className="row g-3">
+                    {Object.entries(groupedPermissions).map(([groupName, perms]) => (
+                      <div className="col-md-6" key={groupName}>
                       <div className="border rounded-3 h-100 bg-white shadow-sm overflow-hidden">
                         <div className="bg-light px-3 py-2 border-bottom d-flex align-items-center gap-2">
                           <Layers size={14} className="text-primary" />
@@ -557,6 +588,7 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             )}
 

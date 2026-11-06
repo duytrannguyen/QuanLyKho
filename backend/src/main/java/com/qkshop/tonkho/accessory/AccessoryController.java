@@ -3,6 +3,7 @@ package com.qkshop.tonkho.accessory;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -66,6 +67,7 @@ public class AccessoryController {
     }
 
     @PostMapping("/default-gifts/save")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE')")
     public ResponseEntity<ApiResponse<String>> saveDefaultGifts(@RequestBody Map<String, String> payload) {
         String giftsJson = payload.getOrDefault("bundleJson", "[]");
         systemConfigService.upsertConfig("DEFAULT_GIFT_BUNDLE", giftsJson, "Bộ quà tặng mặc định khi bán máy");
@@ -86,6 +88,7 @@ public class AccessoryController {
     }
 
     @PostMapping("/submit")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_ACCESSORY')")
     public ResponseEntity<ApiResponse<Accessory>> submitAccessory(@RequestBody Map<String, Object> payload) {
         String category = payload.get("category") != null ? payload.get("category").toString().trim() : "KHAC";
         if (category.isEmpty()) category = "KHAC";
@@ -161,6 +164,7 @@ public class AccessoryController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE') or hasAuthority('IMPORT_ACCESSORY')")
     public ResponseEntity<ApiResponse<Accessory>> updateAccessory(
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload) {
@@ -169,6 +173,7 @@ public class AccessoryController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> deleteAccessory(@PathVariable Long id) {
         accessoryService.deleteAccessory(id);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Đã xóa phụ kiện thành công", null));

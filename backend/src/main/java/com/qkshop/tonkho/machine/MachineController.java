@@ -88,6 +88,7 @@ public class MachineController {
 
     /** Cập nhật giá hàng loạt cho danh sách serial */
     @PutMapping("/bulk-price")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_UPDATE') or hasAuthority('PRICING_MANAGE')")
     public ResponseEntity<ApiResponse<Integer>> updateBulkPrice(@RequestBody Map<String, Object> payload) {
         int updatedCount = machineService.updateBulkPrice(payload);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật giá hàng loạt thành công", updatedCount));
@@ -95,6 +96,7 @@ public class MachineController {
 
     /** Cập nhật thông tin máy (giá, ghi chú, trạng thái) */
     @PutMapping("/{serial}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_UPDATE') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<ActiveInventory>> updateMachine(
             @PathVariable String serial,
             @RequestBody Map<String, Object> updates,
@@ -103,9 +105,9 @@ public class MachineController {
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thành công", updated));
     }
 
-    /** Xóa máy — chỉ ADMIN */
+    /** Xóa máy — ADMIN hoặc người có quyền MACHINE_DELETE */
     @DeleteMapping("/{serial}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_DELETE')")
     public ResponseEntity<ApiResponse<Void>> deleteMachine(
             @PathVariable String serial,
             Authentication authentication) {

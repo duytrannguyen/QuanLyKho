@@ -38,6 +38,8 @@ public class AnalyticsService {
     private final PlatformRepository platformRepo;
     private final AccessoryRepository accessoryRepo;
     private final AccessoryHistoryRepository accessoryHistoryRepo;
+    private final com.qkshop.tonkho.part.PartRepository partRepo;
+    private final com.qkshop.tonkho.part.PartHistoryRepository partHistoryRepo;
 
     private boolean isLaptop(AnalyticsFilterRequest filter) {
         return filter.getProductType() == null || "ALL".equals(filter.getProductType()) || "LAPTOP".equals(filter.getProductType());
@@ -45,6 +47,10 @@ public class AnalyticsService {
 
     private boolean isAccessory(AnalyticsFilterRequest filter) {
         return "ALL".equals(filter.getProductType()) || "ACCESSORY".equals(filter.getProductType());
+    }
+
+    private boolean isPart(AnalyticsFilterRequest filter) {
+        return "ALL".equals(filter.getProductType()) || "PART".equals(filter.getProductType()) || "LINH_KIEN".equalsIgnoreCase(filter.getProductType());
     }
 
     public Map<String, Object> getSummary(AnalyticsFilterRequest filter) {
@@ -113,14 +119,16 @@ public class AnalyticsService {
 
             long accImported = 0;
             for (AccessoryHistory h : histories) {
-                if ("IMPORT".equals(h.getAction())) {
+                if ("IMPORT".equalsIgnoreCase(h.getAction())) {
                     importedCount += h.getQuantity();
                     accImported += h.getQuantity();
-                } else if ("SELL".equals(h.getAction())) {
+                } else if ("SELL".equalsIgnoreCase(h.getAction())) {
                     soldCount += h.getQuantity();
                     realSoldCount += h.getQuantity();
                     BigDecimal p = h.getPrice() != null ? h.getPrice() : BigDecimal.ZERO;
                     soldValue = soldValue.add(p.multiply(BigDecimal.valueOf(h.getQuantity())));
+                } else if ("RETURN".equalsIgnoreCase(h.getAction()) || "CANCEL".equalsIgnoreCase(h.getAction())) {
+                    // Không tính xuất kho đối với hoàn hàng / hủy xuất
                 } else {
                     soldCount += h.getQuantity();
                     otherExportCount += h.getQuantity();
@@ -132,6 +140,41 @@ public class AnalyticsService {
                     if (a.getCreatedAt() != null && !a.getCreatedAt().isBefore(fromDate) && !a.getCreatedAt().isAfter(toDate)) {
                         importedCount += a.getQuantity();
                     }
+                }
+            }
+        }
+
+        if (isPart(filter) && partRepo != null && partHistoryRepo != null) {
+            List<com.qkshop.tonkho.part.Part> partList = partRepo.findAll();
+            if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
+                partList = partList.stream().filter(p -> filter.getCategory().equalsIgnoreCase(p.getCategory())).collect(Collectors.toList());
+            }
+
+            for (com.qkshop.tonkho.part.Part p : partList) {
+                if (p.getQuantity() > 0) {
+                    inventoryCount += p.getQuantity();
+                    BigDecimal price = p.getRetailPrice() != null ? p.getRetailPrice() : BigDecimal.ZERO;
+                    totalInventoryValue = totalInventoryValue.add(price.multiply(BigDecimal.valueOf(p.getQuantity())));
+                    if (p.getRetailPrice() == null || p.getRetailPrice().compareTo(BigDecimal.ZERO) <= 0) withoutPrice += p.getQuantity();
+                }
+            }
+
+            List<com.qkshop.tonkho.part.PartHistory> pHistories = partHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
+            for (com.qkshop.tonkho.part.PartHistory ph : pHistories) {
+                if ("IMPORT".equalsIgnoreCase(ph.getAction()) || "SWAP_IN".equalsIgnoreCase(ph.getAction())) {
+                    importedCount += Math.abs(ph.getQuantity());
+                } else if ("SELL".equalsIgnoreCase(ph.getAction()) || "UPGRADE_USE".equalsIgnoreCase(ph.getAction()) || "REPAIR_USE".equalsIgnoreCase(ph.getAction())) {
+                    int qty = Math.abs(ph.getQuantity());
+                    soldCount += qty;
+                    realSoldCount += qty;
+                    BigDecimal p = ph.getPrice() != null ? ph.getPrice() : BigDecimal.ZERO;
+                    soldValue = soldValue.add(p.multiply(BigDecimal.valueOf(qty)));
+                } else if ("RETURN".equalsIgnoreCase(ph.getAction()) || "DELETE".equalsIgnoreCase(ph.getAction())) {
+                    // Không tính là xuất bán
+                } else {
+                    int qty = Math.abs(ph.getQuantity());
+                    soldCount += qty;
+                    otherExportCount += qty;
                 }
             }
         }
@@ -177,7 +220,7 @@ public class AnalyticsService {
                 }
             });
             exported.forEach(m -> {
-                if (m.getClosedAt() != null) {
+                if (m.getCloseType() == CloseType.SALE && m.getClosedAt() != null) {
                     LocalDate d = m.getClosedAt().toLocalDate();
                     exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + 1);
                 }
@@ -201,10 +244,10 @@ public class AnalyticsService {
 
             for (AccessoryHistory h : histories) {
                 LocalDate d = h.getCreatedAt().toLocalDate();
-                if ("IMPORT".equals(h.getAction())) {
-                    importByDay.put(d, importByDay.getOrDefault(d, 0L) + h.getQuantity());
-                } else {
-                    exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + h.getQuantity());
+                if ("IMPORT".equalsIgnoreCase(h.getAction())) {
+                    importByDay.put(d, importByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
+                } else if ("SELL".equalsIgnoreCase(h.getAction())) {
+                    exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
                 }
             }
 
@@ -216,6 +259,23 @@ public class AnalyticsService {
                     }
                 }
             }
+        }
+
+        if (isPart(filter) && partRepo != null && partHistoryRepo != null) {
+            List<com.qkshop.tonkho.part.Part> partList = partRepo.findAll();
+            for (com.qkshop.tonkho.part.Part p : partList) currentInventoryCount += p.getQuantity();
+
+            List<com.qkshop.tonkho.part.PartHistory> pHistories = partHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
+            pHistories.forEach(h -> {
+                if (h.getCreatedAt() != null) {
+                    LocalDate d = h.getCreatedAt().toLocalDate();
+                    if ("IMPORT".equalsIgnoreCase(h.getAction()) || "SWAP_IN".equalsIgnoreCase(h.getAction())) {
+                        importByDay.put(d, importByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
+                    } else if ("SELL".equalsIgnoreCase(h.getAction()) || "UPGRADE_USE".equalsIgnoreCase(h.getAction()) || "REPAIR_USE".equalsIgnoreCase(h.getAction())) {
+                        exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
+                    }
+                }
+            });
         }
 
         long days = ChronoUnit.DAYS.between(fromDate.toLocalDate(), toDate.toLocalDate()) + 1;
@@ -274,6 +334,20 @@ public class AnalyticsService {
                 if (a.getQuantity() > 0) {
                     BigDecimal v = (a.getPrice() != null ? a.getPrice() : BigDecimal.ZERO).multiply(BigDecimal.valueOf(a.getQuantity()));
                     String key = "Phụ kiện - " + a.getCategory();
+                    structMap.put(key, structMap.getOrDefault(key, BigDecimal.ZERO).add(v));
+                }
+            }
+        }
+
+        if (isPart(filter) && partRepo != null) {
+            List<com.qkshop.tonkho.part.Part> partList = partRepo.findAll();
+            if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
+                partList = partList.stream().filter(p -> filter.getCategory().equalsIgnoreCase(p.getCategory())).collect(Collectors.toList());
+            }
+            for (com.qkshop.tonkho.part.Part p : partList) {
+                if (p.getQuantity() > 0) {
+                    BigDecimal v = (p.getRetailPrice() != null ? p.getRetailPrice() : BigDecimal.ZERO).multiply(BigDecimal.valueOf(p.getQuantity()));
+                    String key = "Linh kiện - " + (p.getCategory() != null ? p.getCategory() : "Khác");
                     structMap.put(key, structMap.getOrDefault(key, BigDecimal.ZERO).add(v));
                 }
             }
@@ -370,10 +444,12 @@ public class AnalyticsService {
             }
 
             for (ClosedCycle cc : exported) {
-                String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
-                        ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
-                String name = "Máy móc - " + getBrandNameForPlatform(platformId);
-                exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + 1);
+                if (cc.getCloseType() == CloseType.SALE) {
+                    String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
+                            ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
+                    String name = "Máy móc - " + getBrandNameForPlatform(platformId);
+                    exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + 1);
+                }
             }
         }
 
@@ -394,10 +470,10 @@ public class AnalyticsService {
             for (AccessoryHistory h : histories) {
                 String cat = skuToCat.getOrDefault(h.getSku(), "Khác");
                 String name = "Phụ kiện - " + cat;
-                if ("IMPORT".equals(h.getAction())) {
-                    importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + h.getQuantity());
-                } else {
-                    exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + h.getQuantity());
+                if ("IMPORT".equalsIgnoreCase(h.getAction())) {
+                    importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + Math.abs(h.getQuantity()));
+                } else if ("SELL".equalsIgnoreCase(h.getAction())) {
+                    exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + Math.abs(h.getQuantity()));
                 }
             }
 
@@ -405,6 +481,22 @@ public class AnalyticsService {
                 String name = "Phụ kiện - " + a.getCategory();
                 if (!importByGroup.containsKey(name) && a.getCreatedAt() != null && !a.getCreatedAt().isBefore(fromDate) && !a.getCreatedAt().isAfter(toDate)) {
                     importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + a.getQuantity());
+                }
+            }
+        }
+
+        if (isPart(filter) && partRepo != null && partHistoryRepo != null) {
+            List<com.qkshop.tonkho.part.PartHistory> pHistories = partHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
+            Map<String, String> partSkuToCat = new HashMap<>();
+            for (com.qkshop.tonkho.part.Part p : partRepo.findAll()) partSkuToCat.put(p.getSku(), p.getCategory());
+
+            for (com.qkshop.tonkho.part.PartHistory ph : pHistories) {
+                String cat = partSkuToCat.getOrDefault(ph.getSku(), "Khác");
+                String name = "Linh kiện - " + cat;
+                if ("IMPORT".equalsIgnoreCase(ph.getAction()) || "SWAP_IN".equalsIgnoreCase(ph.getAction())) {
+                    importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + Math.abs(ph.getQuantity()));
+                } else if ("SELL".equalsIgnoreCase(ph.getAction()) || "UPGRADE_USE".equalsIgnoreCase(ph.getAction()) || "REPAIR_USE".equalsIgnoreCase(ph.getAction())) {
+                    exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + Math.abs(ph.getQuantity()));
                 }
             }
         }

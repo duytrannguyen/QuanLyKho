@@ -175,15 +175,21 @@ class OrderSyncIntegrationTest {
         Accessory updatedPart = accessoryRepo.findBySku(testSku).orElseThrow();
         assertEquals(4, updatedPart.getQuantity(), "Kho phụ kiện phải giảm 1 sau khi thay thế");
 
-        // Kiểm tra tự động đồng bộ sang SalesOrder
+        // Kiểm tra tự động đồng bộ sang SalesOrder (mới tiếp nhận -> netRevenue = 0)
         Optional<SalesOrder> soOpt = salesOrderRepo.findByTransactionId(repairOrder.getOrderCode());
         assertTrue(soOpt.isPresent(), "SalesOrder phải được tạo tự động cho đơn sửa chữa");
         SalesOrder so = soOpt.get();
         assertEquals("REPAIR", so.getOrderCategory());
         assertEquals("Tran Thi Test", so.getCustomerName());
         assertEquals("0987654321", so.getCustomerPhone());
-        assertEquals(new BigDecimal("1350000"), so.getNetRevenue());
-        assertEquals("Hoàn tất", so.getOrderStatus());
+        assertEquals(BigDecimal.ZERO, so.getNetRevenue(), "Đơn mới tiếp nhận chưa hoàn tất thì netRevenue = 0");
+        assertEquals("Đang tiếp nhận/sửa", so.getOrderStatus());
+
+        // Cập nhật trạng thái sang COMPLETED -> ghi nhận doanh thu
+        repairOrderService.updateOrderStatus(repairOrder.getId(), "COMPLETED");
+        SalesOrder soCompleted = salesOrderRepo.findByTransactionId(repairOrder.getOrderCode()).orElseThrow();
+        assertEquals(new BigDecimal("1350000"), soCompleted.getNetRevenue());
+        assertEquals("Hoàn tất", soCompleted.getOrderStatus());
     }
 
     @Test

@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
         name = "gsheet.scheduler.enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @RequiredArgsConstructor
 public class GoogleSheetSyncScheduler {

@@ -1,61 +1,73 @@
+version: '3.8'
+
 services:
+  # ==========================================
+  # 1. DATABASE: MySQL 8
+  # ==========================================
   db:
     image: mysql:8.0
     container_name: qkshop_db
     restart: always
+    # Trỏ đến file .env ở thư mục gốc
+    env_file:
+      - .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-dongduy122}
-      MYSQL_DATABASE: ${DB_NAME:-qkshop_tonkho}
+      # Ánh xạ để MySQL tự cấu hình mật khẩu & tên DB theo .env
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
       TZ: Asia/Ho_Chi_Minh
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      # Đã bổ sung -u và -p để ping không bị từ chối truy cập (Access denied)
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
       interval: 5s
       timeout: 5s
       retries: 25
       start_period: 30s
     ports:
       # Cổng MySQL chỉ mở trên localhost của server để bảo mật
-      - "127.0.0.1:${DB_PORT:-3307}:3306"
+      # Dùng DB_PORT_LOCAL để tránh trùng lặp với DB_PORT (3306) của container
+      - "127.0.0.1:${DB_PORT_LOCAL:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       # Tự động khởi tạo schema bảng và seed data ban đầu khi chạy lần đầu
       - ./database/init:/docker-entrypoint-initdb.d:ro
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone='+07:00'
 
+  # ==========================================
+  # 2. BACKEND: Spring Boot
+  # ==========================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: qkshop_backend
     restart: always
+    # Tự động bơm TOÀN BỘ biến trong .env (JWT, ADMIN, GSHEET...) vào Spring Boot
+    env_file:
+      - .env
     environment:
-      - PORT=8080
-      - DB_URL=jdbc:mysql://db:3306/${DB_NAME:-qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8
-      - DB_USERNAME=root
-      - DB_PASSWORD=${DB_PASSWORD:-dongduy122}
-      - JWT_SECRET=${JWT_SECRET:-357638792F423F4428472B4B6250655368566D597133743677397A2443264629}
-      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS:-43200000}
-      - JWT_REFRESH_EXPIRATION_MS=${JWT_REFRESH_EXPIRATION_MS:-604800000}
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - ADMIN_FULLNAME=${ADMIN_FULLNAME:-Admin QKShop}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@qkshop.vn}
-      - GSHEET_ENABLED=${GSHEET_ENABLED:-false}
-      - GSHEET_CRON_ENABLED=${GSHEET_CRON_ENABLED:-false}
-      - TZ=Asia/Ho_Chi_Minh
+      # GHI ĐÈ biến DB_HOST và DB_PORT từ file .env (vốn đang là localhost)
+      # Để backend gọi đúng vào tên service 'db' trong mạng nội bộ Docker
+      DB_HOST: db
+      DB_PORT: 3306
     ports:
-      # Backend nội bộ, người dùng bên ngoài đi qua Nginx
-      - "127.0.0.1:8080:8080"
+      # Backend nội bộ, người dùng bên ngoài đi qua Nginx/Frontend
+      - "127.0.0.1:${PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
 
+  # ==========================================
+  # 3. FRONTEND: React
+  # ==========================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: qkshop_frontend
     restart: always
+    env_file:
+      - .env
     ports:
       # Lắng nghe trên IP tĩnh server: BIND_IP:HTTP_PORT
       - "${BIND_IP:-0.0.0.0}:${HTTP_PORT:-80}:80"

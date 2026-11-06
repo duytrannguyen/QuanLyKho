@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Eye, ShoppingBag, ClipboardCheck, AlertTriangle,
-  PackagePlus, Search, RefreshCw, ArrowRight
+  PackagePlus, Search, RefreshCw, ArrowRight, Truck
 } from 'lucide-react';
 import { dashboardApi, syncApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
@@ -168,14 +168,10 @@ export default function TrangTongQuan() {
                 </Link>
               </div>
               <div className="col-6">
-                <button
-                  className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2"
-                  onClick={handleManualSync}
-                  disabled={syncing}
-                >
-                  <RefreshCw size={28} className={`text-primary ${syncing ? 'spin-animation' : ''}`} />
-                  <span className="fw-medium text-dark">{syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</span>
-                </button>
+                <Link to="/don-ship" className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2">
+                  <Truck size={28} className="text-primary" />
+                  <span className="fw-medium text-dark">Đơn ship</span>
+                </Link>
               </div>
             </div>
           </div>

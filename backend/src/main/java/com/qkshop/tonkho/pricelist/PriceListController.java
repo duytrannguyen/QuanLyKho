@@ -51,9 +51,12 @@ public class PriceListController {
      */
     @GetMapping("/configs-by-group")
     public ResponseEntity<ApiResponse<List<PriceListItemDTO>>> getConfigsByGroup(
-            @RequestParam String platformIds) {
+            @RequestParam(required = false, defaultValue = "") String platformIds) {
 
         List<PriceListItemDTO> items = new ArrayList<>();
+        if (platformIds == null || platformIds.trim().isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.ok(items));
+        }
 
         String[] ids = platformIds.split(",");
         for (String rawId : ids) {

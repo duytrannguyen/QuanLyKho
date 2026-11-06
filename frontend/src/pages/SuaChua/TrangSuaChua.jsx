@@ -26,9 +26,15 @@ export default function TrangSuaChua() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deviceModel, setDeviceModel] = useState('');
+  const [deviceSerial, setDeviceSerial] = useState('');
+  const [intakeCondition, setIntakeCondition] = useState('');
+  const [accessoriesReceived, setAccessoriesReceived] = useState('');
+  const [promisedDate, setPromisedDate] = useState('');
+  const [orderStatus, setOrderStatus] = useState('RECEIVED');
   const [technicianName, setTechnicianName] = useState('');
   const [createdDate, setCreatedDate] = useState(() => getTodayDateString());
   const [note, setNote] = useState('');
+  const [activeFilterStatus, setActiveFilterStatus] = useState('ALL');
 
   // Danh sách dịch vụ nhập tay
   const [services, setServices] = useState([
@@ -51,7 +57,16 @@ export default function TrangSuaChua() {
     if (location.state?.editOrder) {
       handleEditOrder(location.state.editOrder);
     }
-  }, [location.state]);
+    const params = new URLSearchParams(location.search);
+    const prefillSerial = params.get('prefillSerial') || params.get('serial');
+    const prefillCustomer = params.get('prefillCustomer') || params.get('customer');
+    const prefillPhone = params.get('prefillPhone') || params.get('phone');
+    const prefillModel = params.get('prefillModel') || params.get('device');
+    if (prefillSerial) setDeviceSerial(prefillSerial);
+    if (prefillCustomer) setCustomerName(prefillCustomer);
+    if (prefillPhone) setCustomerPhone(prefillPhone);
+    if (prefillModel) setDeviceModel(prefillModel);
+  }, [location.state, location.search]);
 
   const fetchAvailableParts = async () => {
     try {
@@ -122,6 +137,11 @@ export default function TrangSuaChua() {
     setCustomerName('');
     setCustomerPhone('');
     setDeviceModel('');
+    setDeviceSerial('');
+    setIntakeCondition('');
+    setAccessoriesReceived('');
+    setPromisedDate('');
+    setOrderStatus('RECEIVED');
     setTechnicianName('');
     setCreatedDate(getTodayDateString());
     setNote('');
@@ -135,6 +155,11 @@ export default function TrangSuaChua() {
     setCustomerName(order.customerName || '');
     setCustomerPhone(order.customerPhone || '');
     setDeviceModel(order.deviceModel || '');
+    setDeviceSerial(order.deviceSerial || '');
+    setIntakeCondition(order.intakeCondition || '');
+    setAccessoriesReceived(order.accessoriesReceived || '');
+    setPromisedDate(order.promisedDate ? String(order.promisedDate).slice(0, 10) : '');
+    setOrderStatus(order.status || 'RECEIVED');
     setTechnicianName(order.technicianName || '');
     setNote(order.note || '');
     
@@ -223,6 +248,11 @@ export default function TrangSuaChua() {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         deviceModel: deviceModel.trim(),
+        deviceSerial: deviceSerial ? deviceSerial.trim() : null,
+        intakeCondition: intakeCondition ? intakeCondition.trim() : null,
+        accessoriesReceived: accessoriesReceived ? accessoriesReceived.trim() : null,
+        promisedDate: promisedDate || null,
+        status: orderStatus || 'RECEIVED',
         technicianName: technicianName.trim(),
         createdDate,
         note: note.trim(),
@@ -258,7 +288,6 @@ export default function TrangSuaChua() {
         })
       };
 
-
       let res;
       if (editingOrderId) {
         res = await apiSuaChua.updateOrder(editingOrderId, payload);
@@ -279,6 +308,247 @@ export default function TrangSuaChua() {
     }
   };
 
+  const handleQuickStatusChange = async (orderId, newStatus) => {
+    if (!orderId || !newStatus) return;
+    try {
+      await apiSuaChua.updateOrderStatus(orderId, newStatus);
+      showToast(`Đã chuyển trạng thái đơn sang: ${newStatus}`, 'success');
+      fetchOrders();
+      if (selectedOrderDetail && selectedOrderDetail.id === orderId) {
+        setSelectedOrderDetail({ ...selectedOrderDetail, status: newStatus });
+      }
+    } catch (err) {
+      showToast(err.userMessage || err.message || 'Lỗi cập nhật trạng thái đơn', 'danger');
+    }
+  };
+
+  const printIntakeTicket = (order) => {
+    const win = window.open('', '_blank', 'width=850,height=750');
+    if (!win || !order) return;
+    const servicesText = (order.items || []).map((it, idx) => `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small style="color:#64748b;">${it.note}</small>` : ''}</td>
+        <td style="text-align:center;">${it.quantity || 1}</td>
+        <td style="text-align:right;">${it.price ? formatCurrency(it.price) + ' đ' : 'Chờ báo giá'}</td>
+      </tr>
+    `).join('');
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <title>Phiếu Tiếp Nhận Máy - ${order.orderCode}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+          body { padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; }
+          .logo { font-size: 22px; font-weight: 800; color: #2563eb; }
+          .title { text-align: center; margin: 15px 0; }
+          .title h2 { font-size: 18px; font-weight: 700; text-transform: uppercase; color: #0f172a; }
+          .title p { font-size: 11px; color: #64748b; margin-top: 2px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+          .row-info { display: flex; font-size: 13px; }
+          .lbl { width: 140px; color: #64748b; font-weight: 500; }
+          .val { flex: 1; font-weight: 600; color: #0f172a; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          .table th, .table td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 12px; }
+          .table th { background: #f1f5f9; text-transform: uppercase; font-weight: 600; }
+          .condition-box { background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 10px; margin-top: 12px; }
+          .terms { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 15px; font-size: 11px; color: #475569; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 30px; text-align: center; }
+          .sign-col { width: 220px; }
+          .sign-title { font-weight: 600; margin-bottom: 50px; font-size: 12px; }
+          @media print { body { padding: 15px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">QKSHOP.VN</div>
+            <div style="font-size: 11px; color: #64748b;">Dịch vụ Tiếp nhận Sửa Chữa & Bảo Hành Laptop</div>
+            <div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 14px; font-weight: 700; color: #2563eb;">Mã phiếu: ${order.orderCode}</div>
+            <div style="font-size: 11px; color: #64748b;">Ngày nhận: ${formatDate(order.createdDate)}</div>
+            ${order.promisedDate ? `<div style="font-size: 11px; color: #dc2626; font-weight: 600;">Hẹn trả máy: ${formatDate(order.promisedDate)}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="title">
+          <h2>PHIẾU TIẾP NHẬN MÁY SỬA CHỮA / BẢO HÀNH</h2>
+          <p>(Quý khách vui lòng giữ phiếu này để đối chiếu khi nhận lại máy)</p>
+        </div>
+
+        <div class="grid">
+          <div class="row-info"><span class="lbl">Khách hàng:</span><span class="val">${order.customerName || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Số điện thoại:</span><span class="val font-monospace">${order.customerPhone || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Dòng máy:</span><span class="val">${order.deviceModel || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Số Serial:</span><span class="val font-monospace">${order.deviceSerial || '—'}</span></div>
+          <div class="row-info"><span class="lbl">KTV tiếp nhận:</span><span class="val">${order.technicianName || 'QKShop'}</span></div>
+          <div class="row-info"><span class="lbl">Trạng thái:</span><span class="val" style="color: #d97706;">${order.status === 'RECEIVED' ? 'Mới tiếp nhận máy' : (order.status || 'Chờ xử lý')}</span></div>
+        </div>
+
+        <div class="condition-box">
+          <div style="font-weight: 700; color: #b45309; margin-bottom: 4px;">TÌNH TRẠNG TIẾP NHẬN & PHỤ KIỆN GỬI KÈM:</div>
+          <div><strong>• Tình trạng máy lúc nhận:</strong> ${order.intakeCondition || order.note || 'Bình thường / Chưa ghi chú'}</div>
+          <div><strong>• Phụ kiện gửi kèm:</strong> ${order.accessoriesReceived || 'Chỉ thân máy (Không có phụ kiện)'}</div>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <div style="font-weight: 700; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">Hạng mục dịch vụ / Linh kiện yêu cầu kiểm tra:</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 8%; text-align: center;">STT</th>
+                <th>Dịch vụ / Linh kiện</th>
+                <th style="width: 15%; text-align: center;">Số lượng</th>
+                <th style="width: 25%; text-align: right;">Đơn giá dự kiến</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${servicesText || '<tr><td colspan="4" style="text-align:center;color:#64748b;">Kiểm tra tổng quát theo tình trạng máy</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="terms">
+          <strong>LƯU Ý QUAN TRỌNG:</strong>
+          <p>1. QKShop không chịu trách nhiệm về dữ liệu cá nhân trong máy. Quý khách vui lòng sao lưu trước khi bàn giao.</p>
+          <p>2. Vui lòng kiểm tra lại tình trạng máy và phụ kiện được ghi trên phiếu trước khi rời cửa hàng.</p>
+          <p>3. Khi đến nhận máy, quý khách vui lòng mang theo phiếu này hoặc số điện thoại đăng ký.</p>
+        </div>
+
+        <div class="signatures">
+          <div class="sign-col">
+            <div class="sign-title">KHÁCH HÀNG BÀN GIAO MÁY<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div>
+          </div>
+          <div class="sign-col">
+            <div class="sign-title">KỸ THUẬT VIÊN TIẾP NHẬN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div>
+            <div style="font-weight: 600; font-size: 13px;">${order.technicianName || 'QKShop'}</div>
+          </div>
+        </div>
+
+        <script>window.onload = function() { setTimeout(function() { window.print(); }, 250); };</script>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
+  const printPaymentInvoice = (order) => {
+    const win = window.open('', '_blank', 'width=850,height=750');
+    if (!win || !order) return;
+    const rowsHtml = (order.items || []).map((it, idx) => `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small style="color:#64748b;">${it.note}</small>` : ''}</td>
+        <td style="text-align:center;">${it.quantity || 1}</td>
+        <td style="text-align:right;">${formatCurrency(it.price)} đ</td>
+        <td style="text-align:center;">${it.warrantyPeriod || (it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH')}</td>
+        <td style="text-align:center;">${it.warrantyExpiry || '---'}</td>
+      </tr>
+    `).join('');
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <title>Hóa Đơn & Bảo Hành Dịch Vụ - ${order.orderCode}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+          body { padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #16a34a; padding-bottom: 12px; margin-bottom: 16px; }
+          .logo { font-size: 22px; font-weight: 800; color: #16a34a; }
+          .title { text-align: center; margin: 15px 0; }
+          .title h2 { font-size: 18px; font-weight: 700; text-transform: uppercase; color: #0f172a; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+          .row-info { display: flex; font-size: 13px; }
+          .lbl { width: 140px; color: #64748b; font-weight: 500; }
+          .val { flex: 1; font-weight: 600; color: #0f172a; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          .table th, .table td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 12px; }
+          .table th { background: #f1f5f9; text-transform: uppercase; font-weight: 600; }
+          .total-box { margin-top: 14px; text-align: right; }
+          .total-price { font-size: 18px; font-weight: 800; color: #16a34a; }
+          .terms { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 15px; font-size: 11px; color: #475569; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 30px; text-align: center; }
+          .sign-col { width: 220px; }
+          .sign-title { font-weight: 600; margin-bottom: 50px; font-size: 12px; }
+          @media print { body { padding: 15px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">QKSHOP.VN</div>
+            <div style="font-size: 11px; color: #64748b;">Hóa Đơn Dịch Vụ Sửa Chữa & Bảo Hành Linh Kiện</div>
+            <div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 14px; font-weight: 700; color: #16a34a;">Hóa đơn: ${order.orderCode}</div>
+            <div style="font-size: 11px; color: #64748b;">Ngày thanh toán: ${formatDate(order.createdDate)}</div>
+          </div>
+        </div>
+
+        <div class="title">
+          <h2>PHIẾU THANH TOÁN & BẢO HÀNH DỊCH VỤ</h2>
+        </div>
+
+        <div class="grid">
+          <div class="row-info"><span class="lbl">Khách hàng:</span><span class="val">${order.customerName || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Số điện thoại:</span><span class="val font-monospace">${order.customerPhone || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Dòng máy:</span><span class="val">${order.deviceModel || '—'}</span></div>
+          <div class="row-info"><span class="lbl">Số Serial:</span><span class="val font-monospace">${order.deviceSerial || '—'}</span></div>
+          <div class="row-info"><span class="lbl">KTV thực hiện:</span><span class="val">${order.technicianName || 'QKShop'}</span></div>
+          <div class="row-info"><span class="lbl">Trạng thái:</span><span class="val" style="color: #16a34a;">Đã hoàn tất & Giao khách</span></div>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width: 6%; text-align: center;">STT</th>
+              <th>Dịch vụ / Linh kiện</th>
+              <th style="width: 10%; text-align: center;">Số lượng</th>
+              <th style="width: 20%; text-align: right;">Đơn giá</th>
+              <th style="width: 18%; text-align: center;">Gói bảo hành</th>
+              <th style="width: 18%; text-align: center;">Hạn bảo hành</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="total-box">
+          <div style="font-size: 14px; color: #64748b;">Tổng tiền thanh toán: <span class="total-price">${formatCurrency(order.totalAmount)} đ</span></div>
+        </div>
+
+        <div class="terms">
+          <strong>ĐIỀU KHOẢN BẢO HÀNH:</strong>
+          <p>1. Các linh kiện thay thế được bảo hành theo thời hạn ghi trên phiếu, tem niêm phong phải còn nguyên vẹn.</p>
+          <p>2. Không bảo hành các hư hỏng do rơi vỡ, vào nước, chập cháy nguồn điện, hoặc can thiệp phần cứng trái phép.</p>
+        </div>
+
+        <div class="signatures">
+          <div class="sign-col">
+            <div class="sign-title">KHÁCH HÀNG THANH TOÁN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div>
+          </div>
+          <div class="sign-col">
+            <div class="sign-title">KỸ THUẬT VIÊN / THU NGÂN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div>
+            <div style="font-weight: 600; font-size: 13px;">${order.technicianName || 'QKShop'}</div>
+          </div>
+        </div>
+
+        <script>window.onload = function() { setTimeout(function() { window.print(); }, 250); };</script>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  };
 
   const getItemExpiryStatus = (expiryDate) => {
     if (!expiryDate) {
@@ -308,7 +578,27 @@ export default function TrangSuaChua() {
     };
   };
 
+  const renderStatusBadge = (status) => {
+    switch (status) {
+      case 'RECEIVED':
+        return <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Mới tiếp nhận</span>;
+      case 'IN_REPAIR':
+        return <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">Đang sửa chữa</span>;
+      case 'COMPLETED':
+        return <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">Đã hoàn tất</span>;
+      case 'CANCELLED':
+        return <span className="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Hủy / Trả về</span>;
+      default:
+        return <span className="badge bg-secondary-subtle text-secondary border">{status || 'Chờ xử lý'}</span>;
+    }
+  };
+
   const totalAmount = services.reduce((sum, s) => sum + (parseFloat(s.price) || 0) * (parseInt(s.quantity) || 1), 0);
+
+  const filteredOrders = orders.filter(ord => {
+    if (activeFilterStatus === 'ALL') return true;
+    return (ord.status || 'RECEIVED') === activeFilterStatus;
+  });
 
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
@@ -384,18 +674,48 @@ export default function TrangSuaChua() {
                   </div>
 
                   <div className="col-md-6">
+                    <label className="form-label text-muted fw-semibold small">Số Serial máy</label>
+                    <input className="form-control font-monospace" placeholder="Serial máy khách (nếu có)..." value={deviceSerial} onChange={e => setDeviceSerial(e.target.value)} />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label text-muted fw-semibold small">Tình trạng máy lúc nhận</label>
+                    <input className="form-control" placeholder="Trầy xước, nứt vỡ, mất nguồn, sập nguồn..." value={intakeCondition} onChange={e => setIntakeCondition(e.target.value)} />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label text-muted fw-semibold small">Phụ kiện khách gửi kèm</label>
+                    <input className="form-control" placeholder="Sạc theo máy, chuột, túi chống sốc..." value={accessoriesReceived} onChange={e => setAccessoriesReceived(e.target.value)} />
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label text-muted fw-semibold small">Trạng thái xử lý</label>
+                    <select className="form-select fw-semibold" value={orderStatus} onChange={e => setOrderStatus(e.target.value)}>
+                      <option value="RECEIVED">1. Mới tiếp nhận (RECEIVED)</option>
+                      <option value="IN_REPAIR">2. Đang sửa chữa (IN_REPAIR)</option>
+                      <option value="COMPLETED">3. Hoàn tất & Giao khách (COMPLETED)</option>
+                      <option value="CANCELLED">4. Hủy phiếu / Khách không sửa (CANCELLED)</option>
+                    </select>
+                  </div>
+
+                  <div className="col-md-4">
+                    <label className="form-label text-muted fw-semibold small">Ngày hẹn giao máy</label>
+                    <input type="date" className="form-control" value={promisedDate} onChange={e => setPromisedDate(e.target.value)} />
+                  </div>
+
+                  <div className="col-md-4">
                     <label className="form-label text-muted fw-semibold small">Kỹ thuật viên thực hiện</label>
                     <input className="form-control" placeholder="Tên thợ..." value={technicianName} onChange={e => setTechnicianName(e.target.value)} />
                   </div>
 
                   <div className="col-md-6">
-                    <label className="form-label text-muted fw-semibold small">Ngày thực hiện</label>
+                    <label className="form-label text-muted fw-semibold small">Ngày tiếp nhận / Tạo đơn</label>
                     <input type="date" className="form-control" value={createdDate} onChange={e => setCreatedDate(e.target.value)} />
                   </div>
 
                   <div className="col-md-6">
                     <label className="form-label text-muted fw-semibold small">Ghi chú chung</label>
-                    <input className="form-control" placeholder="Tình trạng máy trước sửa, lưu ý..." value={note} onChange={e => setNote(e.target.value)} />
+                    <input className="form-control" placeholder="Lưu ý thêm của khách hàng..." value={note} onChange={e => setNote(e.target.value)} />
                   </div>
                 </div>
 
@@ -588,30 +908,95 @@ export default function TrangSuaChua() {
                   />
                 </div>
               </div>
+
+              {/* Tabs Lọc Trạng Thái Đơn */}
+              <div className="px-2 pt-2 bg-light border-bottom">
+                <ul className="nav nav-pills nav-fill small gap-1 pb-2">
+                  <li className="nav-item">
+                    <button 
+                      type="button" 
+                      className={`nav-link py-1 px-2 ${activeFilterStatus === 'ALL' ? 'active fw-bold' : 'text-secondary'}`}
+                      style={{ fontSize: '11px' }}
+                      onClick={() => setActiveFilterStatus('ALL')}
+                    >
+                      Tất cả ({orders.length})
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button 
+                      type="button" 
+                      className={`nav-link py-1 px-2 ${activeFilterStatus === 'RECEIVED' ? 'active bg-warning text-dark fw-bold' : 'text-secondary'}`}
+                      style={{ fontSize: '11px' }}
+                      onClick={() => setActiveFilterStatus('RECEIVED')}
+                    >
+                      Nhận ({orders.filter(o => o.status === 'RECEIVED' || !o.status).length})
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button 
+                      type="button" 
+                      className={`nav-link py-1 px-2 ${activeFilterStatus === 'IN_REPAIR' ? 'active bg-info text-dark fw-bold' : 'text-secondary'}`}
+                      style={{ fontSize: '11px' }}
+                      onClick={() => setActiveFilterStatus('IN_REPAIR')}
+                    >
+                      Sửa ({orders.filter(o => o.status === 'IN_REPAIR').length})
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button 
+                      type="button" 
+                      className={`nav-link py-1 px-2 ${activeFilterStatus === 'COMPLETED' ? 'active bg-success text-white fw-bold' : 'text-secondary'}`}
+                      style={{ fontSize: '11px' }}
+                      onClick={() => setActiveFilterStatus('COMPLETED')}
+                    >
+                      Xong ({orders.filter(o => o.status === 'COMPLETED').length})
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button 
+                      type="button" 
+                      className={`nav-link py-1 px-2 ${activeFilterStatus === 'CANCELLED' ? 'active bg-danger text-white fw-bold' : 'text-secondary'}`}
+                      style={{ fontSize: '11px' }}
+                      onClick={() => setActiveFilterStatus('CANCELLED')}
+                    >
+                      Hủy ({orders.filter(o => o.status === 'CANCELLED').length})
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
               <div className="card-body p-3" style={{maxHeight: '650px', overflowY: 'auto'}}>
-                {orders.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                   <div className="text-center py-5 text-muted">
                     <Wrench size={36} className="opacity-25 mb-2" />
-                    <p className="mb-0">Chưa có đơn dịch vụ sửa chữa nào</p>
+                    <p className="mb-0">Không có đơn nào theo bộ lọc</p>
                   </div>
                 ) : (
                   <div className="d-flex flex-column gap-2">
-                    {orders.map(ord => (
+                    {filteredOrders.map(ord => (
                       <div 
                         key={ord.id} 
                         className={`p-3 border rounded-3 bg-white shadow-xs transition-all position-relative ${editingOrderId === ord.id ? 'border-warning shadow-sm bg-warning bg-opacity-10' : 'hover-shadow'}`}
                         style={{ cursor: 'pointer' }}
                         onClick={() => setSelectedOrderDetail(ord)}
                       >
-                        {/* Header rút gọn */}
+                        {/* Header rút gọn & Trạng thái */}
                         <div className="d-flex justify-content-between align-items-start mb-1">
-                          <span className="badge bg-primary-subtle text-primary fw-bold">{ord.orderCode}</span>
+                          <div className="d-flex align-items-center gap-1 flex-wrap">
+                            <span className="badge bg-primary-subtle text-primary fw-bold">{ord.orderCode}</span>
+                            {renderStatusBadge(ord.status)}
+                          </div>
                           <span className="text-danger fw-bold">{formatCurrency(ord.totalAmount)} đ</span>
                         </div>
 
-                        {/* Thông tin cơ bản */}
+                        {/* Thông tin thiết bị */}
                         <div className="fw-bold text-dark text-truncate mb-1" title={ord.deviceModel}>
                           {ord.deviceModel}
+                          {ord.deviceSerial && (
+                            <span className="badge bg-light text-secondary font-monospace border ms-1" style={{ fontSize: '10px' }}>
+                              SN: {ord.deviceSerial}
+                            </span>
+                          )}
                         </div>
 
                         <div className="d-flex justify-content-between align-items-center small text-secondary">
@@ -619,9 +1004,18 @@ export default function TrangSuaChua() {
                           <span>SĐT: <strong className="text-dark">{ord.customerPhone}</strong></span>
                         </div>
 
+                        {ord.intakeCondition && (
+                          <div className="small text-muted text-truncate mt-1">
+                            <span className="fw-semibold">Tình trạng:</span> {ord.intakeCondition}
+                          </div>
+                        )}
+
                         <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
-                          <span className="small text-muted">
-                            {ord.items ? `${ord.items.length} dịch vụ` : ''} • {formatDate(ord.createdDate)}
+                          <span className="small text-muted" style={{ fontSize: '11px' }}>
+                            {ord.items ? `${ord.items.length} mục` : ''} • {formatDate(ord.createdDate)}
+                            {ord.promisedDate && (
+                              <span className="text-danger ms-1 fw-medium">• Hẹn: {formatDate(ord.promisedDate)}</span>
+                            )}
                           </span>
 
                           <div className="d-flex gap-1" onClick={e => e.stopPropagation()}>
@@ -639,7 +1033,7 @@ export default function TrangSuaChua() {
                               title="Xem chi tiết"
                               onClick={() => setSelectedOrderDetail(ord)}
                             >
-                              <Eye size={12} className="me-1"/> Chi tiết
+                              <Eye size={12} className="me-1"/> Xem
                             </button>
                           </div>
                         </div>
@@ -654,7 +1048,7 @@ export default function TrangSuaChua() {
 
       {/* MODAL XEM CHI TIẾT ĐẦY ĐỦ KHI CLICK VÀO HÓA ĐƠN HOẶC DÒNG DỊCH VỤ */}
       {selectedOrderDetail && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow">
               <div className="modal-header bg-dark text-white py-3">
@@ -669,17 +1063,38 @@ export default function TrangSuaChua() {
                 <div className="p-3 bg-light rounded-3 border mb-3">
                   <div className="row g-2 small">
                     <div className="col-sm-6"><strong>Mã hóa đơn:</strong> <span className="badge bg-primary">{selectedOrderDetail.orderCode}</span></div>
-                    <div className="col-sm-6"><strong>Ngày thực hiện:</strong> {formatDate(selectedOrderDetail.createdDate)}</div>
+                    <div className="col-sm-6"><strong>Ngày nhận:</strong> {formatDate(selectedOrderDetail.createdDate)}</div>
                     <div className="col-sm-6"><strong>Khách hàng:</strong> {selectedOrderDetail.customerName}</div>
                     <div className="col-sm-6"><strong>Số điện thoại:</strong> <span className="text-dark fw-bold">{selectedOrderDetail.customerPhone}</span></div>
-                    <div className="col-sm-6"><strong>Máy sửa chữa:</strong> <span className="text-primary fw-bold">{selectedOrderDetail.deviceModel}</span></div>
+                    <div className="col-sm-6"><strong>Dòng máy:</strong> <span className="text-primary fw-bold">{selectedOrderDetail.deviceModel}</span></div>
+                    <div className="col-sm-6"><strong>Số Serial:</strong> <span className="font-monospace fw-bold">{selectedOrderDetail.deviceSerial || '—'}</span></div>
+                    <div className="col-sm-6"><strong>Tình trạng lúc nhận:</strong> {selectedOrderDetail.intakeCondition || '—'}</div>
+                    <div className="col-sm-6"><strong>Phụ kiện kèm:</strong> {selectedOrderDetail.accessoriesReceived || '—'}</div>
                     <div className="col-sm-6"><strong>Kỹ thuật viên:</strong> {selectedOrderDetail.technicianName || '—'}</div>
+                    <div className="col-sm-6"><strong>Hẹn trả máy:</strong> <span className="text-danger fw-bold">{formatDate(selectedOrderDetail.promisedDate) || '—'}</span></div>
                     {selectedOrderDetail.note && (
                       <div className="col-12 mt-1"><strong>Ghi chú:</strong> <span className="text-muted">{selectedOrderDetail.note}</span></div>
                     )}
-                    <div className="col-12 mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-                      <strong className="fs-6">Tổng tiền thanh toán:</strong>
-                      <span className="text-danger fw-bold fs-5">{formatCurrency(selectedOrderDetail.totalAmount)} đ</span>
+                    
+                    <div className="col-12 mt-2 pt-2 border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fw-semibold text-secondary">Trạng thái phiếu:</span>
+                        <select 
+                          className="form-select form-select-sm fw-bold border-primary shadow-sm"
+                          style={{ width: 'auto' }}
+                          value={selectedOrderDetail.status || 'RECEIVED'}
+                          onChange={(e) => handleQuickStatusChange(selectedOrderDetail.id, e.target.value)}
+                        >
+                          <option value="RECEIVED">1. Mới tiếp nhận (RECEIVED)</option>
+                          <option value="IN_REPAIR">2. Đang sửa chữa (IN_REPAIR)</option>
+                          <option value="COMPLETED">3. Hoàn tất & Giao khách (COMPLETED)</option>
+                          <option value="CANCELLED">4. Hủy phiếu / Không sửa (CANCELLED)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <strong className="fs-6 me-2">Tổng tiền:</strong>
+                        <span className="text-danger fw-bold fs-5">{formatCurrency(selectedOrderDetail.totalAmount)} đ</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -736,8 +1151,8 @@ export default function TrangSuaChua() {
                 </div>
               </div>
 
-              <div className="modal-footer bg-light d-flex justify-content-between">
-                <div className="d-flex gap-2">
+              <div className="modal-footer bg-light d-flex flex-wrap justify-content-between gap-2">
+                <div className="d-flex flex-wrap gap-2">
                   <button 
                     type="button" 
                     className="btn btn-warning fw-medium d-flex align-items-center"
@@ -747,72 +1162,21 @@ export default function TrangSuaChua() {
                       handleEditOrder(ord);
                     }}
                   >
-                    <Edit3 size={16} className="me-1" /> Chỉnh sửa hóa đơn này
+                    <Edit3 size={16} className="me-1" /> Sửa đơn
                   </button>
                   <button
                     type="button"
-                    className="btn btn-outline-secondary d-flex align-items-center"
-                    onClick={() => {
-                      const ord = selectedOrderDetail;
-                      const win = window.open('', '_blank', 'width=850,height=700');
-                      if (!win || !ord) return;
-                      const rowsHtml = (ord.items || []).map((it, idx) => `
-                        <tr>
-                          <td style="text-align:center">${idx + 1}</td>
-                          <td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small>${it.note}</small>` : ''}</td>
-                          <td style="text-align:center">${it.quantity || 1}</td>
-                          <td style="text-align:right">${formatCurrency(it.price)} đ</td>
-                          <td style="text-align:center">${it.warrantyPeriod || (it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH')}</td>
-                          <td style="text-align:center">${it.warrantyExpiry || '---'}</td>
-                        </tr>
-                      `).join('');
-                      win.document.write(`
-                        <html>
-                          <head>
-                            <title>Phiếu Dịch Vụ Sửa Chữa #${ord.orderCode}</title>
-                            <style>
-                              body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
-                              .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
-                              table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-                              th, td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 13px; }
-                              th { background: #f1f5f9; }
-                            </style>
-                          </head>
-                          <body>
-                            <div class="header">
-                              <div>
-                                <h2 style="margin:0;color:#0d6efd;">QKSHOP.VN</h2>
-                                <div style="font-size:12px;color:#64748b;">Hotline: 0939 558 894 | Website: qkshop.vn</div>
-                              </div>
-                              <div style="text-align:right;font-size:13px;">
-                                <div>Mã phiếu: <strong>#${ord.orderCode}</strong></div>
-                                <div>Ngày lập: ${ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}</div>
-                              </div>
-                            </div>
-                            <h3 style="text-align:center;margin:12px 0;">PHIẾU BIÊN NHẬN & BẢO HÀNH DỊCH VỤ SỬA CHỮA</h3>
-                            <p style="font-size:14px;"><strong>Khách hàng:</strong> ${ord.customerName || '---'} &nbsp;|&nbsp; <strong>SĐT:</strong> ${ord.customerPhone || '---'} &nbsp;|&nbsp; <strong>Thiết bị:</strong> ${ord.deviceModel || '---'}</p>
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>STT</th>
-                                  <th>Hạng mục dịch vụ / Linh kiện</th>
-                                  <th>SL</th>
-                                  <th>Đơn giá</th>
-                                  <th>Bảo hành</th>
-                                  <th>Hạn bảo hành</th>
-                                </tr>
-                              </thead>
-                              <tbody>${rowsHtml}</tbody>
-                            </table>
-                            <h4 style="text-align:right;margin-top:16px;color:#dc2626;">Tổng thanh toán: ${formatCurrency(ord.totalAmount)} đ</h4>
-                            <script>window.onload = () => { window.print(); };</script>
-                          </body>
-                        </html>
-                      `);
-                      win.document.close();
-                    }}
+                    className="btn btn-outline-primary d-flex align-items-center shadow-sm"
+                    onClick={() => printIntakeTicket(selectedOrderDetail)}
                   >
-                    <Printer size={16} className="me-1" /> In hóa đơn
+                    <Printer size={16} className="me-1" /> In Phiếu Tiếp Nhận Máy
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-success d-flex align-items-center shadow-sm"
+                    onClick={() => printPaymentInvoice(selectedOrderDetail)}
+                  >
+                    <Printer size={16} className="me-1" /> In Phiếu Thanh Toán & BH
                   </button>
                 </div>
                 <button type="button" className="btn btn-secondary px-4" onClick={() => setSelectedOrderDetail(null)}>
@@ -826,7 +1190,7 @@ export default function TrangSuaChua() {
 
       {/* Modal thông báo sau khi lưu hóa đơn */}
       {completedOrder && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow">
               <div className="modal-header bg-success text-white py-3">
@@ -846,7 +1210,14 @@ export default function TrangSuaChua() {
                     <div className="col-sm-6"><strong>Khách hàng:</strong> {completedOrder.customerName}</div>
                     <div className="col-sm-6"><strong>Số điện thoại:</strong> {completedOrder.customerPhone}</div>
                     <div className="col-sm-6"><strong>Máy sửa:</strong> {completedOrder.deviceModel}</div>
-                    <div className="col-sm-6"><strong>Tổng tiền:</strong> <span className="text-danger fw-bold">{formatCurrency(completedOrder.totalAmount)} đ</span></div>
+                    <div className="col-sm-6"><strong>Số Serial:</strong> <span className="font-monospace fw-bold">{completedOrder.deviceSerial || '—'}</span></div>
+                    {completedOrder.intakeCondition && (
+                      <div className="col-sm-6"><strong>Tình trạng lúc nhận:</strong> {completedOrder.intakeCondition}</div>
+                    )}
+                    {completedOrder.promisedDate && (
+                      <div className="col-sm-6"><strong>Hẹn trả máy:</strong> <span className="text-danger fw-bold">{formatDate(completedOrder.promisedDate)}</span></div>
+                    )}
+                    <div className="col-12 mt-1"><strong>Tổng tiền:</strong> <span className="text-danger fw-bold fs-6">{formatCurrency(completedOrder.totalAmount)} đ</span></div>
                   </div>
                 </div>
 
@@ -882,72 +1253,23 @@ export default function TrangSuaChua() {
                   </table>
                 </div>
               </div>
-              <div className="modal-footer bg-light">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={() => {
-                    const ord = completedOrder;
-                    const win = window.open('', '_blank', 'width=850,height=700');
-                    if (!win || !ord) return;
-                    const rowsHtml = (ord.items || []).map((it, idx) => `
-                      <tr>
-                        <td style="text-align:center">${idx + 1}</td>
-                        <td><strong>${it.serviceName || ''}</strong></td>
-                        <td style="text-align:center">${it.quantity || 1}</td>
-                        <td style="text-align:right">${formatCurrency(it.price)} đ</td>
-                        <td style="text-align:center">${it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH'}</td>
-                        <td style="text-align:center">${it.warrantyExpiry || '---'}</td>
-                      </tr>
-                    `).join('');
-                    win.document.write(`
-                      <html>
-                        <head>
-                          <title>Phiếu Dịch Vụ Sửa Chữa #${ord.orderCode}</title>
-                          <style>
-                            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
-                            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0d6efd; padding-bottom: 12px; margin-bottom: 16px; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-                            th, td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 13px; }
-                            th { background: #f1f5f9; }
-                          </style>
-                        </head>
-                        <body>
-                          <div class="header">
-                            <div>
-                              <h2 style="margin:0;color:#0d6efd;">QKSHOP.VN</h2>
-                              <div style="font-size:12px;color:#64748b;">Hotline: 0939 558 894 | Website: qkshop.vn</div>
-                            </div>
-                            <div style="text-align:right;font-size:13px;">
-                              <div>Mã phiếu: <strong>#${ord.orderCode}</strong></div>
-                              <div>Ngày lập: ${new Date().toLocaleDateString('vi-VN')}</div>
-                            </div>
-                          </div>
-                          <h3 style="text-align:center;margin:12px 0;">PHIẾU BIÊN NHẬN & BẢO HÀNH DỊCH VỤ SỬA CHỮA</h3>
-                          <p style="font-size:14px;"><strong>Khách hàng:</strong> ${ord.customerName || '---'} &nbsp;|&nbsp; <strong>SĐT:</strong> ${ord.customerPhone || '---'} &nbsp;|&nbsp; <strong>Thiết bị:</strong> ${ord.deviceModel || '---'}</p>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>STT</th>
-                                <th>Hạng mục dịch vụ / Linh kiện</th>
-                                <th>SL</th>
-                                <th>Đơn giá</th>
-                                <th>Bảo hành</th>
-                                <th>Hạn bảo hành</th>
-                              </tr>
-                            </thead>
-                            <tbody>${rowsHtml}</tbody>
-                          </table>
-                          <h4 style="text-align:right;margin-top:16px;color:#dc2626;">Tổng thanh toán: ${formatCurrency(ord.totalAmount)} đ</h4>
-                          <script>window.onload = () => { window.print(); };</script>
-                        </body>
-                      </html>
-                    `);
-                    win.document.close();
-                  }}
-                >
-                  <Printer size={16} className="me-1" /> In phiếu biên nhận
-                </button>
+              <div className="modal-footer bg-light d-flex flex-wrap justify-content-between gap-2">
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary d-flex align-items-center shadow-sm"
+                    onClick={() => printIntakeTicket(completedOrder)}
+                  >
+                    <Printer size={16} className="me-1" /> In Phiếu Tiếp Nhận Máy
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-success d-flex align-items-center shadow-sm"
+                    onClick={() => printPaymentInvoice(completedOrder)}
+                  >
+                    <Printer size={16} className="me-1" /> In Phiếu Thanh Toán & BH
+                  </button>
+                </div>
                 <button type="button" className="btn btn-primary px-4" onClick={() => setCompletedOrder(null)}>
                   Đóng
                 </button>

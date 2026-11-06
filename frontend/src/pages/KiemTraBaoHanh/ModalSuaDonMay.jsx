@@ -17,10 +17,22 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
   const [warrantyExpiry, setWarrantyExpiry] = useState(
     order.warrantyExpiry ? String(order.warrantyExpiry).slice(0, 10) : ''
   );
+  const [shippingCarrier, setShippingCarrier] = useState(order.shippingCarrier || '');
+  const [trackingCode, setTrackingCode] = useState(order.trackingCode || '');
+  const [shippingAddress, setShippingAddress] = useState(order.shippingAddress || '');
+  const [depositAmount, setDepositAmount] = useState(order.depositAmount || '');
+  const [codAmount, setCodAmount] = useState(order.codAmount || '');
   const [saleNote, setSaleNote] = useState(order.saleNote || '');
   const [isSaving, setIsSaving] = useState(false);
 
+  const isCompanyWarranty = Boolean(
+    warrantyPeriod && (warrantyPeriod.toLowerCase().includes('hãng') || warrantyPeriod.toLowerCase().includes('hang'))
+  );
+
   const calculateExpiry = (period, ship, deliv, dDate) => {
+    if (period && period.toLowerCase().includes('hãng')) {
+      return warrantyExpiry;
+    }
     if (ship && !deliv) return '';
     const baseDate = (ship && deliv) ? (dDate || getTodayDateString()) : order.saleDate;
     return tinhNgayHetHanBaoHanh(baseDate, period) || '';
@@ -37,10 +49,12 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
     if (!checked) {
       setIsDelivered(false);
       setDeliveryDate('');
-      const auto = calculateExpiry(warrantyPeriod, false, false, '');
-      if (auto) setWarrantyExpiry(auto);
+      if (!isCompanyWarranty) {
+        const auto = calculateExpiry(warrantyPeriod, false, false, '');
+        if (auto) setWarrantyExpiry(auto);
+      }
     } else {
-      if (!isDelivered) {
+      if (!isDelivered && !isCompanyWarranty) {
         setWarrantyExpiry('');
       }
     }
@@ -84,8 +98,13 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
         isShipping,
         isDelivered: isShipping ? isDelivered : true,
         deliveryDate: isShipping ? (isDelivered ? (deliveryDate || null) : null) : null,
+        shippingCarrier: shippingCarrier || null,
+        trackingCode: trackingCode || null,
+        shippingAddress: shippingAddress || null,
+        depositAmount: depositAmount ? Number(depositAmount) : 0,
+        codAmount: codAmount ? Number(codAmount) : 0,
         warrantyPeriod: warrantyPeriod.trim(),
-        warrantyExpiry: isShipping && !isDelivered ? null : (warrantyExpiry || null),
+        warrantyExpiry: (isShipping && !isDelivered && !isCompanyWarranty) ? null : (warrantyExpiry || null),
         saleNote: saleNote.trim()
       });
       showToast('Cập nhật thông tin đơn máy thành công!', 'success');
@@ -169,7 +188,60 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
 
                     {isShipping && (
                       <div className="mt-3 pt-3 border-top">
-                        <div className="row g-3 align-items-center">
+                        <div className="row g-2 mb-3">
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Đơn vị vận chuyển</label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="VD: GHTK, Viettel Post..."
+                              value={shippingCarrier}
+                              onChange={(e) => setShippingCarrier(e.target.value)}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Mã vận đơn</label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Mã tracking"
+                              value={trackingCode}
+                              onChange={(e) => setTrackingCode(e.target.value)}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Tiền cọc trước (VNĐ)</label>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm"
+                              placeholder="0"
+                              value={depositAmount}
+                              onChange={(e) => setDepositAmount(e.target.value)}
+                            />
+                          </div>
+                          <div className="col-md-8">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Địa chỉ giao hàng</label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Địa chỉ cụ thể"
+                              value={shippingAddress}
+                              onChange={(e) => setShippingAddress(e.target.value)}
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Thu hộ COD (VNĐ)</label>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm"
+                              placeholder="Số tiền COD"
+                              value={codAmount}
+                              onChange={(e) => setCodAmount(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="row g-3 align-items-center pt-2 border-top">
                           <div className="col-md-6">
                             <div className="form-check form-switch d-flex align-items-center">
                               <input
@@ -206,7 +278,7 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                               </div>
                             ) : (
                               <div className="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning px-3 py-2 rounded-2 text-wrap w-100 text-start">
-                                ⏳ <strong>Đang ở trạng thái Chờ:</strong> Thời gian bảo hành chưa được kích hoạt cho đến khi khách nhận máy.
+                                ⏳ <strong>Đang ở trạng thái Chờ:</strong> Thời gian bảo hành chưa được kích hoạt cho đến khi khách nhận máy (ngoại trừ gói Bảo hành hãng).
                               </div>
                             )}
                           </div>
@@ -230,8 +302,11 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                 <div className="col-12 col-md-6">
                   <label className="form-label small fw-semibold text-secondary">
                     Ngày hết hạn bảo hành
-                    {isShipping && !isDelivered && (
+                    {isShipping && !isDelivered && !isCompanyWarranty && (
                       <span className="badge bg-warning text-dark ms-2">Chờ nhận hàng</span>
+                    )}
+                    {isCompanyWarranty && (
+                      <span className="badge bg-primary text-white ms-2">Bảo hành hãng</span>
                     )}
                   </label>
                   <div className="input-group">
@@ -241,10 +316,10 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                       className="form-control"
                       value={warrantyExpiry}
                       onChange={(e) => setWarrantyExpiry(e.target.value)}
-                      disabled={isShipping && !isDelivered}
+                      disabled={isShipping && !isDelivered && !isCompanyWarranty}
                     />
                   </div>
-                  {isShipping && !isDelivered && (
+                  {isShipping && !isDelivered && !isCompanyWarranty && (
                     <div className="small text-muted mt-1">
                       (Bảo hành sẽ tự động tính khi tích "Xác nhận khách đã nhận hàng")
                     </div>

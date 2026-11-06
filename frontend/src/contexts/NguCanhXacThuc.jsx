@@ -66,7 +66,31 @@ export function AuthProvider({ children }) {
       return true;
     }
     if (!permissionCode) return true;
-    return Array.isArray(user.permissions) && user.permissions.includes(permissionCode);
+
+    const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
+
+    // Hỗ trợ kiểm tra danh sách quyền phân cách bằng dấu gạch đứng '|' hoặc mảng
+    const permsToCheck = Array.isArray(permissionCode)
+      ? permissionCode
+      : String(permissionCode).split('|').map(s => s.trim()).filter(Boolean);
+
+    return permsToCheck.some(code => {
+      if (userPerms.includes(code)) return true;
+
+      // Hỗ trợ tương thích ngược (fallback aliases) cho các tài khoản tạo trước đó
+      if (code === 'SHIP_MANAGE' && userPerms.includes('SALE_MACHINE')) return true;
+      if (code === 'SERVICE_VIEW' && userPerms.includes('SERVICE_REPAIR')) return true;
+      if (code === 'USER_MANAGE' && userPerms.includes('SYSTEM_MANAGE')) return true;
+      if (code === 'ORDER_EDIT' && (userPerms.includes('SALE_MACHINE') || userPerms.includes('SALE_ACCESSORY'))) return true;
+      if (code === 'ORDER_RETURN' && (userPerms.includes('SALE_MACHINE') || userPerms.includes('SYNC_MANAGE'))) return true;
+      if (code === 'MACHINE_UPDATE' && userPerms.includes('IMPORT_MACHINE')) return true;
+      if (code === 'ACCESSORY_MANAGE' && userPerms.includes('IMPORT_ACCESSORY')) return true;
+      if (code === 'PART_MANAGE' && userPerms.includes('IMPORT_PART')) return true;
+      if (code === 'PRICING_MANAGE' && userPerms.includes('PRICING_VIEW')) return true;
+      if (code === 'EXPORT_DATA' && (userPerms.includes('CRM_VIEW') || userPerms.includes('SEARCH_INVENTORY'))) return true;
+
+      return false;
+    });
   }, [user]);
 
   return (

@@ -3,12 +3,13 @@
 
 ## 📌 Tính Năng Cốt Lõi
 
-- 💻 **Quản lý Serial & Vòng đời máy:** Theo dõi đường đi của từng máy tính từ lúc nhập kho, kiểm định (QC), bán hàng đến bảo hành và đóng vòng đời.
-- 🖱️ **Quản lý & Bán phụ kiện:** Theo dõi tồn kho theo mã SKU, tự động trừ kho khi xuất bán, cảnh báo hàng sắp hết.
+- 💻 **Quản lý Serial & Vòng đời máy:** Theo dõi đường đi của từng máy tính từ lúc nhập kho, kiểm định (QC), bán hàng (POS / Ship COD) đến bảo hành, đổi trả và đóng vòng đời.
+- 🖱️ **Quản lý Kho Phụ kiện (`PK-...`) & Kho Linh kiện (`LK-...`):** Tách bạch phụ kiện tặng kèm/bán lẻ và linh kiện phần cứng phục vụ nâng cấp máy hoặc sửa chữa dịch vụ.
+- 🛠️ **Dịch vụ Sửa chữa & Tra cứu Bảo hành 3 trong 1:** Tiếp nhận phiếu sửa chữa (`SC...`), tự động trừ/hoàn kho linh kiện và tra cứu bảo hành hợp nhất (Máy + Phụ kiện + Sửa chữa) chỉ với 1 ô tìm kiếm.
+- 👥 **Khách hàng (CRM) & Chăm sóc sau bán:** Tự động gom hồ sơ khách hàng theo số điện thoại, ghi chú chăm sóc và lọc danh sách máy hết hạn bảo hành.
 - 📋 **In bảng giá PDF tự động (JasperReports):** Xuất bảng báo giá chào hàng chuyên nghiệp chuẩn khổ in A4 / A5 chỉ với 1 click.
-- 🔄 **Đồng bộ Google Sheets 2 chiều:** Tự động đồng bộ số liệu và đối soát lệch kho thời gian thực với bảng tính cửa hàng.
-- 👥 **Phân quyền đa cấp (RBAC):** Phân chia 4 vai trò rõ ràng (`ADMIN`, `Kế toán`, `Kỹ thuật`, `Bán hàng`) với 17 mã quyền chi tiết.
-- 🔔 **Thông báo & Nhật ký kiểm toán:** Nhận thông báo biến động kho tức thời và lưu trữ nhật ký thao tác người dùng minh bạch.
+- 🔄 **Đồng bộ Google Sheets 2 chiều:** Tự động đồng bộ số liệu, chống tạo đơn trùng và đối soát lệch kho thời gian thực với bảng tính cửa hàng.
+- 🛡️ **Phân quyền đa cấp (RBAC):** Phân chia 3 vai trò (`ADMIN`, `MANAGER`, `STAFF`) kết hợp tùy biến 27 mã quyền chi tiết.
 
 ---
 
@@ -83,14 +84,12 @@ Khi cài đặt mới, hệ thống tự động khởi tạo tài khoản Super
 
 ---
 
-## 📚 Trung Tâm Tài Liệu Chi Tiết (Docs Hub)
+## 📚 Tài Liệu Tổng Hợp Hệ Thống (Docs)
 
-Tài liệu chuyên sâu được phân loại trong thư mục [`docs/`](./docs):
+Toàn bộ giải thích luồng xử lý nghiệp vụ, hướng dẫn sử dụng 24 màn hình và cẩm nang vận hành VPS được tổng hợp duy nhất tại thư mục [`docs/`](./docs):
 
-- 🏗️ **[Kiến Trúc Hệ Thống (docs/ARCHITECTURE.md)](./docs/ARCHITECTURE.md):** Thiết kế phân tầng, bảo mật JWT kép, luồng dữ liệu SPA.
-- 📡 **[Đặc Tả API (docs/API_SPECIFICATION.md)](./docs/API_SPECIFICATION.md):** Danh mục 35+ REST Endpoints, format `ApiResponse<T>`, mã lỗi.
-- 📖 **[Sổ Tay Sử Dụng (docs/USER_GUIDE.md)](./docs/USER_GUIDE.md):** Hướng dẫn chi tiết cho nhân viên kho, kỹ thuật, bán hàng.
-- 🚀 **[Hướng Dẫn Triển Khai Server (docs/DEPLOYMENT_GUIDE.md)](./docs/DEPLOYMENT_GUIDE.md):** Cấu hình VPS, IP tĩnh, Nginx, SSL HTTPS.
+- 📕 **[Bản PDF Trực Quan (docs/TONG_HOP_HE_THONG.pdf)](./docs/TONG_HOP_HE_THONG.pdf):** Tài liệu PDF trình bày màu kèm sơ đồ luồng xử lý trực quan, dễ đọc và in ấn.
+- 📘 **[Bản Markdown (docs/TONG_HOP_HE_THONG.md)](./docs/TONG_HOP_HE_THONG.md):** Bản gốc Markdown để xem trực tiếp trên trình soạn thảo code.
 
 ---
 

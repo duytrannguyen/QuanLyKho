@@ -51,6 +51,16 @@ public class RepairController {
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật trạng thái đơn sửa chữa thành công", updated));
     }
 
+    @GetMapping("/by-serial")
+    public ResponseEntity<ApiResponse<List<RepairOrder>>> getOrdersBySerial(
+            @RequestParam(required = false, defaultValue = "") String serial) {
+        if (serial == null || serial.trim().isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.okWithMessage("Lịch sử sửa chữa theo serial", java.util.Collections.emptyList()));
+        }
+        List<RepairOrder> orders = repairOrderService.getOrdersBySerial(serial.trim());
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Lịch sử sửa chữa theo serial", orders));
+    }
+
     @GetMapping("/services")
     public ResponseEntity<ApiResponse<List<RepairOrderItem>>> searchServices(
             @RequestParam(required = false) String keyword) {

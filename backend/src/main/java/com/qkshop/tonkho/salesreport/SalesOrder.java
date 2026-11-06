@@ -144,6 +144,28 @@ public class SalesOrder {
     @Column(name = "delivery_date")
     private LocalDate deliveryDate;
 
+    /** Đơn vị vận chuyển (GHTK, ViettelPost, GHN, J&T, Nhà xe...) */
+    @Column(name = "shipping_carrier", length = 50)
+    private String shippingCarrier;
+
+    /** Mã vận đơn */
+    @Column(name = "tracking_code", length = 100)
+    private String trackingCode;
+
+    /** Địa chỉ giao hàng */
+    @Column(name = "shipping_address", length = 255)
+    private String shippingAddress;
+
+    /** Tiền khách đặt cọc trước (VNĐ) */
+    @Column(name = "deposit_amount", precision = 15, scale = 0)
+    @Builder.Default
+    private BigDecimal depositAmount = BigDecimal.ZERO;
+
+    /** Tiền bưu tá thu hộ COD (VNĐ) */
+    @Column(name = "cod_amount", precision = 15, scale = 0)
+    @Builder.Default
+    private BigDecimal codAmount = BigDecimal.ZERO;
+
     /** Cột W: doanh thu gộp / trước giảm (VNĐ) */
     @Column(name = "gross_revenue", precision = 15, scale = 0)
     private BigDecimal grossRevenue;

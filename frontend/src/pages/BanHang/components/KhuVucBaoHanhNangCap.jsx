@@ -23,7 +23,11 @@ export default function KhuVucBaoHanhNangCap({
   upgradeSsdSku,
   setUpgradeSsdSku,
   upgradeSsdPrice,
-  setUpgradeSsdPrice
+  setUpgradeSsdPrice,
+  swapRamSku,
+  setSwapRamSku,
+  swapSsdSku,
+  setSwapSsdSku
 }) {
   const baseDate =
     formData.isShipping && formData.isDelivered
@@ -136,8 +140,78 @@ export default function KhuVucBaoHanhNangCap({
             </div>
 
             {formData.isShipping && (
-              <div className="mt-1.5 pt-1.5 border-top border-secondary border-opacity-10">
-                <div className="row g-2 align-items-center">
+              <div className="mt-2 pt-2 border-top border-secondary border-opacity-10">
+                <div className="row g-2 mb-2">
+                  <div className="col-md-4 col-12">
+                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
+                      Đơn vị vận chuyển
+                    </label>
+                    <select
+                      className="form-select pos-input"
+                      value={formData.shippingCarrier || ''}
+                      onChange={(e) => handleFormChange('shippingCarrier', e.target.value)}
+                    >
+                      <option value="">-- Chọn đơn vị --</option>
+                      <option value="Giao Hàng Tiết Kiệm (GHTK)">Giao Hàng Tiết Kiệm (GHTK)</option>
+                      <option value="Viettel Post">Viettel Post</option>
+                      <option value="Giao Hàng Nhanh (GHN)">Giao Hàng Nhanh (GHN)</option>
+                      <option value="J&T Express">J&T Express</option>
+                      <option value="Ahamove">Ahamove</option>
+                      <option value="GrabExpress">GrabExpress</option>
+                      <option value="Khác / Tự giao">Khác / Tự giao</option>
+                    </select>
+                  </div>
+                  <div className="col-md-4 col-12">
+                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
+                      Mã vận đơn
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control pos-input"
+                      placeholder="VD: S123456789VN"
+                      value={formData.trackingCode || ''}
+                      onChange={(e) => handleFormChange('trackingCode', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4 col-12">
+                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
+                      Tiền cọc trước (VNĐ)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control pos-input"
+                      placeholder="0"
+                      value={formData.depositAmount ? formatCurrency(formData.depositAmount) : ''}
+                      onChange={(e) => handleFormChange('depositAmount', parseCurrency(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-md-8 col-12">
+                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
+                      Địa chỉ nhận hàng
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control pos-input"
+                      placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP"
+                      value={formData.shippingAddress || ''}
+                      onChange={(e) => handleFormChange('shippingAddress', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-4 col-12">
+                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
+                      Thu hộ COD (VNĐ)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control pos-input"
+                      placeholder="Tự tính nếu để trống"
+                      value={formData.codAmount ? formatCurrency(formData.codAmount) : ''}
+                      onChange={(e) => handleFormChange('codAmount', parseCurrency(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-2 align-items-center pt-1 border-top border-secondary border-opacity-10">
                   <div className="col-md-6 col-12">
                     <div className="form-check form-switch d-flex align-items-center">
                       <input
@@ -173,7 +247,7 @@ export default function KhuVucBaoHanhNangCap({
                       />
                     ) : (
                       <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                        ⏳ Đơn đang chờ giao, chưa kích hoạt bảo hành.
+                        ⏳ Đơn đang chờ giao, bảo hành tính từ ngày giao thành công.
                       </div>
                     )}
                   </div>
@@ -304,6 +378,31 @@ export default function KhuVucBaoHanhNangCap({
                       />
                     </div>
                   </div>
+
+                  <div className="mt-1.5 pt-1 border-top border-secondary border-opacity-10">
+                    <label className="form-label text-muted mb-0.5" style={{ fontSize: '0.7rem' }}>
+                      Thu hồi thanh RAM tháo máy (nhập lại kho):
+                    </label>
+                    <select
+                      className="form-select pos-input py-0.5"
+                      style={{ fontSize: '0.73rem' }}
+                      value={swapRamSku || ''}
+                      onChange={(e) => setSwapRamSku(e.target.value)}
+                    >
+                      <option value="">-- Không thu hồi / Trả khách --</option>
+                      {availableParts
+                        .filter(
+                          (p) =>
+                            (p.category || '').toUpperCase().includes('RAM') ||
+                            (p.name || '').toUpperCase().includes('RAM')
+                        )
+                        .map((p) => (
+                          <option key={p.sku} value={p.sku}>
+                            Nhập vào SKU: {p.sku} - {p.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Cột SSD */}
@@ -386,6 +485,36 @@ export default function KhuVucBaoHanhNangCap({
                         style={{ fontSize: '0.75rem' }}
                       />
                     </div>
+                  </div>
+
+                  <div className="mt-1.5 pt-1 border-top border-secondary border-opacity-10">
+                    <label className="form-label text-muted mb-0.5" style={{ fontSize: '0.7rem' }}>
+                      Thu hồi ổ SSD tháo máy (nhập lại kho):
+                    </label>
+                    <select
+                      className="form-select pos-input py-0.5"
+                      style={{ fontSize: '0.73rem' }}
+                      value={swapSsdSku || ''}
+                      onChange={(e) => setSwapSsdSku(e.target.value)}
+                    >
+                      <option value="">-- Không thu hồi / Trả khách --</option>
+                      {availableParts
+                        .filter((p) => {
+                          const cat = (p.category || '').toUpperCase();
+                          const name = (p.name || '').toUpperCase();
+                          return (
+                            cat.includes('SSD') ||
+                            cat.includes('HDD') ||
+                            name.includes('SSD') ||
+                            name.includes('NVME')
+                          );
+                        })
+                        .map((p) => (
+                          <option key={p.sku} value={p.sku}>
+                            Nhập vào SKU: {p.sku} - {p.name}
+                          </option>
+                        ))}
+                    </select>
                   </div>
                 </div>
               </div>

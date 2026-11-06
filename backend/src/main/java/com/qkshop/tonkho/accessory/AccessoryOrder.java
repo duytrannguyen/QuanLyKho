@@ -49,6 +49,21 @@ public class AccessoryOrder {
     @Column(name = "sale_note", columnDefinition = "TEXT")
     private String saleNote;
 
+    @Column(name = "is_shipping")
+    @Builder.Default
+    private Boolean isShipping = false;
+
+    @Column(name = "is_delivered")
+    @Builder.Default
+    private Boolean isDelivered = false;
+
+    @Column(name = "delivery_date")
+    private java.time.LocalDate deliveryDate;
+
+    @Column(name = "status", length = 30)
+    @Builder.Default
+    private String status = "COMPLETED";
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<AccessoryOrderItem> items = new ArrayList<>();

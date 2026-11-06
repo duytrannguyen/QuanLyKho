@@ -765,6 +765,10 @@ public class CrmQueryService {
         expiredBrandsCache = null;
     }
 
+    public void clearCache() {
+        invalidateCache();
+    }
+
     @Transactional(readOnly = true)
     public ExpiredWarrantySummary getExpiredWarrantySummary() {
         CachedData<ExpiredWarrantySummary> c = expiredSummaryCache;

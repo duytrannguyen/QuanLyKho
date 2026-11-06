@@ -1,36 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Check, Shield, User as UserIcon, Lock, Mail, CheckSquare, 
-  Square, RefreshCw, Info, AlertTriangle, Layers
+  Square, RefreshCw, Info, AlertTriangle, Layers, Search
 } from 'lucide-react';
 import { systemApi } from '../../api';
 
 // Định nghĩa preset quyền mặc định cho từng vai trò
 const ROLE_PRESETS = {
   ADMIN: [
-    'DASHBOARD_VIEW', 'ANALYTICS_VIEW', 'SALES_REPORT_VIEW',
-    'SALE_MACHINE', 'SALE_ACCESSORY', 'REPAIR_SERVICE', 'PRICING_VIEW',
-    'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY',
-    'IMPORT_PART', 'INVENTORY_PART', 'INSPECTION',
-    'SEARCH_INVENTORY', 'ACCESSORY_HISTORY', 'WARRANTY_CHECK',
-    'CRM_VIEW', 'CRM_MANAGE',
-    'SYNC_MANAGE', 'LOGS_VIEW', 'SYSTEM_MANAGE'
+    'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
+    'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN', 'PRICING_VIEW', 'PRICING_MANAGE',
+    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_DELETE', 'INSPECTION',
+    'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_MANAGE',
+    'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE', 'SYSTEM_MANAGE'
   ],
   MANAGER: [
-    'DASHBOARD_VIEW', 'ANALYTICS_VIEW', 'SALES_REPORT_VIEW',
-    'SALE_MACHINE', 'SALE_ACCESSORY', 'REPAIR_SERVICE', 'PRICING_VIEW',
-    'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY',
-    'IMPORT_PART', 'INVENTORY_PART', 'INSPECTION',
-    'SEARCH_INVENTORY', 'ACCESSORY_HISTORY', 'WARRANTY_CHECK',
-    'CRM_VIEW', 'CRM_MANAGE',
-    'SYNC_MANAGE', 'LOGS_VIEW'
+    'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
+    'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN', 'PRICING_VIEW', 'PRICING_MANAGE',
+    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'INSPECTION',
+    'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_MANAGE',
+    'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE'
   ],
   STAFF: [
-    'DASHBOARD_VIEW',
-    'SALE_MACHINE', 'SALE_ACCESSORY', 'REPAIR_SERVICE', 'PRICING_VIEW',
-    'SEARCH_INVENTORY', 'INVENTORY_ACCESSORY', 'INVENTORY_PART',
-    'ACCESSORY_HISTORY', 'WARRANTY_CHECK',
-    'CRM_VIEW', 'INSPECTION'
+    'DASHBOARD_VIEW', 'SALES_REPORT_VIEW',
+    'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'PRICING_VIEW',
+    'SEARCH_INVENTORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART', 'INSPECTION',
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW'
   ]
 };
 
@@ -56,17 +53,27 @@ export default function ModalNguoiDung({
   const [selectedPermissions, setSelectedPermissions] = useState(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('info'); // 'info' hoặc 'permissions'
+  const [permSearchTerm, setPermSearchTerm] = useState('');
 
-  // Nhóm các quyền theo Group
+  // Lọc và nhóm các quyền theo Group
   const groupedPermissions = useMemo(() => {
+    const q = (permSearchTerm || '').trim().toLowerCase();
+    const filtered = (availablePermissions || []).filter(p => {
+      if (!q) return true;
+      return (p.name && p.name.toLowerCase().includes(q)) ||
+             (p.code && p.code.toLowerCase().includes(q)) ||
+             (p.group && p.group.toLowerCase().includes(q)) ||
+             (p.description && p.description.toLowerCase().includes(q));
+    });
+
     const groups = {};
-    (availablePermissions || []).forEach(perm => {
+    filtered.forEach(perm => {
       const gName = perm.group || 'Khác';
       if (!groups[gName]) groups[gName] = [];
       groups[gName].push(perm);
     });
     return groups;
-  }, [availablePermissions]);
+  }, [availablePermissions, permSearchTerm]);
 
   // Điền dữ liệu khi mở modal
   useEffect(() => {
@@ -446,7 +453,7 @@ export default function ModalNguoiDung({
               <div>
                 {/* TOOLBAR */}
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-light p-3 rounded-3 mb-4 border">
-                  <div className="d-flex align-items-center gap-2">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
                     <span className="fw-bold text-dark small">Thao tác nhanh:</span>
                     <button 
                       type="button" 
@@ -474,13 +481,29 @@ export default function ModalNguoiDung({
                     </button>
                   </div>
 
-                  <div className="d-flex align-items-center gap-2">
-                    <span className="small text-secondary">Đã cấp:</span>
-                    <span className="badge bg-primary fs-6 px-3 py-2 rounded-pill">
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="input-group input-group-sm" style={{ width: '220px' }}>
+                      <span className="input-group-text bg-white"><Search size={14} /></span>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="Tìm kiếm quyền hạn..." 
+                        value={permSearchTerm}
+                        onChange={e => setPermSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <span className="badge bg-primary fs-6 px-3 py-1.5 rounded-pill text-nowrap">
                       {selectedCount} / {totalPermsCount} quyền
                     </span>
                   </div>
                 </div>
+
+                {Object.keys(groupedPermissions).length === 0 && (
+                  <div className="text-center py-5 text-muted">
+                    <Search size={32} className="opacity-50 mb-2" />
+                    <div>Không tìm thấy quyền nào phù hợp với từ khóa "{permSearchTerm}"</div>
+                  </div>
+                )}
 
                 {/* DANH SÁCH CÁC NHÓM QUYỀN */}
                 <div className="row g-4">

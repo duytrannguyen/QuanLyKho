@@ -3,6 +3,7 @@ package com.qkshop.tonkho.part;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -64,6 +65,7 @@ public class PartController {
     }
 
     @PostMapping("/import")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_PART')")
     public ResponseEntity<ApiResponse<Part>> importPart(
             @RequestBody Map<String, Object> payload,
             Authentication authentication) {
@@ -73,6 +75,7 @@ public class PartController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PART_MANAGE') or hasAuthority('IMPORT_PART')")
     public ResponseEntity<ApiResponse<Part>> updatePart(
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload,
@@ -83,6 +86,7 @@ public class PartController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PART_MANAGE')")
     public ResponseEntity<ApiResponse<Void>> deletePart(
             @PathVariable Long id,
             Authentication authentication) {

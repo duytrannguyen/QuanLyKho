@@ -44,6 +44,10 @@ export default function TrangBanHang() {
     setUpgradeSsdSku,
     upgradeSsdPrice,
     setUpgradeSsdPrice,
+    swapRamSku,
+    setSwapRamSku,
+    swapSsdSku,
+    setSwapSsdSku,
     matchedCrmCustomer,
     isReady,
     grandTotal,
@@ -127,6 +131,10 @@ export default function TrangBanHang() {
                 setUpgradeSsdSku={setUpgradeSsdSku}
                 upgradeSsdPrice={upgradeSsdPrice}
                 setUpgradeSsdPrice={setUpgradeSsdPrice}
+                swapRamSku={swapRamSku}
+                setSwapRamSku={setSwapRamSku}
+                swapSsdSku={swapSsdSku}
+                setSwapSsdSku={setSwapSsdSku}
               />
 
               {/* 3. PHỤ KIỆN & QUÀ TẶNG */}

@@ -113,7 +113,7 @@ public class CrmController {
     }
 
     @GetMapping("/customers/export-excel")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW') or hasAuthority('EXPORT_DATA')")
     public ResponseEntity<org.springframework.core.io.Resource> exportCustomersExcel(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String filterType,
@@ -152,7 +152,7 @@ public class CrmController {
     }
 
     @GetMapping("/expired-warranty/export-excel")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW') or hasAuthority('EXPORT_DATA')")
     public ResponseEntity<org.springframework.core.io.Resource> exportExpiredWarrantyExcel(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String brand,

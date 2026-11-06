@@ -41,6 +41,11 @@ export function useLogicBanHang() {
     isShipping: false,
     isDelivered: false,
     deliveryDate: '',
+    shippingCarrier: '',
+    trackingCode: '',
+    shippingAddress: '',
+    depositAmount: '',
+    codAmount: '',
   });
 
   const [isUpgraded, setIsUpgraded] = useState(false);
@@ -59,12 +64,14 @@ export function useLogicBanHang() {
   const [defaultGiftDeduction, setDefaultGiftDeduction] = useState(0);
   const defaultGiftBundleRef = useRef([]);
 
-  // State: Nâng cấp linh kiện từ kho (RAM, SSD)
+  // State: Nâng cấp linh kiện từ kho (RAM, SSD) & Thu hồi linh kiện swap
   const [availableParts, setAvailableParts] = useState([]);
   const [upgradeRamSku, setUpgradeRamSku] = useState('');
   const [upgradeRamPrice, setUpgradeRamPrice] = useState('');
   const [upgradeSsdSku, setUpgradeSsdSku] = useState('');
   const [upgradeSsdPrice, setUpgradeSsdPrice] = useState('');
+  const [swapRamSku, setSwapRamSku] = useState('');
+  const [swapSsdSku, setSwapSsdSku] = useState('');
 
   // State: Khách hàng nhận diện từ CRM
   const [matchedCrmCustomer, setMatchedCrmCustomer] = useState(null);
@@ -121,31 +128,32 @@ export function useLogicBanHang() {
     totalPaidAccAmount +
     totalUpgradeAmount;
 
+  const fetchData = async () => {
+    try {
+      const [accRes, giftRes, partsRes] = await Promise.all([
+        apiPhuKien.getAvailable(),
+        apiPhuKien.getDefaultGifts().catch(() => ({ data: { data: '[]' } })),
+        apiLinhKien.getAvailable().catch(() => ({ data: { data: [] } }))
+      ]);
+      setAvailableAccessories(accRes.data || []);
+      setAvailableParts(partsRes.data?.data || partsRes.data || []);
+
+      let bundle = [];
+      try {
+        const raw = giftRes?.data?.data || giftRes?.data;
+        bundle = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+      } catch {
+        bundle = [];
+      }
+      setDefaultGiftBundle(bundle);
+      defaultGiftBundleRef.current = bundle;
+    } catch (err) {
+      console.error('Lỗi lấy dữ liệu phụ kiện / bộ quà / linh kiện:', err);
+    }
+  };
+
   // Effects: Lấy danh sách phụ kiện, quà tặng, linh kiện
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [accRes, giftRes, partsRes] = await Promise.all([
-          apiPhuKien.getAvailable(),
-          apiPhuKien.getDefaultGifts().catch(() => ({ data: { data: '[]' } })),
-          apiLinhKien.getAvailable().catch(() => ({ data: { data: [] } }))
-        ]);
-        setAvailableAccessories(accRes.data || []);
-        setAvailableParts(partsRes.data?.data || partsRes.data || []);
-
-        let bundle = [];
-        try {
-          const raw = giftRes?.data?.data || giftRes?.data;
-          bundle = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
-        } catch {
-          bundle = [];
-        }
-        setDefaultGiftBundle(bundle);
-        defaultGiftBundleRef.current = bundle;
-      } catch (err) {
-        console.error('Lỗi lấy dữ liệu phụ kiện / bộ quà / linh kiện:', err);
-      }
-    };
     fetchData();
   }, []);
 
@@ -213,6 +221,12 @@ export function useLogicBanHang() {
         customWarranty: prefillCustomWarranty,
       }));
       setIsUpgraded(false);
+      setUpgradeRamSku('');
+      setUpgradeRamPrice('');
+      setUpgradeSsdSku('');
+      setUpgradeSsdPrice('');
+      setSwapRamSku('');
+      setSwapSsdSku('');
       setDefaultGiftDeduction(0);
 
       if (defaultGiftBundleRef.current && defaultGiftBundleRef.current.length > 0) {
@@ -392,6 +406,8 @@ export function useLogicBanHang() {
     setUpgradeRamPrice('');
     setUpgradeSsdSku('');
     setUpgradeSsdPrice('');
+    setSwapRamSku('');
+    setSwapSsdSku('');
     setSelectedAccessories([]);
     setDefaultGiftDeduction(0);
     setMatchedCrmCustomer(null);
@@ -417,6 +433,11 @@ export function useLogicBanHang() {
       isShipping: false,
       isDelivered: false,
       deliveryDate: '',
+      shippingCarrier: '',
+      trackingCode: '',
+      shippingAddress: '',
+      depositAmount: '',
+      codAmount: '',
     });
   };
 
@@ -523,10 +544,43 @@ export function useLogicBanHang() {
         calculatedWarrantyExpiry = tinhNgayHetHanBaoHanh(baseDate, effectiveWarrantyPeriod) || null;
       }
 
+      const swapParts = [];
+      if (isUpgraded && swapRamSku) {
+        swapParts.push({
+          sku: swapRamSku,
+          quantity: 1,
+          note: `Thu hồi RAM tháo máy: ${defaultSpecs.ram || 'Gốc'}`
+        });
+      }
+      if (isUpgraded && swapSsdSku) {
+        swapParts.push({
+          sku: swapSsdSku,
+          quantity: 1,
+          note: `Thu hồi SSD tháo máy: ${defaultSpecs.ssd || 'Gốc'}`
+        });
+      }
+
+      const isStudentBool =
+        formData.isStudent === true ||
+        String(formData.isStudent).toLowerCase() === 'có' ||
+        String(formData.isStudent) === '1' ||
+        String(formData.isStudent).toLowerCase().includes('sinh viên');
+
+      const prodFullName = scannedMachine.sourceModelText || scannedMachine.modelName || '';
+      const prodSummary = [
+        scannedMachine.cpu,
+        scannedMachine.ram ? 'RAM ' + scannedMachine.ram : '',
+        scannedMachine.ssd ? 'SSD ' + scannedMachine.ssd : '',
+        scannedMachine.gpu,
+        scannedMachine.screenSize
+      ].filter(Boolean).join(' | ');
+
+      const negotiatedGross = parseCurrency(formData.finalPrice) || scannedMachine.salePrice || 0;
+
       const res = await apiBanHang.submitSale(
         {
           serial: scannedMachine.serialKey,
-          grossRevenue: scannedMachine.salePrice || parseCurrency(formData.finalPrice),
+          grossRevenue: negotiatedGross,
           finalPrice: grandTotal,
           salesperson: formData.salesperson,
           saleDate: formData.saleDate,
@@ -536,6 +590,8 @@ export function useLogicBanHang() {
           upgradeNote: generatedUpgradeNote,
           customerName: formData.customer,
           customerPhone: formData.customerPhone,
+          productFullName: prodFullName,
+          productSummary: prodSummary,
           isShipping: formData.isShipping,
           isDelivered: formData.isShipping ? formData.isDelivered : true,
           deliveryDate: formData.isShipping
@@ -543,6 +599,11 @@ export function useLogicBanHang() {
               ? formData.deliveryDate || getTodayDateString()
               : null
             : formData.saleDate?.slice(0, 10) || null,
+          shippingCarrier: formData.shippingCarrier || null,
+          trackingCode: formData.trackingCode || null,
+          shippingAddress: formData.shippingAddress || null,
+          depositAmount: parseCurrency(formData.depositAmount) || 0,
+          codAmount: parseCurrency(formData.codAmount) || (formData.isShipping && !formData.isDelivered ? Math.max(0, grandTotal - (parseCurrency(formData.depositAmount) || 0)) : 0),
           warrantyPeriod: effectiveWarrantyPeriod,
           warrantyExpiry: calculatedWarrantyExpiry,
           saleNote: formData.saleNote,
@@ -555,8 +616,9 @@ export function useLogicBanHang() {
               ? formData.customLastSource.trim()
               : formData.lastSource,
           customerType: formData.customerType,
-          isStudent: formData.isStudent,
-          accessories: finalAccessories
+          isStudent: isStudentBool,
+          accessories: finalAccessories,
+          swapParts: swapParts
         },
         requestId
       );
@@ -572,6 +634,7 @@ export function useLogicBanHang() {
             : 'Giao dịch bán thành công!';
       showToast(successMsg, 'success');
       resetForm();
+      fetchData();
     } catch (err) {
       showToast(err.userMessage || err.message || 'Lỗi xử lý giao dịch', 'danger');
     } finally {
@@ -613,7 +676,12 @@ export function useLogicBanHang() {
     setUpgradeSsdSku,
     upgradeSsdPrice,
     setUpgradeSsdPrice,
+    swapRamSku,
+    setSwapRamSku,
+    swapSsdSku,
+    setSwapSsdSku,
     matchedCrmCustomer,
+    fetchData,
 
     // Computed
     isReady,

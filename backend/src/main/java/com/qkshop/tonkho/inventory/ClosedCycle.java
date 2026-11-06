@@ -107,6 +107,23 @@ public class ClosedCycle {
     @Column(name = "delivery_date")
     private LocalDate deliveryDate;
 
+    @Column(name = "shipping_carrier", length = 50)
+    private String shippingCarrier;
+
+    @Column(name = "tracking_code", length = 100)
+    private String trackingCode;
+
+    @Column(name = "shipping_address", length = 255)
+    private String shippingAddress;
+
+    @Column(name = "deposit_amount", precision = 15, scale = 0)
+    @Builder.Default
+    private BigDecimal depositAmount = BigDecimal.ZERO;
+
+    @Column(name = "cod_amount", precision = 15, scale = 0)
+    @Builder.Default
+    private BigDecimal codAmount = BigDecimal.ZERO;
+
     @Column(name = "payment_status", length = 50)
     private String paymentStatus;
 

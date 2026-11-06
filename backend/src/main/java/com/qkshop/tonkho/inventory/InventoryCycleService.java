@@ -276,13 +276,27 @@ public class InventoryCycleService {
                 closed.setPaymentStatus((String) saleDetails.get("paymentStatus"));
             }
 
-            if (saleDetails.containsKey("productFullName")) {
-                closed.setProductFullName((String) saleDetails.get("productFullName"));
+            String prodFullName = (String) saleDetails.get("productFullName");
+            if (prodFullName == null || prodFullName.isBlank()) {
+                prodFullName = ai.getSourceModelText();
             }
+            closed.setProductFullName(prodFullName);
 
-            if (saleDetails.containsKey("productSummary")) {
-                closed.setProductSummary((String) saleDetails.get("productSummary"));
+            String prodSummary = (String) saleDetails.get("productSummary");
+            if (prodSummary == null || prodSummary.isBlank()) {
+                List<String> specs = new java.util.ArrayList<>();
+                if (ai.getConfig() != null) {
+                    if (ai.getConfig().getRamCode() != null) specs.add("RAM " + ai.getConfig().getRamCode());
+                    if (ai.getConfig().getSsdCode() != null) specs.add("SSD " + ai.getConfig().getSsdCode());
+                    if (ai.getConfig().getVariant() != null) {
+                        if (ai.getConfig().getVariant().getCpuCode() != null) specs.add(ai.getConfig().getVariant().getCpuCode());
+                        if (ai.getConfig().getVariant().getGpuCode() != null) specs.add(ai.getConfig().getVariant().getGpuCode());
+                        if (ai.getConfig().getVariant().getScreenSize() != null) specs.add(ai.getConfig().getVariant().getScreenSize());
+                    }
+                }
+                prodSummary = String.join(" | ", specs);
             }
+            closed.setProductSummary(prodSummary);
 
             // Xử lý đơn ship và kích hoạt bảo hành
             boolean isShipping = false;
@@ -317,8 +331,29 @@ public class InventoryCycleService {
             closed.setIsDelivered(isDelivered);
             closed.setDeliveryDate(delDate);
 
-            if (isShipping && !isDelivered) {
-                // Đơn ship đang gửi đi: Chưa kích hoạt bảo hành cho đến khi khách nhận được hàng
+            if (saleDetails.containsKey("shippingCarrier")) {
+                closed.setShippingCarrier((String) saleDetails.get("shippingCarrier"));
+            }
+            if (saleDetails.containsKey("trackingCode")) {
+                closed.setTrackingCode((String) saleDetails.get("trackingCode"));
+            }
+            if (saleDetails.containsKey("shippingAddress")) {
+                closed.setShippingAddress((String) saleDetails.get("shippingAddress"));
+            }
+            if (saleDetails.containsKey("depositAmount") && saleDetails.get("depositAmount") != null) {
+                try {
+                    closed.setDepositAmount(new BigDecimal(saleDetails.get("depositAmount").toString().replaceAll("[^0-9.]", "")));
+                } catch (Exception ignored) {}
+            }
+            if (saleDetails.containsKey("codAmount") && saleDetails.get("codAmount") != null) {
+                try {
+                    closed.setCodAmount(new BigDecimal(saleDetails.get("codAmount").toString().replaceAll("[^0-9.]", "")));
+                } catch (Exception ignored) {}
+            }
+
+            boolean isCompanyWarranty = wp != null && (wp.equalsIgnoreCase("Bảo hành hãng") || wp.toLowerCase().contains("hãng"));
+            if (isShipping && !isDelivered && !isCompanyWarranty) {
+                // Đơn ship đang gửi đi: Chưa kích hoạt bảo hành cửa hàng cho đến khi khách nhận được hàng
                 closed.setWarrantyExpiry(null);
             } else {
                 Object warrantyExpiryObj = saleDetails.get("warrantyExpiry");
@@ -401,7 +436,18 @@ public class InventoryCycleService {
                 }
 
                 if (!generalAccessories.isEmpty()) {
-                    accessoryService.deductAccessories(generalAccessories, closed.getCustomerName(), closed.getCustomerPhone(), closed.getCycleId(), salesperson, closed.getSaleDate());
+                    accessoryService.deductAccessories(
+                            generalAccessories,
+                            closed.getCustomerName(),
+                            closed.getCustomerPhone(),
+                            closed.getCycleId(),
+                            salesperson,
+                            closed.getSaleDate(),
+                            isShipping,
+                            isDelivered,
+                            delDate,
+                            wp
+                    );
                 }
 
                 StringBuilder accNote = new StringBuilder();
@@ -446,7 +492,10 @@ public class InventoryCycleService {
                 Object stuObj = saleDetails.get("isStudent");
                 if (stuObj != null) {
                     if (stuObj instanceof Boolean b) isStudent = b;
-                    else isStudent = "true".equalsIgnoreCase(stuObj.toString()) || "1".equals(stuObj.toString());
+                    else {
+                        String s = stuObj.toString().trim();
+                        isStudent = "true".equalsIgnoreCase(s) || "1".equals(s) || "có".equalsIgnoreCase(s) || "co".equalsIgnoreCase(s) || s.toLowerCase().contains("sinh viên");
+                    }
                 }
 
                 String brand = null;
@@ -489,6 +538,11 @@ public class InventoryCycleService {
                 so.setIsShipping(closed.getIsShipping());
                 so.setIsDelivered(closed.getIsDelivered());
                 so.setDeliveryDate(closed.getDeliveryDate());
+                so.setShippingCarrier(closed.getShippingCarrier());
+                so.setTrackingCode(closed.getTrackingCode());
+                so.setShippingAddress(closed.getShippingAddress());
+                so.setDepositAmount(closed.getDepositAmount());
+                so.setCodAmount(closed.getCodAmount());
                 if (Boolean.TRUE.equals(closed.getIsShipping()) && !Boolean.TRUE.equals(closed.getIsDelivered())) {
                     so.setOrderStatus("Chờ giao hàng");
                 } else {

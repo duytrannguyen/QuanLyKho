@@ -108,18 +108,18 @@ function AppRoutes() {
           <Route path="tra-cuu" element={<ProtectedRoute permission="SEARCH_INVENTORY"><TrangTimKiemTonKho /></ProtectedRoute>} />
           <Route path="quan-ly-ma-may" element={<ProtectedRoute permission="MANAGE_MACHINE_CODES"><TrangQuanLyMaMay /></ProtectedRoute>} />
           <Route path="ban-may" element={<ProtectedRoute permission="SALE_MACHINE"><TrangBanHang /></ProtectedRoute>} />
-          <Route path="don-ship" element={<ProtectedRoute permission="SALE_MACHINE"><TrangDonShip /></ProtectedRoute>} />
+          <Route path="don-ship" element={<ProtectedRoute permission="SHIP_MANAGE"><TrangDonShip /></ProtectedRoute>} />
           <Route path="ban-phu-kien" element={<ProtectedRoute permission="SALE_ACCESSORY"><TrangBanPhuKien /></ProtectedRoute>} />
           <Route path="lich-su-ban-phu-kien" element={<ProtectedRoute permission="ACCESSORY_HISTORY"><TrangLichSuBanPhuKien /></ProtectedRoute>} />
           <Route path="dich-vu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangSuaChua /></ProtectedRoute>} />
-          <Route path="tra-cuu-sua-chua" element={<ProtectedRoute permission="SERVICE_REPAIR"><TrangTraCuuSuaChua /></ProtectedRoute>} />
+          <Route path="tra-cuu-sua-chua" element={<ProtectedRoute permission="SERVICE_VIEW"><TrangTraCuuSuaChua /></ProtectedRoute>} />
           <Route path="khach-hang" element={<ProtectedRoute permission="CRM_VIEW"><TrangKhachHang /></ProtectedRoute>} />
           <Route path="khach-hang/het-han-bao-hanh" element={<ProtectedRoute permission="CRM_VIEW"><TrangMayHetBaoHanh /></ProtectedRoute>} />
           <Route path="khach-hang/:id" element={<ProtectedRoute permission="CRM_VIEW"><TrangChiTietKhachHang /></ProtectedRoute>} />
           <Route path="phan-tich" element={<ProtectedRoute permission="ANALYTICS_VIEW"><TrangThongKe /></ProtectedRoute>} />
           <Route path="doi-soat" element={<ProtectedRoute permission="SYNC_MANAGE"><TrangDoiSoat /></ProtectedRoute>} />
           <Route path="nhat-ky" element={<ProtectedRoute permission="LOGS_VIEW"><TrangNhatKyHoatDong /></ProtectedRoute>} />
-          <Route path="he-thong" element={<ProtectedRoute permission="SYSTEM_MANAGE"><TrangCaiDatHeThong /></ProtectedRoute>} />
+          <Route path="he-thong" element={<ProtectedRoute permission="SYSTEM_MANAGE|USER_MANAGE"><TrangCaiDatHeThong /></ProtectedRoute>} />
           <Route path="bang-gia" element={<ProtectedRoute permission="PRICING_VIEW"><TrangBangGia /></ProtectedRoute>} />
           <Route path="bao-hanh" element={<ProtectedRoute permission="WARRANTY_CHECK"><TrangKiemTraBaoHanh /></ProtectedRoute>} />
         </Route>

@@ -1,70 +1,119 @@
+# ==========================================
+# 1. CẤU HÌNH MÁY CHỦ (SERVER)
+# ==========================================
 server:
-  port: ${PORT:${HTTP_PORT:8080}}
+  # Cổng mà ứng dụng Spring Boot sẽ lắng nghe (VD: 8080)
+  port: ${PORT:8080}
+  # Địa chỉ IP ràng buộc. 0.0.0.0 cho phép nhận request từ bất kỳ IP/Card mạng nào.
   address: ${BIND_IP:0.0.0.0}
 
+# ==========================================
+# 2. CẤU HÌNH SPRING BOOT CORE & DATABASE
+# ==========================================
 spring:
   application:
+    # Tên định danh của ứng dụng
     name: tonkho-v2
 
+  # ----------------------------------------
+  # KẾT NỐI CƠ SỞ DỮ LIỆU MYSQL
+  # ----------------------------------------
   datasource:
-    url: ${DB_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8}
+    # Chuỗi kết nối JDBC: Tự động tạo DB nếu chưa có, hỗ trợ Unicode (UTF-8), đặt múi giờ VN, không dùng SSL
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:dongduy122}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  # Khởi tạo dữ liệu: Luôn chạy các file schema.sql và data.sql (nếu có) khi app khởi động
   sql:
     init:
       mode: always
 
-
+  # ----------------------------------------
+  # CẤU HÌNH HIBERNATE / JPA
+  # ----------------------------------------
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: false
+      # Chế độ quản lý cấu trúc bảng: 'update' sẽ tự tạo cột/bảng mới theo Java Entity mà không xóa dữ liệu cũ
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    # Bật/tắt in câu lệnh SQL thô ra console (nhận từ .env)
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
+        # Báo cho Hibernate biết đang dùng MySQL để tạo câu lệnh SQL tương thích
         dialect: org.hibernate.dialect.MySQLDialect
+        # Trình bày câu lệnh SQL in ra console gọn gàng, dễ đọc hơn
         format_sql: true
+    # Giữ Session kết nối DB mở suốt quá trình HTTP Request (giúp lazy-loading không bị lỗi No Session)
     open-in-view: true
 
+  # ----------------------------------------
+  # CẤU HÌNH JSON (JACKSON)
+  # ----------------------------------------
   jackson:
+    # Định dạng ngày giờ trả về cho Frontend qua API
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Ho_Chi_Minh
     serialization:
+      # Trả về ngày tháng dạng chuỗi (String) thay vì mã số Timestamp
       write-dates-as-timestamps: false
 
+  # ----------------------------------------
+  # CẤU HÌNH UPLOAD FILE
+  # ----------------------------------------
   servlet:
     multipart:
-      max-file-size: 25MB
-      max-request-size: 25MB
+      max-file-size: 25MB    # Dung lượng tối đa cho phép của 1 file tải lên
+      max-request-size: 25MB # Dung lượng tối đa của toàn bộ request tải lên
 
-# Default Admin Account
+# ==========================================
+# 3. CẤU HÌNH TÙY CHỈNH CỦA ỨNG DỤNG (APP)
+# ==========================================
 app:
+  # ----------------------------------------
+  # TÀI KHOẢN ADMIN KHỞI TẠO MẶC ĐỊNH
+  # ----------------------------------------
   admin:
-    username: ${ADMIN_USERNAME:admin}
-    password: ${ADMIN_PASSWORD:admin123}
+    username: ${ADMIN_USERNAME:admin@qkshop.vn}
+    password: ${ADMIN_PASSWORD:qkshop123@@}
     fullname: ${ADMIN_FULLNAME:Admin QKShop}
     email: ${ADMIN_EMAIL:admin@qkshop.vn}
 
+  # ----------------------------------------
+  # CẤU HÌNH BẢO MẬT TOKEN (JWT)
+  # ----------------------------------------
   jwt:
+    # Chuỗi khóa bí mật cực kỳ quan trọng dùng để ký mã hóa Token
     secret: ${JWT_SECRET:357638792F423F4428472B4B6250655368566D597133743677397A2443264629}
-    expiration-ms: ${JWT_EXPIRATION_MS:43200000}    # 12 giờ
-    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 ngày
+    # Thời gian tồn tại của Access Token tính bằng mili-giây
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    # Thời gian tồn tại của Refresh Token tính bằng mili-giây
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
-
-# Đồng bộ Google Sheet "DATABASE_BÁN HÀNG" -> trừ kho
-# Mặc định TẮT. Bật bằng biến môi trường GSHEET_ENABLED=true (và GSHEET_CRON_ENABLED=true để chạy tự động).
+# ==========================================
+# 4. CẤU HÌNH ĐỒNG BỘ GOOGLE SHEETS
+# ==========================================
 gsheet:
-  enabled: ${GSHEET_ENABLED:false}
-  cron-enabled: ${GSHEET_CRON_ENABLED:false}
-  cron: ${GSHEET_CRON:0 */15 * * * *}
-  spreadsheet-id: ${GSHEET_SPREADSHEET_ID:13gxMGT1dDwlK-ncXi3fUx2nY17U3ax2v1hxNRt2oIqs}
-  sheet-name: ${GSHEET_SHEET_NAME:DATABASE_BÁN HÀNG}
-  read-range: ${GSHEET_READ_RANGE:A1:AE}
-  credentials-path: ${GSHEET_CREDENTIALS_PATH:secrets/service_account.json}
+  enabled: ${GSHEET_ENABLED:false}               # Bật/tắt toàn bộ module đồng bộ
+  cron-enabled: ${GSHEET_CRON_ENABLED:false}     # Bật/tắt việc đồng bộ tự động chạy ngầm
+  scheduler:
+    enabled: ${GSHEET_SCHEDULER_ENABLED:false}   # Bật/tắt bộ hẹn giờ của Spring
+  # Biểu thức Cron xác định chu kỳ chạy tự động (VD: 0 */15 * * * * = mỗi 15 phút)
+  cron: ${GSHEET_CRON:0 */30 * * * *}
+  
+  # Cấu hình API Google Sheet
+  spreadsheet-id: ${GSHEET_SPREADSHEET_ID:} # Mã ID của file Google Sheet (lấy trên URL)
+  sheet-name: ${GSHEET_SHEET_NAME:DATABASE_BÁN HÀNG}         # Tên tab (sheet) cần đọc dữ liệu
+  read-range: ${GSHEET_READ_RANGE:A1:AE}         # Phạm vi vùng dữ liệu cần quét (VD: từ cột A1 đến AE)
+  credentials-path: ${GSHEET_CREDENTIALS_PATH:secrets/service_account.json} # Đường dẫn file JSON chứa key Google Service Account
+
+  # Các cờ (flag) nhận diện trạng thái khi đọc/ghi vào Sheet
   completed-status: "Hoàn tất"
   done-marker: "Đã xuất kho"
   error-prefix: "Lỗi: "
+  
+  # Ánh xạ tiêu đề cột (Map tên cột Tiếng Việt trên Sheet với code Java)
   columns:
     transaction-id: "transaction_ID"
     order-status: "trạng thái đơn"
@@ -84,15 +133,21 @@ gsheet:
     note: "ghi chú"
     salesperson: "nhân viên bán"
 
-# Swagger
+# ==========================================
+# 5. CẤU HÌNH TÀI LIỆU API (SWAGGER / SPRINGDOC)
+# ==========================================
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /api-docs         # Đường dẫn tải về cấu trúc API dạng JSON (OpenAPI 3)
   swagger-ui:
-    path: /swagger-ui.html
+    path: /swagger-ui.html  # Đường dẫn xem và test API trực quan trên trình duyệt
 
-# Logging
+# ==========================================
+# 6. CẤU HÌNH GHI NHẬT KÝ (LOGGING)
+# ==========================================
 logging:
   level:
-    com.qkshop.tonkho: DEBUG
-    org.springframework.security: INFO
+    # Mức độ ghi log cho mã nguồn nghiệp vụ của bạn (VD: DEBUG để dễ tìm lỗi)
+    com.qkshop.tonkho: ${LOG_LEVEL_APP:DEBUG}
+    # Mức độ ghi log cho bộ lọc bảo mật của Spring Security (VD: INFO để không bị nhiễu)
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}

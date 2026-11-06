@@ -12,9 +12,14 @@ import ModalXemQuyen from './ModalXemQuyen';
 
 export default function TrangCaiDatHeThong() {
   const { showToast } = useToast();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, hasPermission } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('general');
+  const canManageSystem = hasPermission('SYSTEM_MANAGE');
+  const canManageUsers = hasPermission('USER_MANAGE') || canManageSystem;
+
+  const [activeTab, setActiveTab] = useState(() => {
+    return canManageSystem ? 'general' : 'users';
+  });
   const [users, setUsers] = useState([]);
   const [availablePermissions, setAvailablePermissions] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -166,20 +171,24 @@ export default function TrangCaiDatHeThong() {
         <div className="col-lg-3">
           <div className="card shadow-sm border-0">
             <div className="list-group list-group-flush rounded">
-              <button 
-                className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'general' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
-                onClick={() => setActiveTab('general')}
-              >
-                <Settings size={20} />
-                Cấu hình chung
-              </button>
-              <button 
-                className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'users' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
-                onClick={() => setActiveTab('users')}
-              >
-                <Users size={20} />
-                Người dùng & Phân quyền
-              </button>
+              {canManageSystem && (
+                <button 
+                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'general' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
+                  onClick={() => setActiveTab('general')}
+                >
+                  <Settings size={20} />
+                  Cấu hình chung
+                </button>
+              )}
+              {canManageUsers && (
+                <button 
+                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'users' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
+                  onClick={() => setActiveTab('users')}
+                >
+                  <Users size={20} />
+                  Người dùng & Phân quyền
+                </button>
+              )}
             </div>
           </div>
         </div>

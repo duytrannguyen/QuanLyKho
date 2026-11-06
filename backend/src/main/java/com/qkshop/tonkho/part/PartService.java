@@ -228,8 +228,48 @@ public class PartService {
     @Transactional(rollbackFor = Exception.class)
     public void deletePart(Long id, String username) {
         Part part = getPartById(id);
+        PartHistory history = PartHistory.builder()
+                .sku(part.getSku())
+                .name(part.getName())
+                .quantity(-part.getQuantity())
+                .price(part.getRetailPrice())
+                .action("DELETE")
+                .note("Xóa linh kiện khỏi danh mục hệ thống (Tồn kho lúc xóa: " + part.getQuantity() + ")")
+                .createdBy(username != null ? username : "SYSTEM")
+                .build();
+        partHistoryRepository.save(history);
+
         partRepository.delete(part);
         log.info("Người dùng {} đã xóa linh kiện SKU: {}", username, part.getSku());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public boolean swapInPart(String sku, int quantity, String cycleId, String customerName, String customerPhone, String salesperson, String reason) {
+        if (sku == null || sku.trim().isEmpty() || quantity <= 0) return false;
+        Optional<Part> partOpt = partRepository.findBySku(sku.trim());
+        if (partOpt.isEmpty()) {
+            log.warn("Không tìm thấy linh kiện SKU {} để nhập hồi swap máy {}", sku, cycleId);
+            return false;
+        }
+
+        Part part = partOpt.get();
+        part.setQuantity(part.getQuantity() + quantity);
+        partRepository.save(part);
+
+        PartHistory history = PartHistory.builder()
+                .sku(part.getSku())
+                .name(part.getName())
+                .quantity(quantity)
+                .price(part.getImportPrice() != null ? part.getImportPrice() : BigDecimal.ZERO)
+                .action("SWAP_IN")
+                .orderCode(cycleId)
+                .customerName(customerName)
+                .customerPhone(customerPhone)
+                .note(reason != null ? reason : ("Thu hồi linh kiện tháo máy nâng cấp chu kỳ " + cycleId))
+                .createdBy(salesperson != null ? salesperson : "BÁN HÀNG")
+                .build();
+        partHistoryRepository.save(history);
+        return true;
     }
 
     @Transactional(rollbackFor = Exception.class)

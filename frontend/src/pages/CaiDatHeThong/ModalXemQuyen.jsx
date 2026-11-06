@@ -1,19 +1,33 @@
-import React from 'react';
-import { Shield, X, CheckCircle2, XCircle, Layers } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Shield, X, CheckCircle2, XCircle, Layers, Search } from 'lucide-react';
 
 export default function ModalXemQuyen({ show, onClose, user, availablePermissions }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const isAdmin = user?.role === 'ADMIN';
+  const userPermSet = useMemo(() => new Set(user?.permissions || []), [user]);
+
+  // Lọc và nhóm các quyền theo Group
+  const groupedPermissions = useMemo(() => {
+    const q = (searchTerm || '').trim().toLowerCase();
+    const filtered = (availablePermissions || []).filter(p => {
+      if (!q) return true;
+      return (p.name && p.name.toLowerCase().includes(q)) ||
+             (p.code && p.code.toLowerCase().includes(q)) ||
+             (p.group && p.group.toLowerCase().includes(q)) ||
+             (p.description && p.description.toLowerCase().includes(q));
+    });
+
+    const groups = {};
+    filtered.forEach(perm => {
+      const gName = perm.group || 'Khác';
+      if (!groups[gName]) groups[gName] = [];
+      groups[gName].push(perm);
+    });
+    return groups;
+  }, [availablePermissions, searchTerm]);
+
   if (!show || !user) return null;
-
-  const isAdmin = user.role === 'ADMIN';
-  const userPermSet = new Set(user.permissions || []);
-
-  // Nhóm các quyền theo Group
-  const groupedPermissions = {};
-  (availablePermissions || []).forEach(perm => {
-    const gName = perm.group || 'Khác';
-    if (!groupedPermissions[gName]) groupedPermissions[gName] = [];
-    groupedPermissions[gName].push(perm);
-  });
 
   const totalGranted = isAdmin 
     ? (availablePermissions || []).length 
@@ -53,6 +67,23 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
             />
           </div>
 
+          {/* SEARCH & FILTER BAR */}
+          <div className="bg-light px-4 py-2.5 border-bottom d-flex justify-content-between align-items-center gap-3">
+            <div className="input-group input-group-sm" style={{ maxWidth: '320px' }}>
+              <span className="input-group-text bg-white"><Search size={14} /></span>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Tìm quyền theo tên hoặc mã..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <span className="badge bg-primary rounded-pill px-3 py-1.5 small">
+              {totalGranted} quyền đang sở hữu
+            </span>
+          </div>
+
           {/* BODY */}
           <div className="modal-body p-4" style={{ maxHeight: '70vh' }}>
             {isAdmin && (
@@ -64,48 +95,63 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
               </div>
             )}
 
-            <div className="row g-3">
-              {Object.entries(groupedPermissions).map(([groupName, perms]) => (
-                <div className="col-md-6" key={groupName}>
-                  <div className="border rounded-3 h-100 bg-white shadow-sm overflow-hidden">
-                    <div className="bg-light px-3 py-2 border-bottom d-flex align-items-center gap-2">
-                      <Layers size={14} className="text-primary" />
-                      <span className="fw-bold text-dark text-uppercase small">{groupName}</span>
-                    </div>
-                    <div className="p-2">
-                      {perms.map(p => {
-                        const hasThis = isAdmin || userPermSet.has(p.code);
-                        return (
-                          <div 
-                            key={p.code} 
-                            className={`p-2 rounded-2 mb-1 d-flex align-items-start gap-2 ${hasThis ? 'bg-success-subtle' : 'bg-light text-muted opacity-60'}`}
-                          >
-                            <div className="pt-0.5">
-                              {hasThis ? (
-                                <CheckCircle2 size={16} className="text-success" />
-                              ) : (
-                                <XCircle size={16} className="text-secondary" />
-                              )}
-                            </div>
-                            <div className="flex-grow-1">
-                              <div className="d-flex align-items-center justify-content-between">
-                                <span className={`fw-semibold small ${hasThis ? 'text-success-emphasis' : 'text-secondary'}`}>
-                                  {p.name}
-                                </span>
-                                <code style={{ fontSize: '0.65rem' }}>{p.code}</code>
-                              </div>
-                              <div style={{ fontSize: '0.75rem' }} className="text-secondary">
-                                {p.description}
-                              </div>
-                            </div>
+            {Object.keys(groupedPermissions).length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <Search size={32} className="opacity-50 mb-2" />
+                <div>Không tìm thấy quyền nào phù hợp với "{searchTerm}"</div>
+              </div>
+            ) : (
+              <div className="row g-3">
+                {Object.entries(groupedPermissions).map(([groupName, perms]) => {
+                  const grantedInGroup = perms.filter(p => isAdmin || userPermSet.has(p.code)).length;
+                  return (
+                    <div className="col-md-6" key={groupName}>
+                      <div className="border rounded-3 h-100 bg-white shadow-sm overflow-hidden">
+                        <div className="bg-light px-3 py-2 border-bottom d-flex align-items-center justify-content-between">
+                          <div className="d-flex align-items-center gap-2">
+                            <Layers size={14} className="text-primary" />
+                            <span className="fw-bold text-dark text-uppercase small">{groupName}</span>
                           </div>
-                        );
-                      })}
+                          <span className="badge bg-secondary-subtle text-secondary rounded-pill small">
+                            {grantedInGroup}/{perms.length}
+                          </span>
+                        </div>
+                        <div className="p-2">
+                          {perms.map(p => {
+                            const hasThis = isAdmin || userPermSet.has(p.code);
+                            return (
+                              <div 
+                                key={p.code} 
+                                className={`p-2 rounded-2 mb-1 d-flex align-items-start gap-2 ${hasThis ? 'bg-success-subtle' : 'bg-light text-muted opacity-60'}`}
+                              >
+                                <div className="pt-0.5">
+                                  {hasThis ? (
+                                    <CheckCircle2 size={16} className="text-success" />
+                                  ) : (
+                                    <XCircle size={16} className="text-secondary" />
+                                  )}
+                                </div>
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center justify-content-between">
+                                    <span className={`fw-semibold small ${hasThis ? 'text-success-emphasis' : 'text-secondary'}`}>
+                                      {p.name}
+                                    </span>
+                                    <code style={{ fontSize: '0.65rem' }}>{p.code}</code>
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem' }} className="text-secondary">
+                                    {p.description}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* FOOTER */}

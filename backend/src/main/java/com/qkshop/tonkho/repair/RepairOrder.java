@@ -33,6 +33,18 @@ public class RepairOrder {
     @Column(name = "device_model", nullable = false, length = 200)
     private String deviceModel; // Tên máy
 
+    @Column(name = "device_serial", length = 100)
+    private String deviceSerial; // Serial máy tiếp nhận
+
+    @Column(name = "intake_condition", columnDefinition = "TEXT")
+    private String intakeCondition; // Tình trạng máy khi tiếp nhận (trầy xước, nứt vỡ, mất nguồn...)
+
+    @Column(name = "accessories_received", length = 255)
+    private String accessoriesReceived; // Phụ kiện gửi kèm (sạc, túi, chuột...)
+
+    @Column(name = "promised_date")
+    private java.time.LocalDate promisedDate; // Ngày hẹn trả máy
+
     @Column(name = "created_date", nullable = false)
     private LocalDateTime createdDate;
 
@@ -45,7 +57,7 @@ public class RepairOrder {
 
     @Column(name = "status", length = 50)
     @Builder.Default
-    private String status = "COMPLETED";
+    private String status = "RECEIVED";
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;

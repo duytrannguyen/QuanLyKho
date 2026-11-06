@@ -161,8 +161,10 @@ export const apiPhuKien = {
 export const apiSuaChua = {
   getOrders: (params) => axiosClient.get('/repair', { params, silent: true }),
   getOrderById: (id) => axiosClient.get(`/repair/${id}`, { silent: true }),
+  getOrdersBySerial: (serial) => axiosClient.get('/repair/by-serial', { params: { serial }, silent: true }),
   createOrder: (payload) => axiosClient.post('/repair', payload),
   updateOrder: (id, payload) => axiosClient.put(`/repair/${id}`, payload),
+  updateOrderStatus: (id, status) => axiosClient.put(`/repair/${id}/status`, { status }),
   searchServices: (params) => axiosClient.get('/repair/services', { params, silent: true }),
 };
 
@@ -171,8 +173,17 @@ export const apiBaoHanh = {
   getShippingOrders: (params) => axiosClient.get(`/sale/shipping-orders`, { params, silent: true }),
   updateMachineOrder: (cycleId, payload) => axiosClient.put(`/sale/order/${cycleId}`, payload),
   confirmDelivery: (cycleId, payload) => axiosClient.put(`/sale/order/${cycleId}/confirm-delivery`, payload),
+  returnOrder: (cycleId, payload) => axiosClient.post(`/sale/order/${cycleId}/return-order`, payload),
+  returnShippingOrder: (cycleId, payload) => axiosClient.post(`/sale/order/${cycleId}/return-shipping`, payload),
   updateAccessoryOrder: (orderId, payload) => axiosClient.put(`/sale/accessory-order/${orderId}`, payload),
   updateRepairOrder: (orderId, payload) => axiosClient.put(`/sale/repair-order/${orderId}`, payload),
+};
+
+export const apiDonShip = {
+  getShippingOrders: (params) => axiosClient.get(`/sale/shipping-orders`, { params, silent: true }),
+  confirmDelivery: (cycleId, payload) => axiosClient.put(`/sale/order/${cycleId}/confirm-delivery`, payload),
+  returnOrder: (cycleId, payload) => axiosClient.post(`/sale/order/${cycleId}/return-shipping`, payload),
+  updateOrder: (cycleId, payload) => axiosClient.put(`/sale/order/${cycleId}`, payload),
 };
 
 export const salesReportApi = {

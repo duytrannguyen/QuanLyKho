@@ -356,7 +356,17 @@ public class AccessoryService {
             so.setNormalizedSource("Mua tại cửa hàng");
             so.setInboxType("Đơn mua thẳng");
             so.setIsStudent(false);
-            so.setOrderStatus("Hoàn tất");
+            if (Boolean.TRUE.equals(order.getIsShipping()) && !Boolean.TRUE.equals(order.getIsDelivered())) {
+                so.setOrderStatus("Chờ giao hàng");
+                so.setIsShipping(true);
+                so.setIsDelivered(false);
+                so.setDeliveryDate(null);
+            } else {
+                so.setOrderStatus("Hoàn tất");
+                so.setIsShipping(order.getIsShipping());
+                so.setIsDelivered(order.getIsDelivered());
+                so.setDeliveryDate(order.getDeliveryDate());
+            }
             so.setPaymentStatus("Đã thanh toán");
             so.setProductName("Phụ kiện: " + itemsSummary);
             so.setBrand("PHỤ KIỆN");
@@ -421,10 +431,17 @@ public class AccessoryService {
 
     @Transactional(rollbackFor = Exception.class)
     public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone, String cycleId, String salesperson, LocalDateTime saleDate) {
+        deductAccessories(accessoriesToDeduct, customerName, customerPhone, cycleId, salesperson, saleDate, false, true, null, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone, String cycleId, String salesperson, LocalDateTime saleDate,
+                                  Boolean isShipping, Boolean isDelivered, LocalDate deliveryDate, String machineWarrantyPeriod) {
         if (accessoriesToDeduct == null || accessoriesToDeduct.isEmpty()) return;
 
         LocalDateTime actualSaleDate = saleDate != null ? saleDate : LocalDateTime.now();
         AccessoryOrder machineAccOrder = null;
+        boolean pendingShipping = Boolean.TRUE.equals(isShipping) && !Boolean.TRUE.equals(isDelivered);
 
         if (cycleId != null) {
             String orderCode = "PK-KEM-" + cycleId.replace("CYC-", "");
@@ -435,6 +452,10 @@ public class AccessoryService {
                     .salesperson(salesperson != null ? salesperson.trim() : null)
                     .saleDate(actualSaleDate)
                     .saleNote("Phụ kiện bán kèm theo đơn máy (Cycle: " + cycleId + ")")
+                    .isShipping(isShipping != null ? isShipping : false)
+                    .isDelivered(isDelivered != null ? isDelivered : !Boolean.TRUE.equals(isShipping))
+                    .deliveryDate(deliveryDate)
+                    .status(pendingShipping ? "PENDING" : "COMPLETED")
                     .totalAmount(BigDecimal.ZERO)
                     .discount(BigDecimal.ZERO)
                     .finalAmount(BigDecimal.ZERO)
@@ -481,7 +502,8 @@ public class AccessoryService {
             if (machineAccOrder != null) {
                 int warrantyMonths = accessory.getDefaultWarrantyMonths() != null ? accessory.getDefaultWarrantyMonths() : 0;
                 String warrantyPeriod = warrantyMonths > 0 ? warrantyMonths + " Tháng" : "Không BH";
-                LocalDate warrantyExpiry = warrantyMonths > 0 ? actualSaleDate.toLocalDate().plusMonths(warrantyMonths) : null;
+                LocalDate baseDate = deliveryDate != null ? deliveryDate : actualSaleDate.toLocalDate();
+                LocalDate warrantyExpiry = (warrantyMonths > 0 && !pendingShipping) ? baseDate.plusMonths(warrantyMonths) : null;
 
                 AccessoryOrderItem item = AccessoryOrderItem.builder()
                         .accessoryId(accessory.getId())
