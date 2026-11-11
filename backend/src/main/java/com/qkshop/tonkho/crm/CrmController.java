@@ -24,13 +24,13 @@ public class CrmController {
     private final CrmCustomerLinkService linkService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<CrmSummary>> getSummary() {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getSummary()));
     }
 
     @GetMapping("/customers")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<PageResult<CustomerItem>>> searchCustomers(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String filterType,
@@ -43,7 +43,7 @@ public class CrmController {
     }
 
     @GetMapping("/customers/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<CustomerItem>> getCustomer(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getCustomer(id)));
     }
@@ -58,7 +58,7 @@ public class CrmController {
     }
 
     @GetMapping("/customers/{id}/orders")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<PageResult<OrderItem>>> getCustomerOrders(
             @PathVariable Long id,
             @RequestParam(defaultValue = "") String category,
@@ -68,13 +68,13 @@ public class CrmController {
     }
 
     @GetMapping("/orders/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<OrderItem>> getOrder(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getOrder(id)));
     }
 
     @GetMapping("/unlinked-orders")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<PageResult<OrderItem>>> getUnlinkedOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -94,7 +94,7 @@ public class CrmController {
     }
 
     @GetMapping("/customers/{id}/care-notes")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<java.util.List<CareNoteItem>>> getCareNotes(
             @PathVariable Long id,
             @RequestParam(required = false) Long orderId) {
@@ -102,7 +102,7 @@ public class CrmController {
     }
 
     @PostMapping("/customers/{id}/care-notes")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_MANAGE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<CareNoteItem>> addCareNote(
             @PathVariable Long id,
             @Valid @RequestBody CreateCareNoteRequest request,
@@ -113,7 +113,7 @@ public class CrmController {
     }
 
     @GetMapping("/customers/export-excel")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW') or hasAuthority('EXPORT_DATA')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EXPORT_DATA')")
     public ResponseEntity<org.springframework.core.io.Resource> exportCustomersExcel(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String filterType,
@@ -128,19 +128,19 @@ public class CrmController {
     }
 
     @GetMapping("/expired-warranty/summary")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<ExpiredWarrantySummary>> getExpiredWarrantySummary() {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getExpiredWarrantySummary()));
     }
 
     @GetMapping("/expired-warranty/brands")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<java.util.List<String>>> getExpiredWarrantyBrands() {
         return ResponseEntity.ok(ApiResponse.ok(queryService.getExpiredWarrantyBrands()));
     }
 
     @GetMapping("/expired-warranty/orders")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE')")
     public ResponseEntity<ApiResponse<PageResult<ExpiredWarrantyOrderItem>>> getExpiredWarrantyOrders(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String brand,
@@ -152,7 +152,7 @@ public class CrmController {
     }
 
     @GetMapping("/expired-warranty/export-excel")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CRM_VIEW') or hasAuthority('EXPORT_DATA')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EXPORT_DATA')")
     public ResponseEntity<org.springframework.core.io.Resource> exportExpiredWarrantyExcel(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String brand,

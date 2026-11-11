@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -9,18 +9,34 @@ const NguCanhThongBao = createContext(null);
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
+  const timersRef = useRef(new Map());
+
+  const removeToast = useCallback((id) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   const showToast = useCallback((message, type = 'primary') => {
     const id = Date.now() + Math.random().toString(36).substring(2);
     setToasts(prev => [...prev, { id, message, type, time: new Date() }]);
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timersRef.current.delete(id);
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3000);
+    timersRef.current.set(id, timer);
   }, []);
 
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
   }, []);
 
   const confirm = useCallback((message) => {
@@ -39,8 +55,10 @@ export const ToastProvider = ({ children }) => {
     });
   }, []);
 
+  const contextValue = useMemo(() => ({ showToast, confirm }), [showToast, confirm]);
+
   return (
-    <NguCanhThongBao.Provider value={{ showToast, confirm }}>
+    <NguCanhThongBao.Provider value={contextValue}>
       {children}
       <div className="toast-container position-fixed top-0 end-0 p-3 mt-5" style={{ zIndex: 9999 }}>
         {toasts.map(t => {

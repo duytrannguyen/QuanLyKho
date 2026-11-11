@@ -20,7 +20,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = {
         "spring.task.scheduling.enabled=false",
         "gsheet.scheduler.enabled=false",
-        "gsheet.enabled=false"
+        "gsheet.enabled=false",
+        "crm.startup-sync.enabled=false"
 })
 public class AuthControllerTest {
 

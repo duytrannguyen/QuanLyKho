@@ -3,15 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import {
   Cpu, Search, Plus, RotateCcw, Edit3, Trash2, History,
   CheckCircle2, AlertTriangle, XCircle, SlidersHorizontal, 
-  ShieldCheck, ArrowUpDown, X, Tag, Package, Filter, MoreHorizontal
+  ShieldCheck, ArrowUpDown, X, Tag, Package, Filter, MoreHorizontal, Lock
 } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { apiLinhKien } from '../../api';
 import { formatCurrency, parseCurrency, formatDate } from '../../utils/dinh_dang';
 
 export default function TrangTonKhoLinhKien() {
   const navigate = useNavigate();
   const { showToast, confirm } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canImportPart = hasPermission('IMPORT_PART');
+  const canManagePart = hasPermission('PART_MANAGE');
 
   const [parts, setParts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -127,6 +131,7 @@ export default function TrangTonKhoLinhKien() {
   }, [searchTerm, selectedCategory, stockFilter, sortBy, itemsPerPage]);
 
   const handleOpenEdit = (part) => {
+    if (!requirePermission('PART_MANAGE', showToast, 'Chỉnh sửa thông tin linh kiện')) return;
     setEditingPart(part);
     setEditFormData({
       name: part.name || '',
@@ -143,6 +148,7 @@ export default function TrangTonKhoLinhKien() {
 
   const handleSaveEdit = async () => {
     if (!editingPart) return;
+    if (!requirePermission('PART_MANAGE', showToast, 'Cập nhật linh kiện')) return;
     setIsUpdating(true);
     try {
       const payload = {
@@ -169,6 +175,7 @@ export default function TrangTonKhoLinhKien() {
   };
 
   const handleDeletePart = async (part) => {
+    if (!requirePermission('PART_MANAGE', showToast, 'Xóa linh kiện khỏi kho')) return;
     const isConfirmed = await confirm(`Bạn có chắc chắn muốn xóa linh kiện ${part.name} (${part.sku}) khỏi kho?`);
     if (!isConfirmed) return;
 
@@ -243,10 +250,15 @@ export default function TrangTonKhoLinhKien() {
           <button
             type="button"
             className="btn btn-primary rounded-pill px-4 shadow-sm d-flex align-items-center gap-2 transition-all"
-            onClick={() => navigate('/nhap-linh-kien')}
+            onClick={() => {
+              if (!requirePermission('IMPORT_PART', showToast, 'Nhập kho linh kiện')) return;
+              navigate('/nhap-linh-kien');
+            }}
+            title={canImportPart ? 'Nhập linh kiện vào kho' : 'Yêu cầu quyền: Nhập kho linh kiện'}
           >
             <Plus size={18} />
             <span className="fw-bold">Nhập linh kiện</span>
+            {!canImportPart && <Lock size={13} className="text-warning" />}
           </button>
         </div>
       </div>
@@ -416,11 +428,12 @@ export default function TrangTonKhoLinhKien() {
                       <div className="d-flex justify-content-end gap-2">
                         <button
                           type="button"
-                          className="btn btn-sm btn-light border text-primary px-2 py-1 rounded-3 hover-primary"
-                          title="Chỉnh sửa thông tin"
+                          className="btn btn-sm btn-light border text-primary px-2 py-1 rounded-3 hover-primary d-inline-flex align-items-center gap-1"
+                          title={canManagePart ? 'Chỉnh sửa thông tin' : 'Yêu cầu quyền: Quản lý kho linh kiện'}
                           onClick={() => handleOpenEdit(part)}
                         >
                           <Edit3 size={16} />
+                          {!canManagePart && <Lock size={11} className="text-warning" />}
                         </button>
                         <button
                           type="button"
@@ -432,11 +445,12 @@ export default function TrangTonKhoLinhKien() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-light border text-danger px-2 py-1 rounded-3 hover-danger"
-                          title="Xóa"
+                          className="btn btn-sm btn-light border text-danger px-2 py-1 rounded-3 hover-danger d-inline-flex align-items-center gap-1"
+                          title={canManagePart ? 'Xóa linh kiện' : 'Yêu cầu quyền: Quản lý kho linh kiện'}
                           onClick={() => handleDeletePart(part)}
                         >
                           <Trash2 size={16} />
+                          {!canManagePart && <Lock size={11} className="text-warning" />}
                         </button>
                       </div>
                     </td>

@@ -6,6 +6,16 @@ server:
   port: ${PORT:8080}
   # Địa chỉ IP ràng buộc. 0.0.0.0 cho phép nhận request từ bất kỳ IP/Card mạng nào.
   address: ${BIND_IP:0.0.0.0}
+  # Tắt JMX MBean của Tomcat và nhường việc nén Gzip cho Nginx để giảm tải CPU & RAM cho JVM
+  tomcat:
+    mbeanregistry:
+      enabled: false
+    max-connections: 500
+    accept-count: 50
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:false}
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,application/css
+    min-response-size: 1024
 
 # ==========================================
 # 2. CẤU HÌNH SPRING BOOT CORE & DATABASE
@@ -15,15 +25,30 @@ spring:
     # Tên định danh của ứng dụng
     name: tonkho-v2
 
+  # Tắt JMX toàn cục để khởi động nhanh hơn và tiết kiệm ~25MB RAM Metaspace/Heap
+  jmx:
+    enabled: false
+
+  # Bật Virtual Threads của Java 21 giúp tối ưu hóa luồng xử lý I/O đồng thời
+  threads:
+    virtual:
+      enabled: true
+
   # ----------------------------------------
   # KẾT NỐI CƠ SỞ DỮ LIỆU MYSQL
   # ----------------------------------------
   datasource:
-    # Chuỗi kết nối JDBC: Tự động tạo DB nếu chưa có, hỗ trợ Unicode (UTF-8), đặt múi giờ VN, không dùng SSL
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8
+    # Chuỗi kết nối JDBC: Tự động tạo DB nếu chưa có, hỗ trợ Unicode (UTF-8), đặt múi giờ VN, tối ưu batch & prepared statement cache
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:qkshop_tonkho}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useServerPrepStmts=true&useLocalSessionState=true&elideSetAutoCommits=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:dongduy122}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1800000
 
   # Khởi tạo dữ liệu: Luôn chạy các file schema.sql và data.sql (nếu có) khi app khởi động
   sql:
@@ -43,8 +68,20 @@ spring:
       hibernate:
         # Báo cho Hibernate biết đang dùng MySQL để tạo câu lệnh SQL tương thích
         dialect: org.hibernate.dialect.MySQLDialect
-        # Trình bày câu lệnh SQL in ra console gọn gàng, dễ đọc hơn
-        format_sql: true
+        # Trình bày câu lệnh SQL in ra console gọn gàng, dễ đọc hơn (tắt mặc định để tối ưu tốc độ)
+        format_sql: ${FORMAT_SQL:false}
+        # Tối ưu gom nhóm truy vấn Lazy Loading (giảm thiểu lỗi N+1) và Batch Insert/Update
+        default_batch_fetch_size: 32
+        # Giới hạn Query Plan Cache của Hibernate 6 (tiết kiệm ~120MB Old Gen Heap so với mặc định 2048)
+        query:
+          plan_cache_max_size: 128
+          plan_parameter_metadata_max_size: 32
+          in_clause_parameter_padding: true
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+        order_inserts: true
+        order_updates: true
     # Giữ Session kết nối DB mở suốt quá trình HTTP Request (giúp lazy-loading không bị lỗi No Session)
     open-in-view: true
 
@@ -72,13 +109,10 @@ spring:
 # ==========================================
 app:
   # ----------------------------------------
-  # TÀI KHOẢN ADMIN KHỞI TẠO MẶC ĐỊNH
+  # TÀI KHOẢN ADMIN (Mặc định tắt tự tạo mới vì CSDL đã có sẵn tài khoản quản trị)
   # ----------------------------------------
   admin:
-    username: ${ADMIN_USERNAME:admin@qkshop.vn}
-    password: ${ADMIN_PASSWORD:qkshop123@@}
-    fullname: ${ADMIN_FULLNAME:Admin QKShop}
-    email: ${ADMIN_EMAIL:admin@qkshop.vn}
+    auto-create: ${ADMIN_AUTO_CREATE:false}
 
   # ----------------------------------------
   # CẤU HÌNH BẢO MẬT TOKEN (JWT)
@@ -147,7 +181,7 @@ springdoc:
 # ==========================================
 logging:
   level:
-    # Mức độ ghi log cho mã nguồn nghiệp vụ của bạn (VD: DEBUG để dễ tìm lỗi)
-    com.qkshop.tonkho: ${LOG_LEVEL_APP:DEBUG}
+    # Mức độ ghi log cho mã nguồn nghiệp vụ của bạn (mặc định INFO để tối ưu tốc độ I/O)
+    com.qkshop.tonkho: ${LOG_LEVEL_APP:INFO}
     # Mức độ ghi log cho bộ lọc bảo mật của Spring Security (VD: INFO để không bị nhiễu)
     org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}

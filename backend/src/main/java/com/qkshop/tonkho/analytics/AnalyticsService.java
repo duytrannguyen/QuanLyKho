@@ -18,6 +18,7 @@ import com.qkshop.tonkho.accessory.AccessoryRepository;
 import com.qkshop.tonkho.accessory.AccessoryHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,11 +26,31 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AnalyticsService {
+
+    private static final long CACHE_TTL_MS = 10_000L;
+
+    private record CacheEntry<T>(T data, long expiresAt) {
+        boolean isValid() {
+            return System.currentTimeMillis() < expiresAt;
+        }
+    }
+
+    private final Map<String, CacheEntry<Map<String, Object>>> summaryCache = new ConcurrentHashMap<>();
+    private final Map<String, CacheEntry<List<Map<String, Object>>>> ageCache = new ConcurrentHashMap<>();
+    private final Map<String, CacheEntry<List<Map<String, Object>>>> turnoverCache = new ConcurrentHashMap<>();
+
+    private String buildCacheKey(AnalyticsFilterRequest f) {
+        if (f == null) return "DEFAULT";
+        return String.format("%s|%s|%s|%s|%s|%s",
+                f.getPeriod(), f.getProductType(), f.getBrandId(), f.getSegmentCode(), f.getModelLineId(), f.getCategory());
+    }
 
     private final ActiveInventoryRepository activeInventoryRepo;
     private final ClosedCycleRepository closedCycleRepo;
@@ -54,6 +75,12 @@ public class AnalyticsService {
     }
 
     public Map<String, Object> getSummary(AnalyticsFilterRequest filter) {
+        String cacheKey = buildCacheKey(filter);
+        CacheEntry<Map<String, Object>> cached = summaryCache.get(cacheKey);
+        if (cached != null && cached.isValid()) {
+            return cached.data();
+        }
+
         LocalDateTime fromDate = resolvePeriodStart(filter.getPeriod());
         LocalDateTime toDate = LocalDateTime.now();
 
@@ -188,6 +215,7 @@ public class AnalyticsService {
         summary.put("soldValue", soldValue.longValue());
         summary.put("importedCount", importedCount);
         summary.put("withoutPrice", withoutPrice);
+        summaryCache.put(cacheKey, new CacheEntry<>(summary, System.currentTimeMillis() + CACHE_TTL_MS));
         return summary;
     }
 
@@ -369,6 +397,12 @@ public class AnalyticsService {
     }
 
     public List<Map<String, Object>> getInventoryAge(AnalyticsFilterRequest filter) {
+        String cacheKey = buildCacheKey(filter);
+        CacheEntry<List<Map<String, Object>>> cached = ageCache.get(cacheKey);
+        if (cached != null && cached.isValid()) {
+            return cached.data();
+        }
+
         SegmentCode segment = null;
         try { if (filter.getSegmentCode() != null) segment = SegmentCode.valueOf(filter.getSegmentCode()); } catch (Exception ignored) {}
 
@@ -411,10 +445,17 @@ public class AnalyticsService {
         result.add(ageRow("60 - 90 ngày", ageMap.get("60 - 90 ngày"), total));
         result.add(ageRow("Trên 90 ngày", ageMap.get("Trên 90 ngày"), total));
 
+        ageCache.put(cacheKey, new CacheEntry<>(result, System.currentTimeMillis() + CACHE_TTL_MS));
         return result;
     }
 
     public List<Map<String, Object>> getTurnoverRate(AnalyticsFilterRequest filter) {
+        String cacheKey = buildCacheKey(filter);
+        CacheEntry<List<Map<String, Object>>> cached = turnoverCache.get(cacheKey);
+        if (cached != null && cached.isValid()) {
+            return cached.data();
+        }
+
         LocalDateTime fromDate = resolvePeriodStart(filter.getPeriod());
         LocalDateTime toDate = LocalDateTime.now();
 
@@ -430,24 +471,18 @@ public class AnalyticsService {
             List<ClosedCycle> exported = closedCycleRepo.findFilteredExported(fromDate, toDate, filter.getBrandId(), segment, filter.getModelLineId());
 
             for (ActiveInventory ai : importedActive) {
-                String platformId = ai.getConfig() != null && ai.getConfig().getVariant() != null && ai.getConfig().getVariant().getPlatform() != null
-                        ? ai.getConfig().getVariant().getPlatform().getPlatformId() : null;
-                String name = "Máy móc - " + getBrandNameForPlatform(platformId);
+                String name = "Máy móc - " + extractBrandNameFromConfig(ai.getConfig());
                 importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + 1);
             }
 
             for (ClosedCycle cc : importedClosed) {
-                String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
-                        ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
-                String name = "Máy móc - " + getBrandNameForPlatform(platformId);
+                String name = "Máy móc - " + extractBrandNameFromConfig(cc.getConfig());
                 importByGroup.put(name, importByGroup.getOrDefault(name, 0L) + 1);
             }
 
             for (ClosedCycle cc : exported) {
                 if (cc.getCloseType() == CloseType.SALE) {
-                    String platformId = cc.getConfig() != null && cc.getConfig().getVariant() != null && cc.getConfig().getVariant().getPlatform() != null
-                            ? cc.getConfig().getVariant().getPlatform().getPlatformId() : null;
-                    String name = "Máy móc - " + getBrandNameForPlatform(platformId);
+                    String name = "Máy móc - " + extractBrandNameFromConfig(cc.getConfig());
                     exportByGroup.put(name, exportByGroup.getOrDefault(name, 0L) + 1);
                 }
             }
@@ -455,17 +490,20 @@ public class AnalyticsService {
 
         if (isAccessory(filter)) {
             List<AccessoryHistory> histories = accessoryHistoryRepo.findByCreatedAtBetween(fromDate, toDate);
-            List<Accessory> accList = accessoryRepo.findAll();
-            if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
-                accList = accList.stream().filter(a -> filter.getCategory().equals(a.getCategory())).collect(Collectors.toList());
+            List<Accessory> allAccessories = accessoryRepo.findAll();
+            Map<String, String> skuToCat = new HashMap<>();
+            for (Accessory a : allAccessories) {
+                skuToCat.put(a.getSku(), a.getCategory());
             }
-            List<String> validSkus = accList.stream().map(Accessory::getSku).collect(Collectors.toList());
+
+            List<Accessory> accList = allAccessories;
+            if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
+                accList = allAccessories.stream().filter(a -> filter.getCategory().equals(a.getCategory())).collect(Collectors.toList());
+            }
+            Set<String> validSkus = accList.stream().map(Accessory::getSku).collect(Collectors.toSet());
             if (filter.getCategory() != null && !filter.getCategory().isEmpty()) {
                 histories = histories.stream().filter(h -> validSkus.contains(h.getSku())).collect(Collectors.toList());
             }
-
-            Map<String, String> skuToCat = new HashMap<>();
-            for (Accessory a : accessoryRepo.findAll()) skuToCat.put(a.getSku(), a.getCategory());
 
             for (AccessoryHistory h : histories) {
                 String cat = skuToCat.getOrDefault(h.getSku(), "Khác");
@@ -523,7 +561,20 @@ public class AnalyticsService {
             result.add(item);
         }
         result.sort((a, b) -> Double.compare((Double) b.get("rate"), (Double) a.get("rate")));
+        turnoverCache.put(cacheKey, new CacheEntry<>(result, System.currentTimeMillis() + CACHE_TTL_MS));
         return result;
+    }
+
+    private String extractBrandNameFromConfig(com.qkshop.tonkho.sale.SalesConfig config) {
+        if (config != null
+                && config.getVariant() != null
+                && config.getVariant().getPlatform() != null
+                && config.getVariant().getPlatform().getModelLine() != null
+                && config.getVariant().getPlatform().getModelLine().getBrand() != null
+                && config.getVariant().getPlatform().getModelLine().getBrand().getBrandName() != null) {
+            return config.getVariant().getPlatform().getModelLine().getBrand().getBrandName();
+        }
+        return "Khác";
     }
 
     private String getBrandNameForPlatform(String platformId) {
@@ -600,7 +651,7 @@ public class AnalyticsService {
         List<Map<String, Object>> topPerformers = new ArrayList<>();
 
         if (isLaptop(filter)) {
-            List<ActiveInventory> all = activeInventoryRepo.findAll();
+            List<ActiveInventory> all = activeInventoryRepo.findAllWithHierarchy();
             LocalDate limitDate = LocalDate.now().minusDays(90);
 
             Map<String, List<ActiveInventory>> grouped = all.stream()

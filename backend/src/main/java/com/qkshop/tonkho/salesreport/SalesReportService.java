@@ -42,13 +42,17 @@ public class SalesReportService {
         KpiData curKpi = parseKpiRow(curKpiRow);
         KpiData prevKpi = parseKpiRow(prevKpiRow);
 
-        // Doanh thu theo nguồn cho 2 kỳ để tính KPI nguồn
-        Map<String, Double> curSourceMap = getSourceRevenueMap(currentStart, currentEnd);
-        Map<String, Double> prevSourceMap = getSourceRevenueMap(prevStart, prevEnd);
+        // Doanh thu theo nguồn cho 2 kỳ để tính KPI nguồn (Tái sử dụng kết quả truy vấn cho biểu đồ bên dưới)
+        List<SalesOrderRepository.GroupAggregate> curSourceRows = salesOrderRepo.getRevenueBySource(currentStart, currentEnd);
+        List<SalesOrderRepository.GroupAggregate> prevSourceRows = salesOrderRepo.getRevenueBySource(prevStart, prevEnd);
+        Map<String, Double> curSourceMap = toSourceRevenueMap(curSourceRows);
+        Map<String, Double> prevSourceMap = toSourceRevenueMap(prevSourceRows);
 
         // Doanh thu & sản lượng theo ngành hàng (Máy móc, Phụ kiện, Sửa chữa)
-        Map<String, CategoryStats> curCategoryMap = getCategoryStatsMap(currentStart, currentEnd);
-        Map<String, CategoryStats> prevCategoryMap = getCategoryStatsMap(prevStart, prevEnd);
+        List<SalesOrderRepository.GroupAggregate> curCategoryRows = salesOrderRepo.getCategoryMix(currentStart, currentEnd);
+        List<SalesOrderRepository.GroupAggregate> prevCategoryRows = salesOrderRepo.getCategoryMix(prevStart, prevEnd);
+        Map<String, CategoryStats> curCategoryMap = toCategoryStatsMap(curCategoryRows);
+        Map<String, CategoryStats> prevCategoryMap = toCategoryStatsMap(prevCategoryRows);
 
         // 3. Xây dựng KpiSection
         KpiSection kpis = buildKpiSection(curKpi, prevKpi, curSourceMap, prevSourceMap, curCategoryMap, prevCategoryMap, window.periodUnit);
@@ -59,8 +63,8 @@ public class SalesReportService {
         // 5. Top 10 Model bán chạy nhất
         List<TopModelItem> topModels = buildTopModels(currentStart, currentEnd);
 
-        // 6. Doanh thu theo Nguồn chốt chuẩn hoá
-        List<SourceRevenueItem> revenueBySource = buildRevenueBySource(currentStart, currentEnd, curKpi.netRevenue);
+        // 6. Doanh thu theo Nguồn chốt chuẩn hoá (tái sử dụng curSourceRows)
+        List<SourceRevenueItem> revenueBySource = buildRevenueBySourceFromRows(curSourceRows, curKpi.netRevenue);
 
         // 7. Các lát cắt biểu đồ cơ cấu (Donut / Pie)
         CategoryStats curMach = curCategoryMap.getOrDefault("Máy móc", new CategoryStats(curKpi.netRevenue, curKpi.soldMachineCount));
@@ -74,7 +78,7 @@ public class SalesReportService {
         List<ChartSlice> inboxVsDirect = buildInboxVsDirect(currentStart, currentEnd, curKpi.netRevenue);
         List<ChartSlice> customerTypeMix = buildCustomerTypeMix(currentStart, currentEnd, curKpi.totalOrders);
         List<ChartSlice> studentMix = buildStudentMix(currentStart, currentEnd, curKpi.totalOrders);
-        List<ChartSlice> categoryMix = buildCategoryMix(currentStart, currentEnd, curKpi.netRevenue);
+        List<ChartSlice> categoryMix = buildSlices(curCategoryRows, curKpi.netRevenue, true);
 
         // 8. Thống kê chất lượng dữ liệu
         long issuesCount = salesOrderRepo.countDataIssuesInPeriod(currentStart, currentEnd);
@@ -111,9 +115,8 @@ public class SalesReportService {
                 .build();
     }
 
-    private Map<String, Double> getSourceRevenueMap(LocalDateTime start, LocalDateTime end) {
+    private Map<String, Double> toSourceRevenueMap(List<SalesOrderRepository.GroupAggregate> list) {
         Map<String, Double> map = new HashMap<>();
-        List<SalesOrderRepository.GroupAggregate> list = salesOrderRepo.getRevenueBySource(start, end);
         for (SalesOrderRepository.GroupAggregate item : list) {
             map.put(item.getGroupName(), item.getTotalRevenue());
         }
@@ -122,9 +125,8 @@ public class SalesReportService {
 
     private record CategoryStats(double netRevenue, long orderCount) {}
 
-    private Map<String, CategoryStats> getCategoryStatsMap(LocalDateTime start, LocalDateTime end) {
+    private Map<String, CategoryStats> toCategoryStatsMap(List<SalesOrderRepository.GroupAggregate> list) {
         Map<String, CategoryStats> map = new HashMap<>();
-        List<SalesOrderRepository.GroupAggregate> list = salesOrderRepo.getCategoryMix(start, end);
         for (SalesOrderRepository.GroupAggregate item : list) {
             map.put(item.getGroupName(), new CategoryStats(item.getTotalRevenue(), item.getOrderCount()));
         }
@@ -270,8 +272,7 @@ public class SalesReportService {
         return list;
     }
 
-    private List<SourceRevenueItem> buildRevenueBySource(LocalDateTime start, LocalDateTime end, double totalRevenue) {
-        List<SalesOrderRepository.GroupAggregate> rows = salesOrderRepo.getRevenueBySource(start, end);
+    private List<SourceRevenueItem> buildRevenueBySourceFromRows(List<SalesOrderRepository.GroupAggregate> rows, double totalRevenue) {
         List<SourceRevenueItem> list = new ArrayList<>();
         for (SalesOrderRepository.GroupAggregate r : rows) {
             double aov = r.getOrderCount() > 0 ? Math.round(r.getTotalRevenue() / r.getOrderCount()) : 0;

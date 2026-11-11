@@ -2,6 +2,8 @@ package com.qkshop.tonkho.catalog;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,4 +16,7 @@ public interface VariantV2Repository extends JpaRepository<VariantV2, Long> {
 
     @Query("SELECT v FROM VariantV2 v LEFT JOIN FETCH v.platform p LEFT JOIN FETCH p.modelLine ml LEFT JOIN FETCH ml.brand")
     List<VariantV2> findAllWithHierarchy();
+
+    @Query("SELECT v FROM VariantV2 v JOIN FETCH v.platform p WHERE p.platformId IN :platformIds AND v.active = true")
+    List<VariantV2> findByPlatformIdsAndActiveTrue(@Param("platformIds") Collection<String> platformIds);
 }

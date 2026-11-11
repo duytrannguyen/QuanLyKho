@@ -28,10 +28,7 @@ public class NotificationInitializer implements ApplicationRunner {
             if (notificationRepository.count() == 0) {
                 log.info("[NOTIFICATION] Khởi tạo dữ liệu thông báo từ các lượt đồng bộ gần nhất...");
 
-                List<SyncRun> recentRuns = syncRunRepository.findAll().stream()
-                        .sorted((a, b) -> b.getStartedAt().compareTo(a.getStartedAt()))
-                        .limit(5)
-                        .toList();
+                List<SyncRun> recentRuns = syncRunRepository.findTop5ByOrderByStartedAtDesc();
 
                 if (!recentRuns.isEmpty()) {
                     for (SyncRun run : recentRuns) {

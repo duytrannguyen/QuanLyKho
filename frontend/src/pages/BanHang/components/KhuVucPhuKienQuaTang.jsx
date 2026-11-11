@@ -1,6 +1,8 @@
 import React from 'react';
-import { PackagePlus, RefreshCw, Settings, Gift, X, Search, Minus, Plus, Trash2 } from 'lucide-react';
+import { PackagePlus, RefreshCw, Settings, Gift, X, Search, Minus, Plus, Trash2, Lock } from 'lucide-react';
 import { formatCurrency } from '../../../utils/dinh_dang';
+import { useAuth } from '../../../contexts/NguCanhXacThuc';
+import { useToast } from '../../../contexts/notification/NguCanhThongBao';
 
 export default function KhuVucPhuKienQuaTang({
   availableAccessories,
@@ -16,6 +18,9 @@ export default function KhuVucPhuKienQuaTang({
   handleRemoveDefaultGift,
   handleRemoveAccessory
 }) {
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canManageGift = hasPermission('ACCESSORY_MANAGE');
   const defaultGiftItems = selectedAccessories.filter((a) => a.isGift && a.isFromDefaultBundle);
   const additionalItems = selectedAccessories.filter((sa) => !(sa.isGift && sa.isFromDefaultBundle));
 
@@ -36,11 +41,15 @@ export default function KhuVucPhuKienQuaTang({
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-primary shadow-none rounded-pill px-2 py-0"
+            className={`btn btn-sm shadow-none rounded-pill px-2 py-0 ${canManageGift ? 'btn-primary' : 'btn-outline-secondary opacity-75'}`}
             style={{ fontSize: '0.72rem', height: '24px' }}
-            onClick={handleOpenGiftModal}
+            title={canManageGift ? 'Cài đặt bộ quà tặng mặc định' : 'Cần quyền: Sửa / Xóa phụ kiện & Cấu hình quà tặng (ACCESSORY_MANAGE)'}
+            onClick={() => {
+              if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Cài đặt bộ quà tặng mặc định khi bán máy')) return;
+              handleOpenGiftModal();
+            }}
           >
-            <Settings size={11} className="me-1" /> Cài đặt
+            {canManageGift ? <Settings size={11} className="me-1" /> : <Lock size={11} className="me-1" />} Cài đặt
           </button>
         </div>
       </div>

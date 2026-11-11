@@ -18,7 +18,11 @@ import java.time.LocalDateTime;
 @Table(name = "closed_cycles", indexes = {
     @Index(name = "idx_cc_serial", columnList = "serial_key"),
     @Index(name = "idx_cc_close_type", columnList = "close_type"),
-    @Index(name = "idx_cc_closed_at", columnList = "closed_at")
+    @Index(name = "idx_cc_closed_at", columnList = "closed_at"),
+    @Index(name = "idx_cc_sale_date", columnList = "sale_date"),
+    @Index(name = "idx_cc_shipping", columnList = "is_shipping, is_delivered"),
+    @Index(name = "idx_cc_phone", columnList = "customer_phone"),
+    @Index(name = "idx_cc_source_ref", columnList = "source_reference")
 })
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor

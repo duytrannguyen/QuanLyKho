@@ -2,6 +2,7 @@ package com.qkshop.tonkho.crm;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,6 +26,9 @@ public class CrmLinkEventListener implements ApplicationRunner {
     private final CrmCustomerRepository customerRepo;
     private final CrmOrderRepository orderRepo;
 
+    @Value("${crm.startup-sync.enabled:true}")
+    private boolean startupSyncEnabled;
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onOrderChanged(SalesOrderChangedEvent event) {
         try {
@@ -42,6 +46,9 @@ public class CrmLinkEventListener implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        if (!startupSyncEnabled) {
+            return;
+        }
         try {
             if (customerRepo.count() == 0 && orderRepo.count() > 0) {
                 log.info("[CRM] Chưa có dữ liệu khách hàng, bắt đầu dựng từ đơn hàng hiện có (chạy nền)...");

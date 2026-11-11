@@ -21,6 +21,9 @@ import java.util.UUID;
 @Slf4j
 public class CatalogService {
 
+    private static final java.util.regex.Pattern CLEAN_MODEL_PATTERN =
+            java.util.regex.Pattern.compile("(?i) (core|ryzen|ram|ssd|intel|amd|/|- \\d{4})");
+
     private final BrandRepository brandRepo;
     private final ModelLineRepository modelLineRepo;
     private final PlatformRepository platformRepo;
@@ -30,13 +33,52 @@ public class CatalogService {
     private String appendConfigPart(String base, String part) {
         if (part == null || part.trim().isEmpty()) return base;
         String p = part.trim();
-        if (p.equalsIgnoreCase("N/A") || p.equalsIgnoreCase("NA") || p.equalsIgnoreCase("ONBOARD")) return base;
+        if (p.equalsIgnoreCase("N/A") || p.equalsIgnoreCase("NA") || p.equalsIgnoreCase("ONBOARD")
+                || p.equalsIgnoreCase("CHƯA GHI NHẬN") || p.equalsIgnoreCase("CHƯA RÕ")) {
+            return base;
+        }
 
         String normalizedBase = base.toLowerCase().replaceAll("\\s+", "");
         String normalizedPart = p.toLowerCase().replaceAll("\\s+", "");
 
         if (normalizedBase.contains(normalizedPart)) return base;
         return base + " | " + p;
+    }
+
+    private String buildPlatformDisplayName(Brand brandObj, ModelLine mlObj, String rawPlatformCode) {
+        String brandName = brandObj != null && brandObj.getBrandName() != null ? brandObj.getBrandName().trim() : "";
+        String modelLineName = mlObj != null && mlObj.getModelLineName() != null ? mlObj.getModelLineName().trim() : "";
+        String code = rawPlatformCode != null ? rawPlatformCode.trim() : "";
+
+        // Loại bỏ tiền tố hãng bị lặp (ví dụ "Acer Acer Nitro 5" -> "Acer Nitro 5")
+        if (!brandName.isEmpty()) {
+            String dupBrandPattern = "(?i)^(" + java.util.regex.Pattern.quote(brandName) + "\\s+)+";
+            code = code.replaceAll(dupBrandPattern, brandName + " ").trim();
+            modelLineName = modelLineName.replaceAll(dupBrandPattern, brandName + " ").trim();
+        }
+
+        String prefix = modelLineName;
+        if (!brandName.isEmpty() && !modelLineName.toLowerCase().startsWith(brandName.toLowerCase())) {
+            prefix = (brandName + " " + modelLineName).trim();
+        }
+
+        String displayName = code.isEmpty() ? prefix : code;
+        String lowerDisplay = displayName.toLowerCase();
+        if (!brandName.isEmpty() && !lowerDisplay.contains(brandName.toLowerCase())
+                && !modelLineName.isEmpty() && !lowerDisplay.contains(modelLineName.toLowerCase())) {
+            displayName = (prefix + " " + displayName).trim();
+        } else if (!brandName.isEmpty() && !lowerDisplay.contains(brandName.toLowerCase())) {
+            displayName = (brandName + " " + displayName).trim();
+        }
+
+        if (!brandName.isEmpty()) {
+            String dupBrandPattern = "(?i)^(" + java.util.regex.Pattern.quote(brandName) + "\\s+)+";
+            displayName = displayName.replaceAll(dupBrandPattern, brandName + " ").trim();
+        }
+        if (displayName.length() > 200) {
+            displayName = displayName.substring(0, 200);
+        }
+        return displayName;
     }
 
     private String appendTouch(String base, String touchStr) {
@@ -51,7 +93,7 @@ public class CatalogService {
     public String cleanModelString(String input) {
         if (input == null) return "";
         String lower = input.toLowerCase();
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i) (core|ryzen|ram|ssd|intel|amd|/|- \\d{4})").matcher(lower);
+        java.util.regex.Matcher m = CLEAN_MODEL_PATTERN.matcher(lower);
         if (m.find() && m.start() > 0) {
             return input.substring(0, m.start()).trim();
         }
@@ -126,16 +168,7 @@ public class CatalogService {
         if (safePlatformCode.isBlank()) safePlatformCode = "Laptop";
         if (safePlatformCode.length() > 100) safePlatformCode = safePlatformCode.substring(0, 100);
 
-        String prefix = modelLine.getBrand().getBrandName() + " " + modelLine.getModelLineName();
-        String displayName = safePlatformCode;
-        if (!displayName.toLowerCase().contains(modelLine.getBrand().getBrandName().toLowerCase()) &&
-            !displayName.toLowerCase().contains(modelLine.getModelLineName().toLowerCase())) {
-            displayName = prefix + " " + displayName;
-        } else if (!displayName.toLowerCase().contains(modelLine.getBrand().getBrandName().toLowerCase())) {
-            displayName = modelLine.getBrand().getBrandName() + " " + displayName;
-        }
-
-        if (displayName.length() > 200) displayName = displayName.substring(0, 200);
+        String displayName = buildPlatformDisplayName(modelLine.getBrand(), modelLine, safePlatformCode);
 
         Platform newPlatform = Platform.builder()
                 .platformId("PF-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4))
@@ -237,15 +270,7 @@ public class CatalogService {
         for (Platform platObj : platforms) {
             ModelLine mlObj = platObj.getModelLine();
             Brand brandObj = mlObj.getBrand();
-            String prefix = brandObj.getBrandName() + " " + mlObj.getModelLineName();
-            String displayName = platObj.getPlatformCode();
-            if (!displayName.toLowerCase().contains(brandObj.getBrandName().toLowerCase()) &&
-                !displayName.toLowerCase().contains(mlObj.getModelLineName().toLowerCase())) {
-                displayName = prefix + " " + displayName;
-            } else if (!displayName.toLowerCase().contains(brandObj.getBrandName().toLowerCase())) {
-                displayName = brandObj.getBrandName() + " " + displayName;
-            }
-            if (displayName.length() > 200) displayName = displayName.substring(0, 200);
+            String displayName = buildPlatformDisplayName(brandObj, mlObj, platObj.getPlatformCode());
             platObj.setDisplayName(displayName);
         }
         platformRepo.saveAll(platforms);

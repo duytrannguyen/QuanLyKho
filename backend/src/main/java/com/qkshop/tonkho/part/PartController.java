@@ -75,7 +75,7 @@ public class PartController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PART_MANAGE') or hasAuthority('IMPORT_PART')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PART_MANAGE')")
     public ResponseEntity<ApiResponse<Part>> updatePart(
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload,

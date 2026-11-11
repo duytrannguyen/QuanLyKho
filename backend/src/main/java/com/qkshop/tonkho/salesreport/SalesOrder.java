@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_so_source", columnList = "normalized_source"),
         @Index(name = "idx_so_brand", columnList = "brand"),
         @Index(name = "idx_so_status", columnList = "order_status, payment_status"),
+        @Index(name = "idx_so_status_date", columnList = "order_status, sale_date"),
+        @Index(name = "idx_so_matched_cycle", columnList = "matched_cycle_id"),
         @Index(name = "idx_so_crm_customer", columnList = "crm_customer_id, sale_date"),
         @Index(name = "idx_so_care_status", columnList = "care_status, next_care_date")
 })

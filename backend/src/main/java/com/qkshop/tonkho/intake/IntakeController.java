@@ -26,7 +26,7 @@ public class IntakeController {
     private final ObjectMapper objectMapper;
 
     @PostMapping("/single/submit")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'NHAP_LIEU')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<ActiveInventory>> submitSingleIntake(
             @RequestHeader(value = "X-Request-Id", required = true) String requestId,
             @Valid @RequestBody MachineImportRequest request,
@@ -56,7 +56,7 @@ public class IntakeController {
     }
 
     @PostMapping("/batch/submit")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'NHAP_LIEU')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> submitBatchIntake(
             @RequestHeader(value = "X-Request-Id", required = true) String requestId,
             @Valid @RequestBody BulkMachineImportRequest request,

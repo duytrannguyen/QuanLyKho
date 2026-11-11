@@ -1,35 +1,100 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Check, Shield, User as UserIcon, Lock, Mail, CheckSquare, 
-  Square, RefreshCw, Info, AlertTriangle, Layers, Search
+  Square, RefreshCw, Info, AlertTriangle, Layers, Search, Eye, Zap, Layout
 } from 'lucide-react';
 import { systemApi } from '../../api';
+import { ROUTE_PERMISSION_MAP } from '../../contexts/NguCanhXacThuc';
 
-// Định nghĩa preset quyền mặc định cho từng vai trò
+// Định nghĩa preset quyền mặc định cho từng vai trò hệ thống
 const ROLE_PRESETS = {
   ADMIN: [
     'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
     'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN', 'PRICING_VIEW', 'PRICING_MANAGE',
-    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_DELETE', 'INSPECTION',
+    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'MACHINE_DELETE', 'INSPECTION',
     'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
-    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_MANAGE',
-    'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE', 'SYSTEM_MANAGE'
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
+    'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE', 'SYSTEM_MANAGE'
   ],
   MANAGER: [
     'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
     'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN', 'PRICING_VIEW', 'PRICING_MANAGE',
-    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'INSPECTION',
+    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'INSPECTION',
     'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
-    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_MANAGE',
-    'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE'
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
+    'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE'
   ],
   STAFF: [
     'DASHBOARD_VIEW', 'SALES_REPORT_VIEW',
     'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'PRICING_VIEW',
-    'SEARCH_INVENTORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART', 'INSPECTION',
-    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW'
+    'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART', 'INSPECTION',
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'SYNC_VIEW'
   ]
 };
+
+// Mẫu phân quyền nhanh theo vị trí công việc thực tế tại cửa hàng
+const JOB_TEMPLATES = [
+  {
+    id: 'POS_SALES',
+    label: 'Bán hàng & Thu ngân (POS)',
+    desc: 'Bán máy, bán phụ kiện, quản lý đơn ship, xem bảng giá, tra cứu tồn kho & bảo hành',
+    permissions: [
+      'DASHBOARD_VIEW', 'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE',
+      'PRICING_VIEW', 'SEARCH_INVENTORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY',
+      'WARRANTY_CHECK', 'CRM_VIEW', 'CRM_CARE'
+    ]
+  },
+  {
+    id: 'WAREHOUSE_KEEPER',
+    label: 'Thủ kho & Nhập liệu',
+    desc: 'Nhập kho máy/phụ kiện/linh kiện, sửa giá & bảo hành máy, xuất khác, quản lý mã máy',
+    permissions: [
+      'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER',
+      'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE',
+      'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE', 'PRICING_VIEW', 'PRICING_MANAGE'
+    ]
+  },
+  {
+    id: 'TECHNICIAN',
+    label: 'Kỹ thuật & Sửa chữa',
+    desc: 'Kiểm định máy, tiếp nhận & xử lý phiếu sửa chữa, tra cứu tồn kho máy & linh kiện',
+    permissions: [
+      'SEARCH_INVENTORY', 'INSPECTION', 'INVENTORY_PART',
+      'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW'
+    ]
+  },
+  {
+    id: 'CSKH_WARRANTY',
+    label: 'CSKH & Bảo hành',
+    desc: 'Tra cứu bảo hành, theo dõi sửa chữa, chăm sóc khách hàng & máy hết hạn bảo hành',
+    permissions: [
+      'WARRANTY_CHECK', 'SERVICE_VIEW', 'SHIP_MANAGE',
+      'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE'
+    ]
+  },
+  {
+    id: 'ACCOUNTANT_SYNC',
+    label: 'Kế toán & Đối soát',
+    desc: 'Xem báo cáo doanh số, thống kê, sửa/hoàn đơn, đối soát Google Sheets & xuất Excel',
+    permissions: [
+      'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
+      'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN',
+      'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'ACCESSORY_HISTORY',
+      'CRM_VIEW', 'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA'
+    ]
+  },
+  {
+    id: 'READ_ONLY',
+    label: 'Chỉ xem & Tra cứu (Không thao tác)',
+    desc: 'Chỉ được xem các màn hình tra cứu, báo cáo, tồn kho; không được thêm/sửa/xóa',
+    permissions: [
+      'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
+      'PRICING_VIEW', 'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES',
+      'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART',
+      'WARRANTY_CHECK', 'SERVICE_VIEW', 'CRM_VIEW', 'SYNC_VIEW'
+    ]
+  }
+];
 
 export default function ModalNguoiDung({ 
   show, 
@@ -54,15 +119,25 @@ export default function ModalNguoiDung({
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('info'); // 'info' hoặc 'permissions'
   const [permSearchTerm, setPermSearchTerm] = useState('');
+  const [permTypeFilter, setPermTypeFilter] = useState('ALL'); // 'ALL', 'VIEW', 'ACTION', 'SELECTED', 'UNSELECTED'
+  const [showUiPreview, setShowUiPreview] = useState(true);
 
-  // Lọc và nhóm các quyền theo Group
+  const isAdminRoot = isEdit && editingUser?.username === 'admin';
+
+  // Lọc và nhóm các quyền theo Group + Type + Search
   const groupedPermissions = useMemo(() => {
     const q = (permSearchTerm || '').trim().toLowerCase();
     const filtered = (availablePermissions || []).filter(p => {
+      if (permTypeFilter === 'VIEW' && p.type !== 'VIEW') return false;
+      if (permTypeFilter === 'ACTION' && p.type !== 'ACTION') return false;
+      if (permTypeFilter === 'SELECTED' && !selectedPermissions.has(p.code)) return false;
+      if (permTypeFilter === 'UNSELECTED' && selectedPermissions.has(p.code)) return false;
+
       if (!q) return true;
       return (p.name && p.name.toLowerCase().includes(q)) ||
              (p.code && p.code.toLowerCase().includes(q)) ||
              (p.group && p.group.toLowerCase().includes(q)) ||
+             (p.module && p.module.toLowerCase().includes(q)) ||
              (p.description && p.description.toLowerCase().includes(q));
     });
 
@@ -73,7 +148,19 @@ export default function ModalNguoiDung({
       groups[gName].push(perm);
     });
     return groups;
-  }, [availablePermissions, permSearchTerm]);
+  }, [availablePermissions, permSearchTerm, permTypeFilter, selectedPermissions]);
+
+  // Tính toán danh sách menu giao diện sẽ hiển thị cho tài khoản này dựa trên quyền đã chọn
+  const previewVisibleMenus = useMemo(() => {
+    return ROUTE_PERMISSION_MAP.filter(route => {
+      const codes = String(route.permission).split('|').map(s => s.trim()).filter(Boolean);
+      return codes.some(c => selectedPermissions.has(c));
+    });
+  }, [selectedPermissions]);
+
+  const previewActionPerms = useMemo(() => {
+    return (availablePermissions || []).filter(p => p.type === 'ACTION' && selectedPermissions.has(p.code));
+  }, [availablePermissions, selectedPermissions]);
 
   // Điền dữ liệu khi mở modal
   useEffect(() => {
@@ -89,7 +176,6 @@ export default function ModalNguoiDung({
         isActive: editingUser.isActive !== false,
       });
 
-      // Nếu là ADMIN thì nạp toàn quyền, ngược lại nạp permissions của user
       if (editingUser.role === 'ADMIN') {
         const allCodes = (availablePermissions || []).map(p => p.code);
         setSelectedPermissions(new Set(allCodes));
@@ -99,7 +185,6 @@ export default function ModalNguoiDung({
         setSelectedPermissions(new Set(ROLE_PRESETS[editingUser.role] || []));
       }
     } else {
-      // Thêm mới: mặc định vai trò STAFF và nạp preset STAFF
       setFormData({
         username: '',
         password: '',
@@ -110,6 +195,8 @@ export default function ModalNguoiDung({
       });
       setSelectedPermissions(new Set(ROLE_PRESETS.STAFF));
     }
+    setPermSearchTerm('');
+    setPermTypeFilter('ALL');
     setActiveTab('info');
   }, [show, editingUser, availablePermissions]);
 
@@ -119,19 +206,31 @@ export default function ModalNguoiDung({
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
 
-    // Nếu thay đổi vai trò khi tạo mới -> tự động cập nhật gợi ý quyền
-    if (field === 'role' && !isEdit) {
-      const preset = ROLE_PRESETS[value] || [];
-      setSelectedPermissions(new Set(preset));
+    if (field === 'role') {
+      if (value === 'ADMIN') {
+        const allCodes = (availablePermissions || []).map(p => p.code);
+        setSelectedPermissions(new Set(allCodes));
+      } else if (!isEdit) {
+        const preset = ROLE_PRESETS[value] || [];
+        setSelectedPermissions(new Set(preset));
+      }
     }
   };
 
   // Toggle một quyền đơn lẻ
   const togglePermission = (code) => {
+    if (isAdminRoot) {
+      showToast('Tài khoản admin gốc mặc định luôn giữ toàn bộ quyền hạn hệ thống.', 'warning');
+      return;
+    }
     setSelectedPermissions(prev => {
       const next = new Set(prev);
       if (next.has(code)) {
         next.delete(code);
+        if (formData.role === 'ADMIN') {
+          setFormData(f => ({ ...f, role: 'MANAGER' }));
+          showToast('Đã tự động chuyển vai trò từ ADMIN sang MANAGER để lưu bộ quyền tùy chỉnh riêng.', 'info');
+        }
       } else {
         next.add(code);
       }
@@ -141,6 +240,10 @@ export default function ModalNguoiDung({
 
   // Toggle toàn bộ quyền trong một nhóm
   const toggleGroup = (groupName) => {
+    if (isAdminRoot) {
+      showToast('Tài khoản admin gốc mặc định luôn giữ toàn bộ quyền hạn hệ thống.', 'warning');
+      return;
+    }
     const permsInGroup = groupedPermissions[groupName] || [];
     const allSelected = permsInGroup.every(p => selectedPermissions.has(p.code));
 
@@ -153,6 +256,10 @@ export default function ModalNguoiDung({
           next.add(p.code);
         }
       });
+      if (allSelected && formData.role === 'ADMIN') {
+        setFormData(f => ({ ...f, role: 'MANAGER' }));
+        showToast('Đã tự động chuyển vai trò từ ADMIN sang MANAGER để lưu bộ quyền tùy chỉnh riêng.', 'info');
+      }
       return next;
     });
   };
@@ -164,6 +271,13 @@ export default function ModalNguoiDung({
   };
 
   const deselectAllPermissions = () => {
+    if (isAdminRoot) {
+      showToast('Không thể bỏ quyền của tài khoản admin gốc.', 'warning');
+      return;
+    }
+    if (formData.role === 'ADMIN') {
+      setFormData(f => ({ ...f, role: 'STAFF' }));
+    }
     setSelectedPermissions(new Set());
   };
 
@@ -171,6 +285,18 @@ export default function ModalNguoiDung({
     const preset = ROLE_PRESETS[formData.role] || [];
     setSelectedPermissions(new Set(preset));
     showToast(`Đã áp dụng ${preset.length} quyền chuẩn của vai trò ${formData.role}`, 'info');
+  };
+
+  const applyJobTemplate = (tpl) => {
+    if (isAdminRoot) {
+      showToast('Không thể thay đổi bộ quyền của tài khoản admin gốc.', 'warning');
+      return;
+    }
+    if (formData.role === 'ADMIN') {
+      setFormData(f => ({ ...f, role: 'STAFF' }));
+    }
+    setSelectedPermissions(new Set(tpl.permissions));
+    showToast(`Đã áp dụng mẫu vị trí "${tpl.label}" (${tpl.permissions.length} quyền). Bạn có thể tích chọn thêm hoặc bớt tùy ý.`, 'info');
   };
 
   // Gửi Form
@@ -451,8 +577,97 @@ export default function ModalNguoiDung({
             {/* TAB 2: PHÂN QUYỀN TÙY CHỈNH */}
             {activeTab === 'permissions' && (
               <div>
+                {/* MẪU PHÂN QUYỀN THEO VỊ TRÍ CÔNG VIỆC */}
+                <div className="bg-white p-3 rounded-3 mb-3 border shadow-sm">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="fw-bold text-dark small d-flex align-items-center gap-1">
+                      <Zap size={15} className="text-warning" />
+                      Gán nhanh theo vị trí công việc (Sau đó có thể tích thêm/bớt từng chức năng &amp; thao tác):
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0 text-decoration-none small"
+                      onClick={() => setShowUiPreview(prev => !prev)}
+                    >
+                      <Layout size={14} className="me-1 d-inline" />
+                      {showUiPreview ? 'Ẩn xem trước giao diện' : 'Xem trước giao diện tài khoản'}
+                    </button>
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {JOB_TEMPLATES.map(tpl => (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        className="btn btn-sm btn-outline-dark rounded-pill px-3"
+                        title={tpl.desc}
+                        onClick={() => applyJobTemplate(tpl)}
+                      >
+                        {tpl.label} <span className="badge bg-secondary-subtle text-secondary ms-1">{tpl.permissions.length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* XEM TRƯỚC GIAO DIỆN NGƯỜI DÙNG CỦA TÀI KHOẢN NÀY */}
+                {showUiPreview && (
+                  <div className="bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 p-3 mb-3">
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                      <div className="fw-bold text-primary small d-flex align-items-center gap-2">
+                        <Eye size={16} />
+                        <span>Xem trước Giao diện &amp; Quyền hạn thực tế của tài khoản ({formData.username || 'mới'}):</span>
+                      </div>
+                      <span className="small text-secondary">
+                        Trang mặc định khi đăng nhập:{' '}
+                        <strong className="text-dark">
+                          {previewVisibleMenus.length > 0
+                            ? `${previewVisibleMenus[0].label} (${previewVisibleMenus[0].path})`
+                            : 'Chưa có trang nào (Sẽ báo thiếu quyền)'}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="row g-2">
+                      <div className="col-md-6">
+                        <div className="bg-white rounded-2 p-2 border h-100">
+                          <div className="small fw-semibold text-secondary mb-1">
+                            Menu Thanh bên (Sidebar) sẽ hiển thị ({previewVisibleMenus.length}/{ROUTE_PERMISSION_MAP.length} trang):
+                          </div>
+                          {previewVisibleMenus.length === 0 ? (
+                            <div className="small text-danger fst-italic">Không có menu nào được hiển thị.</div>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-1">
+                              {previewVisibleMenus.map(m => (
+                                <span key={m.path} className="badge bg-primary-subtle text-primary border border-primary-subtle fw-medium">
+                                  {m.label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="bg-white rounded-2 p-2 border h-100">
+                          <div className="small fw-semibold text-secondary mb-1">
+                            Các thao tác nghiệp vụ cụ thể được phép ({previewActionPerms.length} thao tác):
+                          </div>
+                          {previewActionPerms.length === 0 ? (
+                            <div className="small text-muted fst-italic">Tài khoản chỉ được xem dữ liệu (Read-only), các nút Thêm/Sửa/Xóa/Xuất sẽ khóa.</div>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-1" style={{ maxHeight: '72px', overflowY: 'auto' }}>
+                              {previewActionPerms.map(a => (
+                                <span key={a.code} className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-medium">
+                                  {a.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* TOOLBAR */}
-                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-light p-3 rounded-3 mb-4 border">
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 bg-light p-3 rounded-3 mb-3 border">
                   <div className="d-flex align-items-center gap-2 flex-wrap">
                     <span className="fw-bold text-dark small">Thao tác nhanh:</span>
                     <button 
@@ -481,27 +696,55 @@ export default function ModalNguoiDung({
                     </button>
                   </div>
 
-                  <div className="d-flex align-items-center gap-3">
-                    <div className="input-group input-group-sm" style={{ width: '220px' }}>
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <div className="btn-group btn-group-sm">
+                      <button
+                        type="button"
+                        className={`btn ${permTypeFilter === 'ALL' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                        onClick={() => setPermTypeFilter('ALL')}
+                      >
+                        Tất cả ({totalPermsCount})
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${permTypeFilter === 'VIEW' ? 'btn-info text-white' : 'btn-outline-secondary'}`}
+                        onClick={() => setPermTypeFilter('VIEW')}
+                      >
+                        Chức năng / Xem ({(availablePermissions || []).filter(p => p.type === 'VIEW').length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${permTypeFilter === 'ACTION' ? 'btn-warning text-dark' : 'btn-outline-secondary'}`}
+                        onClick={() => setPermTypeFilter('ACTION')}
+                      >
+                        Thao tác ({(availablePermissions || []).filter(p => p.type === 'ACTION').length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${permTypeFilter === 'SELECTED' ? 'btn-success' : 'btn-outline-secondary'}`}
+                        onClick={() => setPermTypeFilter('SELECTED')}
+                      >
+                        Đã cấp ({selectedCount})
+                      </button>
+                    </div>
+
+                    <div className="input-group input-group-sm" style={{ width: '210px' }}>
                       <span className="input-group-text bg-white"><Search size={14} /></span>
                       <input 
                         type="text" 
                         className="form-control" 
-                        placeholder="Tìm kiếm quyền hạn..." 
+                        placeholder="Tìm tên, mã, màn hình..." 
                         value={permSearchTerm}
                         onChange={e => setPermSearchTerm(e.target.value)}
                       />
                     </div>
-                    <span className="badge bg-primary fs-6 px-3 py-1.5 rounded-pill text-nowrap">
-                      {selectedCount} / {totalPermsCount} quyền
-                    </span>
                   </div>
                 </div>
 
                 {Object.keys(groupedPermissions).length === 0 && (
                   <div className="text-center py-5 text-muted">
                     <Search size={32} className="opacity-50 mb-2" />
-                    <div>Không tìm thấy quyền nào phù hợp với từ khóa "{permSearchTerm}"</div>
+                    <div>Không tìm thấy quyền nào phù hợp với bộ lọc hiện tại</div>
                   </div>
                 )}
 
@@ -509,7 +752,6 @@ export default function ModalNguoiDung({
                 <div className="row g-4">
                   {Object.entries(groupedPermissions).map(([groupName, perms]) => {
                     const allInGroupSelected = perms.every(p => selectedPermissions.has(p.code));
-                    const someInGroupSelected = perms.some(p => selectedPermissions.has(p.code));
 
                     return (
                       <div className="col-lg-6" key={groupName}>
@@ -536,10 +778,11 @@ export default function ModalNguoiDung({
                           <div className="p-2">
                             {perms.map(p => {
                               const isChecked = selectedPermissions.has(p.code);
+                              const isAction = p.type === 'ACTION';
                               return (
                                 <div 
                                   key={p.code} 
-                                  className={`p-2 rounded-2 mb-1 transition-all d-flex align-items-start gap-3 ${isChecked ? 'bg-primary-subtle' : 'hover-bg-light'}`}
+                                  className={`p-2 rounded-2 mb-1 transition-all d-flex align-items-start gap-3 border ${isChecked ? 'bg-primary-subtle border-primary-subtle' : 'hover-bg-light border-transparent'}`}
                                   style={{ cursor: 'pointer' }}
                                   onClick={() => togglePermission(p.code)}
                                 >
@@ -548,22 +791,41 @@ export default function ModalNguoiDung({
                                       type="checkbox" 
                                       className="form-check-input" 
                                       checked={isChecked}
-                                      onChange={() => {}} // handled by parent onClick
+                                      onChange={() => {}}
                                       style={{ cursor: 'pointer' }}
                                     />
                                   </div>
                                   <div className="flex-grow-1">
-                                    <div className="d-flex align-items-center gap-2">
-                                      <span className={`fw-semibold small ${isChecked ? 'text-primary' : 'text-dark'}`}>
-                                        {p.name}
-                                      </span>
-                                      <code className="text-secondary" style={{ fontSize: '0.7rem' }}>
+                                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-1 mb-0.5">
+                                      <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                                        <span className={`fw-semibold small ${isChecked ? 'text-primary' : 'text-dark'}`}>
+                                          {p.name}
+                                        </span>
+                                        <span
+                                          className={`badge rounded-pill ${
+                                            isAction
+                                              ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'
+                                              : 'bg-info-subtle text-info-emphasis border border-info-subtle'
+                                          }`}
+                                          style={{ fontSize: '0.65rem' }}
+                                        >
+                                          {isAction ? 'Thao tác' : 'Chức năng (Xem)'}
+                                        </span>
+                                      </div>
+                                      <code className="text-secondary" style={{ fontSize: '0.68rem' }}>
                                         {p.code}
                                       </code>
                                     </div>
-                                    <div className="small text-muted" style={{ fontSize: '0.78rem' }}>
+                                    <div className="small text-muted" style={{ fontSize: '0.77rem' }}>
                                       {p.description}
                                     </div>
+                                    {p.module && (
+                                      <div className="mt-1">
+                                        <span className="badge bg-light text-secondary border fw-normal" style={{ fontSize: '0.68rem' }}>
+                                          📍 Vị trí: {p.module}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );

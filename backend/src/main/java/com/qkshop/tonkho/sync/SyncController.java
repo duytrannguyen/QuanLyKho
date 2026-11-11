@@ -27,6 +27,7 @@ public class SyncController {
     private final com.qkshop.tonkho.issue.DataIssueRepository dataIssueRepo;
 
     @PostMapping("/run")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<SyncRun>> runSync(@RequestBody(required = false) Map<String, String> payload) {
         String mode = (payload != null && payload.containsKey("mode")) ? payload.get("mode") : "MANUAL";
         SyncRun run = salesSyncService.syncSalesWindow(LocalDateTime.now().minusDays(30), LocalDateTime.now(), mode);
@@ -34,11 +35,13 @@ public class SyncController {
     }
 
     @GetMapping("/issues")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_VIEW', 'SYNC_MANAGE', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<List<DataIssue>>> getOpenIssues() {
         return ResponseEntity.ok(ApiResponse.ok(reconciliationService.getAllOpenIssues()));
     }
 
     @GetMapping("/runs")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_VIEW', 'SYNC_MANAGE', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<List<SyncRun>>> getRecentRuns() {
         return ResponseEntity.ok(ApiResponse.ok(reconciliationService.getRecentSyncRuns()));
     }
@@ -67,11 +70,13 @@ public class SyncController {
     }
 
     @PostMapping("/issues/{issueId}/recheck")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<DataIssue>> recheckIssue(@PathVariable String issueId) {
         return ResponseEntity.ok(ApiResponse.ok(reconciliationService.recheckIssue(issueId)));
     }
 
     @PostMapping("/issues/{issueId}/resolve")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<DataIssue>> resolveIssueManual(
             @PathVariable String issueId, 
             @RequestBody Map<String, String> payload) {
@@ -80,6 +85,7 @@ public class SyncController {
     }
 
     @PostMapping("/issues/resolve-all")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> resolveAllIssues(
             @RequestBody(required = false) Map<String, String> payload) {
         String issueType = payload != null ? payload.get("issueType") : null;
@@ -101,7 +107,7 @@ public class SyncController {
     }
 
     @GetMapping("/settings")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_VIEW', 'SYNC_MANAGE', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getSyncSettings() {
         Map<String, Object> settings = new java.util.HashMap<>();
         settings.put("enabled", Boolean.parseBoolean(systemConfigService.getConfig("GSHEET_SYNC_ENABLED", String.valueOf(googleSheetProperties.isEnabled()))));

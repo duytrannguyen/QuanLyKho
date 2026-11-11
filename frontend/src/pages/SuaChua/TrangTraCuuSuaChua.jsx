@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, AlertCircle, Wrench, X, Eye, Printer, Edit3 } from 'lucide-react';
+import { Search, ShieldCheck, AlertCircle, Wrench, X, Eye, Printer, Edit3, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { apiSuaChua } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatCurrency, formatDate } from '../../utils/dinh_dang';
 
 export default function TrangTraCuuSuaChua() {
   const { showToast } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canCreateRepair = hasPermission('SERVICE_REPAIR');
+  const canEditRepair = hasPermission('SERVICE_REPAIR|ORDER_EDIT');
   const navigate = useNavigate();
 
   const [keyword, setKeyword] = useState('');
@@ -32,10 +36,26 @@ export default function TrangTraCuuSuaChua() {
     }
   };
 
-  const getItemExpiryStatus = (expiryDate) => {
+  const getItemExpiryStatus = (expiryDate, periodText = '') => {
+    const lower = (periodText || '').toLowerCase();
+    if (lower.includes('từ chối') || lower.includes('tu choi')) {
+      return {
+        text: 'Từ chối bảo hành',
+        badge: 'bg-danger-subtle text-danger border border-danger-subtle',
+        icon: AlertCircle
+      };
+    }
+    if (lower.includes('theo bh') || lower.includes('theo bảo hành')) {
+      return {
+        text: 'Theo BH máy (Còn hạn)',
+        badge: 'bg-primary-subtle text-primary border border-primary-subtle',
+        icon: ShieldCheck
+      };
+    }
+
     if (!expiryDate) {
       return {
-        text: 'Không bảo hành',
+        text: periodText || 'Không bảo hành',
         badge: 'bg-secondary-subtle text-secondary',
         icon: AlertCircle
       };
@@ -74,10 +94,16 @@ export default function TrangTraCuuSuaChua() {
         </div>
         <button
           type="button"
-          className="btn btn-outline-primary d-flex align-items-center fw-medium shadow-sm"
-          onClick={() => navigate('/dich-vu-sua-chua')}
+          className="btn btn-outline-primary d-flex align-items-center gap-2 fw-medium shadow-sm"
+          onClick={() => {
+            if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo và cập nhật đơn sửa chữa')) return;
+            navigate('/dich-vu-sua-chua');
+          }}
+          title={canCreateRepair ? 'Tạo và cập nhật đơn sửa chữa' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
         >
-          <Wrench size={16} className="me-2" /> Tạo & Cập nhật đơn sửa chữa
+          <Wrench size={16} />
+          <span>Tạo & Cập nhật đơn sửa chữa</span>
+          {!canCreateRepair && <Lock size={13} className="text-warning" />}
         </button>
       </div>
 
@@ -231,11 +257,16 @@ export default function TrangTraCuuSuaChua() {
                               <div className="d-flex justify-content-end gap-1">
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-outline-primary py-0 px-2 fw-medium"
-                                  title="Chỉnh sửa hóa đơn này"
-                                  onClick={() => navigate('/dich-vu-sua-chua', { state: { editOrder: ord } })}
+                                  className="btn btn-sm btn-outline-primary py-0 px-2 fw-medium d-inline-flex align-items-center gap-1"
+                                  title={canEditRepair ? 'Chỉnh sửa hóa đơn này' : 'Yêu cầu quyền: Dịch vụ sửa chữa hoặc Sửa đơn bán'}
+                                  onClick={() => {
+                                    if (!requirePermission('SERVICE_REPAIR|ORDER_EDIT', showToast, 'Chỉnh sửa hóa đơn sửa chữa')) return;
+                                    navigate('/dich-vu-sua-chua', { state: { editOrder: ord } });
+                                  }}
                                 >
-                                  <Edit3 size={13} className="me-1" /> Sửa
+                                  <Edit3 size={13} />
+                                  <span>Sửa</span>
+                                  {!canEditRepair && <Lock size={11} className="text-warning" />}
                                 </button>
                               </div>
                             </td>
@@ -304,7 +335,7 @@ export default function TrangTraCuuSuaChua() {
                     </thead>
                     <tbody>
                       {selectedOrderDetail.items?.map((it, idx) => {
-                        const itExp = getItemExpiryStatus(it.warrantyExpiry);
+                        const itExp = getItemExpiryStatus(it.warrantyExpiry, it.warrantyPeriod);
                         const ItExpIcon = itExp.icon;
 
                         return (
@@ -316,7 +347,9 @@ export default function TrangTraCuuSuaChua() {
                             <td className="text-center">{it.quantity}</td>
                             <td className="text-end fw-medium">{formatCurrency(it.price)} đ</td>
                             <td className="text-center">
-                              {it.warrantyMonths > 0 ? (
+                              {it.warrantyPeriod ? (
+                                <span className="badge bg-light text-dark border">{it.warrantyPeriod}</span>
+                              ) : it.warrantyMonths > 0 ? (
                                 <span className="badge bg-light text-dark border">{it.warrantyMonths} Tháng</span>
                               ) : (
                                 <span className="badge bg-secondary-subtle text-secondary">Không BH</span>
@@ -341,14 +374,18 @@ export default function TrangTraCuuSuaChua() {
                 <div className="d-flex gap-2">
                   <button
                     type="button"
-                    className="btn btn-warning fw-medium d-flex align-items-center"
+                    className="btn btn-warning fw-medium d-flex align-items-center gap-1"
                     onClick={() => {
+                      if (!requirePermission('SERVICE_REPAIR|ORDER_EDIT', showToast, 'Chỉnh sửa hóa đơn sửa chữa')) return;
                       const ord = selectedOrderDetail;
                       setSelectedOrderDetail(null);
                       navigate('/dich-vu-sua-chua', { state: { editOrder: ord } });
                     }}
+                    title={canEditRepair ? 'Chỉnh sửa hóa đơn này' : 'Yêu cầu quyền: Dịch vụ sửa chữa hoặc Sửa đơn bán'}
                   >
-                    <Edit3 size={16} className="me-1" /> Chỉnh sửa hóa đơn này
+                    <Edit3 size={16} />
+                    <span>Chỉnh sửa hóa đơn này</span>
+                    {!canEditRepair && <Lock size={13} className="text-danger" />}
                   </button>
                   <button type="button" className="btn btn-outline-secondary d-flex align-items-center" onClick={() => window.print()}>
                     <Printer size={16} className="me-1" /> In hóa đơn

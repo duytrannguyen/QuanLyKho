@@ -132,15 +132,36 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
                                   )}
                                 </div>
                                 <div className="flex-grow-1">
-                                  <div className="d-flex align-items-center justify-content-between">
-                                    <span className={`fw-semibold small ${hasThis ? 'text-success-emphasis' : 'text-secondary'}`}>
-                                      {p.name}
-                                    </span>
+                                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-1">
+                                    <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                                      <span className={`fw-semibold small ${hasThis ? 'text-success-emphasis' : 'text-secondary'}`}>
+                                        {p.name}
+                                      </span>
+                                      {p.type && (
+                                        <span
+                                          className={`badge rounded-pill ${
+                                            p.type === 'ACTION'
+                                              ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'
+                                              : 'bg-info-subtle text-info-emphasis border border-info-subtle'
+                                          }`}
+                                          style={{ fontSize: '0.62rem' }}
+                                        >
+                                          {p.type === 'ACTION' ? 'Thao tác' : 'Chức năng'}
+                                        </span>
+                                      )}
+                                    </div>
                                     <code style={{ fontSize: '0.65rem' }}>{p.code}</code>
                                   </div>
                                   <div style={{ fontSize: '0.75rem' }} className="text-secondary">
                                     {p.description}
                                   </div>
+                                  {p.module && (
+                                    <div className="mt-1">
+                                      <span className="badge bg-white text-secondary border fw-normal" style={{ fontSize: '0.65rem' }}>
+                                        📍 {p.module}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );

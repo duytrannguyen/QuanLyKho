@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, Lock, Trash2 } from 'lucide-react';
 import { apiTonKho, apiMayMoc } from '../../api';
 import { formatCurrency, parseCurrency, formatDate } from '../../utils/dinh_dang';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatCycleState } from '../../constants/trangThai';
 
 export default function TrangTimKiemTonKho() {
   const { showToast, confirm } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canUpdateMachine = hasPermission('MACHINE_UPDATE');
+  const canExportOther = hasPermission('MACHINE_EXPORT_OTHER');
+  const canDeleteMachine = hasPermission('MACHINE_DELETE');
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [brand, setBrand] = useState('Tất cả');
   const [status, setStatus] = useState('Tất cả');
   const [segment, setSegment] = useState('Tất cả');
@@ -49,7 +55,7 @@ export default function TrangTimKiemTonKho() {
 
   const fetchInventory = async () => {
     try {
-      const res = await apiTonKho.search({ query, brand, status, segment, page, size: 10 });
+      const res = await apiTonKho.search({ query: debouncedQuery, brand, status, segment, page, size: 10 });
       if (res.data && res.data.content) {
         setResults(res.data.content);
         setPageInfo({
@@ -70,16 +76,23 @@ export default function TrangTimKiemTonKho() {
     }
   };
 
+  // Chỉ debounce cho từ khóa gõ tìm kiếm (300ms)
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchInventory();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [query, brand, status, segment, page]);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Tải ngay lập tức (0ms) khi vào trang, chuyển trang hoặc đổi dropdown lọc
+  useEffect(() => {
+    fetchInventory();
+  }, [debouncedQuery, brand, status, segment, page]);
 
   useEffect(() => {
     setPage(0);
-  }, [query, brand, status, segment]);
+  }, [brand, status, segment]);
 
   const clearFilters = () => {
     setQuery('');
@@ -97,6 +110,7 @@ export default function TrangTimKiemTonKho() {
   };
 
   const handleUpdatePriceAll = () => {
+    if (!requirePermission('MACHINE_UPDATE', showToast, 'Sửa giá cấu hình hàng loạt')) return;
     if (!activeVariant || !activeVariant.machines || activeVariant.machines.length === 0) {
       showToast('Không có máy nào để cập nhật', 'danger');
       return;
@@ -106,16 +120,19 @@ export default function TrangTimKiemTonKho() {
   };
 
   const handleUpdateSinglePrice = (machine) => {
+    if (!requirePermission('MACHINE_UPDATE', showToast, 'Sửa giá bán riêng theo serial')) return;
     setModalForm({ price: machine.price ? machine.price.toString() : '', reason: '' });
     setActiveModal({ type: 'PRICE_SINGLE', payload: { machine } });
   };
 
   const handleMoveToInspection = (machine) => {
+    if (!requirePermission('MACHINE_EXPORT_OTHER', showToast, 'Đưa máy về trạng thái kiểm tra')) return;
     setModalForm({ price: '', reason: '' });
     setActiveModal({ type: 'INSPECTION', payload: { machine } });
   };
 
   const handleUpdateSingleWarranty = (machine) => {
+    if (!requirePermission('MACHINE_UPDATE', showToast, 'Sửa gói bảo hành máy tồn kho')) return;
     const validPresets = [
       'BH phần cứng 3 tháng',
       'BH phần cứng 6 tháng',
@@ -146,8 +163,24 @@ export default function TrangTimKiemTonKho() {
   };
 
   const handleExportOther = (machine) => {
+    if (!requirePermission('MACHINE_EXPORT_OTHER', showToast, 'Xuất máy khác (ngoài bán hàng)')) return;
     setModalForm({ price: '', reason: '' });
     setActiveModal({ type: 'EXPORT_OTHER', payload: { machine } });
+  };
+
+  const handleDeleteMachine = async (machine) => {
+    if (!requirePermission('MACHINE_DELETE', showToast, 'Xóa serial máy khỏi kho')) return;
+    const ok = confirm
+      ? await confirm(`Xác nhận xóa vĩnh viễn máy có Serial "${machine.serial}" khỏi kho? (Chỉ xóa được máy chưa phát sinh lịch sử bán/trả)`)
+      : window.confirm(`Xác nhận xóa vĩnh viễn máy có Serial "${machine.serial}" khỏi kho?`);
+    if (!ok) return;
+    try {
+      await apiMayMoc.delete(machine.serial);
+      showToast(`Đã xóa máy ${machine.serial} khỏi kho thành công`, 'success');
+      fetchInventory();
+    } catch (err) {
+      showToast('Không thể xóa máy: ' + (err.userMessage || err.message), 'danger');
+    }
   };
 
   const submitModal = async () => {
@@ -305,7 +338,14 @@ export default function TrangTimKiemTonKho() {
                     {activeVariant?.config?.displayName || activeVariant?.variant?.variantName}
                   </p>
                 </div>
-                <button className="btn btn-outline-primary btn-sm fw-medium" onClick={handleUpdatePriceAll}>Sửa giá cấu hình này</button>
+                <button
+                  className={`btn btn-sm fw-medium d-flex align-items-center gap-1 ${canUpdateMachine ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75'}`}
+                  onClick={handleUpdatePriceAll}
+                  title={canUpdateMachine ? 'Sửa giá toàn bộ máy trong cấu hình này' : 'Cần quyền: Sửa giá bán & Bảo hành máy tồn kho (MACHINE_UPDATE)'}
+                >
+                  {!canUpdateMachine && <Lock size={13} />}
+                  <span>Sửa giá cấu hình này</span>
+                </button>
               </div>
 
               <div className="row g-3 mb-4 pb-4 border-bottom">
@@ -434,11 +474,47 @@ export default function TrangTimKiemTonKho() {
                                       </div>
                                     </div>
 
-                                    <div className="d-flex gap-2 justify-content-end w-100">
-                                      <button className="btn btn-outline-secondary btn-sm" onClick={() => handleUpdateSingleWarranty(machine)}>Sửa bảo hành</button>
-                                      <button className="btn btn-outline-secondary btn-sm" onClick={() => handleUpdateSinglePrice(machine)}>Sửa giá riêng</button>
-                                      <button className="btn btn-outline-secondary btn-sm" onClick={() => handleMoveToInspection(machine)}>Đưa về kiểm tra</button>
-                                      <button className="btn btn-outline-danger btn-sm" onClick={() => handleExportOther(machine)}>Xuất khác</button>
+                                    <div className="d-flex flex-wrap gap-2 justify-content-end w-100">
+                                      <button
+                                        className={`btn btn-sm d-flex align-items-center gap-1 ${canUpdateMachine ? 'btn-outline-secondary' : 'btn-light text-muted border'}`}
+                                        onClick={() => handleUpdateSingleWarranty(machine)}
+                                        title={canUpdateMachine ? 'Sửa gói bảo hành của máy' : 'Cần quyền: Sửa giá bán & Bảo hành máy tồn kho (MACHINE_UPDATE)'}
+                                      >
+                                        {!canUpdateMachine && <Lock size={12} />}
+                                        <span>Sửa bảo hành</span>
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm d-flex align-items-center gap-1 ${canUpdateMachine ? 'btn-outline-secondary' : 'btn-light text-muted border'}`}
+                                        onClick={() => handleUpdateSinglePrice(machine)}
+                                        title={canUpdateMachine ? 'Sửa giá bán riêng cho serial này' : 'Cần quyền: Sửa giá bán & Bảo hành máy tồn kho (MACHINE_UPDATE)'}
+                                      >
+                                        {!canUpdateMachine && <Lock size={12} />}
+                                        <span>Sửa giá riêng</span>
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm d-flex align-items-center gap-1 ${canExportOther ? 'btn-outline-secondary' : 'btn-light text-muted border'}`}
+                                        onClick={() => handleMoveToInspection(machine)}
+                                        title={canExportOther ? 'Chuyển máy về trạng thái Cần kiểm tra' : 'Cần quyền: Xuất máy khác & Đưa về kiểm tra (MACHINE_EXPORT_OTHER)'}
+                                      >
+                                        {!canExportOther && <Lock size={12} />}
+                                        <span>Đưa về kiểm tra</span>
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm d-flex align-items-center gap-1 ${canExportOther ? 'btn-outline-danger' : 'btn-light text-muted border'}`}
+                                        onClick={() => handleExportOther(machine)}
+                                        title={canExportOther ? 'Xuất máy khác không ghi nhận doanh thu' : 'Cần quyền: Xuất máy khác & Đưa về kiểm tra (MACHINE_EXPORT_OTHER)'}
+                                      >
+                                        {!canExportOther && <Lock size={12} />}
+                                        <span>Xuất khác</span>
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm d-flex align-items-center gap-1 ${canDeleteMachine ? 'btn-danger' : 'btn-light text-muted border'}`}
+                                        onClick={() => handleDeleteMachine(machine)}
+                                        title={canDeleteMachine ? 'Xóa vĩnh viễn serial này khỏi kho' : 'Cần quyền: Xóa máy khỏi kho (MACHINE_DELETE)'}
+                                      >
+                                        {canDeleteMachine ? <Trash2 size={12} /> : <Lock size={12} />}
+                                        <span>Xóa máy</span>
+                                      </button>
                                     </div>
                                   </div>
                                 </td>

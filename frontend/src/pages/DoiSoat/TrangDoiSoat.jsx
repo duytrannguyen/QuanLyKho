@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, Lock } from 'lucide-react';
 import { syncApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 
 export default function TrangDoiSoat() {
   const { showToast, confirm } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canManageSync = hasPermission('SYNC_MANAGE');
+  const canApproveReturn = hasPermission('SYNC_MANAGE|ORDER_RETURN');
   const [activeTab, setActiveTab] = useState('Tổng quan');
   const [loading, setLoading] = useState(false);
   const [issues, setIssues] = useState([]);
@@ -87,6 +91,7 @@ export default function TrangDoiSoat() {
 
   const handleSaveSettings = async (e) => {
     if (e) e.preventDefault();
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Lưu cấu hình đồng bộ Google Sheet')) return;
     setSavingSettings(true);
     try {
       await syncApi.updateSyncSettings(settings);
@@ -100,6 +105,7 @@ export default function TrangDoiSoat() {
   };
 
   const handleApproveReturn = async (issueId, entityId) => {
+    if (!requirePermission('SYNC_MANAGE|ORDER_RETURN', showToast, 'Duyệt nhập lại máy vào kho từ đơn hủy')) return;
     const isConfirmed = await confirm(`Xác nhận nhập lại máy ${entityId} vào kho (chuyển về kiểm tra đầu vào do đơn bị hủy/trả trên Sheet)?`);
     if (!isConfirmed) return;
     try {
@@ -112,6 +118,7 @@ export default function TrangDoiSoat() {
   };
 
   const handleSyncNow = async () => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Chạy đồng bộ Google Sheet')) return;
     setLoading(true);
     try {
       const res = await syncApi.run('MANUAL');
@@ -138,6 +145,7 @@ export default function TrangDoiSoat() {
   };
 
   const handleRecheckIssue = async (issueId) => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Quét lại lỗi đối soát')) return;
     try {
       const res = await syncApi.recheckIssue(issueId);
       if (res.data.status === 'RESOLVED') {
@@ -147,11 +155,12 @@ export default function TrangDoiSoat() {
       }
       fetchData();
     } catch (err) {
-      showToast('Lỗi quét lại', 'danger');
+      showToast(err.userMessage || 'Lỗi quét lại', 'danger');
     }
   };
 
   const handleResolveManual = async (issueId) => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Đóng lỗi đối soát thủ công')) return;
     const isConfirmed = await confirm('Xác nhận đóng lỗi thủ công?');
     if (!isConfirmed) return;
     try {
@@ -159,7 +168,7 @@ export default function TrangDoiSoat() {
       showToast('Đã đóng lỗi', 'success');
       fetchData();
     } catch (err) {
-      showToast('Lỗi thao tác', 'danger');
+      showToast(err.userMessage || 'Lỗi thao tác', 'danger');
     }
   };
 
@@ -173,6 +182,7 @@ export default function TrangDoiSoat() {
     : issues.filter(i => i.issueType === selectedTypeFilter);
 
   const handleResolveAll = async (typeToResolve) => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Đóng hàng loạt lỗi đối soát')) return;
     const isAll = !typeToResolve || typeToResolve === 'ALL';
     const targetLabel = isAll ? 'TẤT CẢ các lỗi' : `các lỗi '${getIssueMeta(typeToResolve).label}'`;
     const countToResolve = isAll ? issues.length : (typeCounts[typeToResolve] || 0);
@@ -203,12 +213,27 @@ export default function TrangDoiSoat() {
           <p className="text-secondary m-0">Đồng bộ đơn "Hoàn tất" từ Google Sheet DATABASE_BÁN HÀNG để trừ kho và theo dõi sai lệch dữ liệu</p>
         </div>
         <div>
-          <button className="btn btn-primary d-flex align-items-center gap-2" onClick={handleSyncNow} disabled={loading}>
+          <button
+            className="btn btn-primary d-flex align-items-center gap-2"
+            onClick={handleSyncNow}
+            disabled={loading}
+            title={canManageSync ? 'Chạy đồng bộ Google Sheet ngay' : 'Yêu cầu quyền: Quản lý đồng bộ'}
+          >
             <RefreshCw size={18} className={loading ? 'spinner-border spinner-border-sm' : ''} />
             {loading ? 'Đang chạy...' : 'Đồng bộ ngay'}
+            {!canManageSync && <Lock size={14} className="text-warning" />}
           </button>
         </div>
       </div>
+
+      {!canManageSync && (
+        <div className="alert alert-info d-flex align-items-center gap-2 py-2 px-3 small border-0 shadow-sm rounded-3 mb-3">
+          <Lock size={15} className="flex-shrink-0" />
+          <span>
+            Bạn đang ở chế độ <strong>chỉ xem</strong> đối soát. Các thao tác chạy đồng bộ, quét lại, đóng lỗi và lưu cấu hình yêu cầu quyền <strong>Quản lý đồng bộ</strong>.
+          </span>
+        </div>
+      )}
 
       <ul className="nav nav-tabs mb-4">
         {['Tổng quan', 'Lỗi cần xử lý', 'Lịch sử đồng bộ', 'Cài đặt đồng bộ'].map(tab => (
@@ -242,10 +267,11 @@ export default function TrangDoiSoat() {
                       className="btn btn-outline-danger btn-sm d-flex align-items-center gap-1"
                       onClick={() => handleResolveAll(selectedTypeFilter)}
                       disabled={bulkResolving}
-                      title="Chuyển toàn bộ các lỗi thuộc loại này sang trạng thái Đã xử lý"
+                      title={canManageSync ? 'Chuyển toàn bộ các lỗi thuộc loại này sang trạng thái Đã xử lý' : 'Yêu cầu quyền: Quản lý đồng bộ'}
                     >
                       <XCircle size={15} />
                       {bulkResolving ? 'Đang xử lý...' : `Đóng hàng loạt (${filteredIssues.length})`}
+                      {!canManageSync && <Lock size={12} className="text-warning" />}
                     </button>
                   )}
                   <button className="btn btn-outline-secondary btn-sm" onClick={fetchData}>Làm mới</button>
@@ -322,14 +348,30 @@ export default function TrangDoiSoat() {
                             <div className="d-flex flex-wrap gap-2">
                               {issue.issueType === 'ORDER_CANCELLED_PENDING_RETURN' && (
                                 <button
-                                  className="btn btn-success btn-sm fw-bold"
+                                  className="btn btn-success btn-sm fw-bold d-inline-flex align-items-center gap-1"
                                   onClick={() => handleApproveReturn(issue.issueId, issue.entityId)}
+                                  title={canApproveReturn ? 'Xác nhận nhập lại máy vào kho' : 'Yêu cầu quyền: Quản lý đồng bộ hoặc Hoàn hàng'}
                                 >
                                   Xác nhận nhập lại kho
+                                  {!canApproveReturn && <Lock size={12} className="text-warning" />}
                                 </button>
                               )}
-                              <button className="btn btn-outline-primary btn-sm" onClick={() => handleRecheckIssue(issue.issueId)}>Quét lại</button>
-                              <button className="btn btn-outline-danger btn-sm" onClick={() => handleResolveManual(issue.issueId)}>Đóng thủ công</button>
+                              <button
+                                className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                                onClick={() => handleRecheckIssue(issue.issueId)}
+                                title={canManageSync ? 'Quét lại lỗi này' : 'Yêu cầu quyền: Quản lý đồng bộ'}
+                              >
+                                Quét lại
+                                {!canManageSync && <Lock size={12} className="text-warning" />}
+                              </button>
+                              <button
+                                className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+                                onClick={() => handleResolveManual(issue.issueId)}
+                                title={canManageSync ? 'Đóng lỗi thủ công' : 'Yêu cầu quyền: Quản lý đồng bộ'}
+                              >
+                                Đóng thủ công
+                                {!canManageSync && <Lock size={12} className="text-warning" />}
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -697,8 +739,14 @@ export default function TrangDoiSoat() {
                 </div>
 
                 <div className="d-flex gap-2 pt-2 border-top">
-                  <button type="submit" className="btn btn-primary px-4 fw-bold" disabled={savingSettings}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary px-4 fw-bold d-inline-flex align-items-center gap-2"
+                    disabled={savingSettings}
+                    title={canManageSync ? 'Lưu cấu hình đồng bộ' : 'Yêu cầu quyền: Quản lý đồng bộ'}
+                  >
                     {savingSettings ? 'Đang lưu...' : 'Lưu cấu hình'}
+                    {!canManageSync && <Lock size={14} className="text-warning" />}
                   </button>
                   <button type="button" className="btn btn-outline-secondary" onClick={fetchData}>
                     Tải lại

@@ -11,6 +11,7 @@ import java.util.Optional;
 
 public interface EventLogRepository extends JpaRepository<EventLog, Long> {
     Optional<EventLog> findByEventId(String eventId);
+    List<EventLog> findByEventIdIn(java.util.Collection<String> eventIds);
     Optional<EventLog> findByIdempotencyKey(String idempotencyKey);
     boolean existsByIdempotencyKey(String idempotencyKey);
 

@@ -2,6 +2,7 @@ package com.qkshop.tonkho.salesreport;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qkshop.tonkho.crm.PhoneNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -118,13 +119,43 @@ public class SalesOrderBackfillService implements CommandLineRunner {
                     order.setSeries(SourceNormalizer.extractSeries(order.getProductName(), order.getModelName()));
                 }
 
+                // Chuẩn hóa số điện thoại khách hàng (bổ sung số 0 đầu nếu bị mất từ Excel)
+                if (order.getCustomerPhone() != null && !order.getCustomerPhone().isBlank()) {
+                    String normalizedPhone = PhoneNormalizer.normalize(order.getCustomerPhone());
+                    if (normalizedPhone != null) {
+                        order.setCustomerPhone(normalizedPhone);
+                    }
+                }
+
+                // Bổ sung phân loại đơn và các cờ mặc định nếu chưa có
+                if (order.getOrderCategory() == null || order.getOrderCategory().isBlank()) {
+                    order.setOrderCategory("MACHINE");
+                }
+                if (order.getIsShipping() == null) {
+                    order.setIsShipping(false);
+                }
+                if (order.getIsDelivered() == null) {
+                    order.setIsDelivered(true);
+                }
+                if (order.getCareStatus() == null || order.getCareStatus().isBlank()) {
+                    order.setCareStatus("CHUA_CHAM_SOC");
+                }
+
                 // Tự động chuẩn hoá nguồn chốt và loại đơn
                 order.setNormalizedSource(SourceNormalizer.normalizeSource(order.getFirstSource(), order.getLastSource()));
                 order.setInboxType(SourceNormalizer.determineInboxType(order.getNormalizedSource()));
 
-                // Tự động tính hạn bảo hành nếu chưa có
-                if (order.getWarrantyExpiry() == null && order.getSaleDate() != null && order.getWarrantyPeriod() != null) {
-                    order.setWarrantyExpiry(SourceNormalizer.calculateWarrantyExpiry(order.getSaleDate().toLocalDate(), order.getWarrantyPeriod()));
+                // Tự động tính hạn bảo hành nếu chưa có và làm sạch chuỗi mức bảo hành
+                if (order.getWarrantyExpiry() == null && order.getWarrantyPeriod() != null) {
+                    LocalDate parsedDate = SourceNormalizer.extractSpecificDate(order.getWarrantyPeriod());
+                    if (parsedDate != null) {
+                        order.setWarrantyExpiry(parsedDate);
+                    } else if (order.getSaleDate() != null) {
+                        order.setWarrantyExpiry(SourceNormalizer.calculateWarrantyExpiry(order.getSaleDate().toLocalDate(), order.getWarrantyPeriod()));
+                    }
+                }
+                if (order.getWarrantyPeriod() != null) {
+                    order.setWarrantyPeriod(normalizeWarrantyPeriodLabel(order.getWarrantyPeriod()));
                 }
 
                 salesOrderRepo.save(order);
@@ -287,5 +318,25 @@ public class SalesOrderBackfillService implements CommandLineRunner {
         }
         String text = node.asText().trim();
         return com.qkshop.tonkho.sync.SalesSyncRowProcessor.parseDate(text);
+    }
+
+    private String normalizeWarrantyPeriodLabel(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String s = raw.trim();
+        String lower = s.toLowerCase();
+        if (lower.contains("bảo hành hãng") || lower.contains("bh hãng")) {
+            return "Bảo hành hãng";
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(\\d+)\\s*tháng").matcher(s);
+        if (m.find()) {
+            return m.group(1) + " Tháng";
+        }
+        if (lower.contains("không bh") || lower.contains("không bảo hành") || lower.equals("0") || lower.equals("0t")) {
+            return "Không BH";
+        }
+        if (s.contains("/")) {
+            return s.split("/")[0].trim();
+        }
+        return s;
     }
 }

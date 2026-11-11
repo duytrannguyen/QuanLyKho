@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, RefreshCw } from 'lucide-react';
 import { apiKiemDinh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
@@ -17,7 +17,7 @@ export default function TrangKiemDinh() {
   const fetchInspections = async () => {
     try {
       const res = await apiKiemDinh.getActive('ALL');
-      setInspections(res.data);
+      setInspections(res.data || []);
     } catch (err) {
       console.error(err);
     }
@@ -27,8 +27,9 @@ export default function TrangKiemDinh() {
     fetchInspections();
   }, []);
 
-  useEffect(() => {
-    const filtered = inspections.filter(item => {
+  const filteredInspections = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return inspections.filter(item => {
       let matchTab = false;
       if (activeTab === 'TẤT CẢ') matchTab = true;
       else if (activeTab === 'ĐANG MỞ') matchTab = item.status === 'OPEN';
@@ -38,25 +39,46 @@ export default function TrangKiemDinh() {
       else if (activeTab === 'HỦY/TRẢ') matchTab = item.status === 'REJECTED_RETURNED';
       else matchTab = true;
 
-      let matchSearch = true;
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
-        matchSearch =
+      if (!matchTab) return false;
+      if (q !== '') {
+        return (
           (item.serial || '').toLowerCase().includes(q) ||
           (item.name || '').toLowerCase().includes(q) ||
-          (item.id || '').toLowerCase().includes(q);
+          (item.id || '').toLowerCase().includes(q)
+        );
       }
-      return matchTab && matchSearch;
+      return true;
     });
+  }, [activeTab, searchQuery, inspections]);
 
-    if (filtered.length > 0) {
-      if (!activeItem || !filtered.find(i => i.id === activeItem.id)) {
-        setActiveItem(filtered[0]);
+  const tabCounts = useMemo(() => {
+    const counts = {
+      'ĐANG MỞ': 0,
+      'ĐANG XỬ LÝ': 0,
+      'YÊU CẦU KIỂM TRA LẠI': 0,
+      'ĐẠT': 0,
+      'HỦY/TRẢ': 0,
+      'TẤT CẢ': inspections.length
+    };
+    for (const item of inspections) {
+      if (item.status === 'OPEN') counts['ĐANG MỞ']++;
+      else if (item.status === 'IN_PROGRESS') counts['ĐANG XỬ LÝ']++;
+      else if (item.status === 'RECHECK_REQUESTED') counts['YÊU CẦU KIỂM TRA LẠI']++;
+      else if (item.status === 'PASSED') counts['ĐẠT']++;
+      else if (item.status === 'REJECTED_RETURNED') counts['HỦY/TRẢ']++;
+    }
+    return counts;
+  }, [inspections]);
+
+  useEffect(() => {
+    if (filteredInspections.length > 0) {
+      if (!activeItem || !filteredInspections.find(i => i.id === activeItem.id)) {
+        setActiveItem(filteredInspections[0]);
       }
     } else {
       setActiveItem(null);
     }
-  }, [activeTab, searchQuery, inspections]);
+  }, [filteredInspections]);
 
   useEffect(() => {
     setPage(0);
@@ -115,27 +137,6 @@ export default function TrangKiemDinh() {
     }
   };
 
-  const filteredInspections = inspections.filter(item => {
-    let matchTab = false;
-    if (activeTab === 'TẤT CẢ') matchTab = true;
-    else if (activeTab === 'ĐANG MỞ') matchTab = item.status === 'OPEN';
-    else if (activeTab === 'ĐANG XỬ LÝ') matchTab = item.status === 'IN_PROGRESS';
-    else if (activeTab === 'YÊU CẦU KIỂM TRA LẠI') matchTab = item.status === 'RECHECK_REQUESTED';
-    else if (activeTab === 'ĐẠT') matchTab = item.status === 'PASSED';
-    else if (activeTab === 'HỦY/TRẢ') matchTab = item.status === 'REJECTED_RETURNED';
-    else matchTab = true;
-
-    let matchSearch = true;
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      matchSearch =
-        (item.serial || '').toLowerCase().includes(q) ||
-        (item.name || '').toLowerCase().includes(q) ||
-        (item.id || '').toLowerCase().includes(q);
-    }
-    return matchTab && matchSearch;
-  });
-
   return (
     <div className="container-fluid p-0">
       
@@ -172,15 +173,7 @@ export default function TrangKiemDinh() {
         <div className="col-md-7 col-lg-8">
           <ul className="nav nav-pills gap-2 flex-nowrap overflow-auto pb-1">
             {['ĐANG MỞ', 'ĐANG XỬ LÝ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => {
-              const count = inspections.filter(item => {
-                if (tab === 'TẤT CẢ') return true;
-                if (tab === 'ĐANG MỞ') return item.status === 'OPEN';
-                if (tab === 'ĐANG XỬ LÝ') return item.status === 'IN_PROGRESS';
-                if (tab === 'YÊU CẦU KIỂM TRA LẠI') return item.status === 'RECHECK_REQUESTED';
-                if (tab === 'ĐẠT') return item.status === 'PASSED';
-                if (tab === 'HỦY/TRẢ') return item.status === 'REJECTED_RETURNED';
-                return true;
-              }).length;
+              const count = tabCounts[tab] || 0;
               return (
                 <li className="nav-item" key={tab}>
                   <button

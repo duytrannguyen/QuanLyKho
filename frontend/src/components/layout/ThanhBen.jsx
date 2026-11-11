@@ -24,14 +24,14 @@ const navGroups = [
       { path: '/ban-phu-kien', label: 'Bán phụ kiện lẻ', icon: ShoppingBag, permission: 'SALE_ACCESSORY' },
       { path: '/don-ship', label: 'Đơn ship & Giao hàng', icon: Truck, permission: 'SHIP_MANAGE' },
       { path: '/dich-vu-sua-chua', label: 'Tiếp nhận sửa chữa', icon: Wrench, permission: 'SERVICE_REPAIR' },
-      { path: '/tra-cuu-sua-chua', label: 'Tra cứu phiếu sửa chữa', icon: Search, permission: 'SERVICE_VIEW' },
-      { path: '/bang-gia', label: 'Bảng giá niêm yết', icon: Tag, permission: 'PRICING_VIEW' },
+      { path: '/tra-cuu-sua-chua', label: 'Tra cứu phiếu sửa chữa', icon: Search, permission: 'SERVICE_VIEW|SERVICE_REPAIR' },
+      { path: '/bang-gia', label: 'Bảng giá niêm yết', icon: Tag, permission: 'PRICING_VIEW|PRICING_MANAGE' },
     ]
   },
   {
     title: 'KHO MÁY & KIỂM ĐỊNH',
     items: [
-      { path: '/tra-cuu', label: 'Tồn kho máy', icon: Search, permission: 'SEARCH_INVENTORY' },
+      { path: '/tra-cuu', label: 'Tồn kho máy', icon: Search, permission: 'SEARCH_INVENTORY|MACHINE_UPDATE|MACHINE_EXPORT_OTHER' },
       { path: '/quan-ly-ma-may', label: 'Quản lý mã máy (Serial)', icon: List, permission: 'MANAGE_MACHINE_CODES' },
       { path: '/nhap-may', label: 'Nhập kho máy', icon: PackagePlus, permission: 'IMPORT_MACHINE' },
       { path: '/kiem-tra', label: 'Kiểm định chất lượng', icon: ClipboardCheck, permission: 'INSPECTION' },
@@ -41,24 +41,24 @@ const navGroups = [
     title: 'LINH KIỆN & PHỤ KIỆN',
     items: [
       { path: '/nhap-phu-kien', label: 'Nhập kho phụ kiện', icon: PackagePlus, permission: 'IMPORT_ACCESSORY' },
-      { path: '/ton-kho-phu-kien', label: 'Kho phụ kiện', icon: Package, permission: 'INVENTORY_ACCESSORY' },
+      { path: '/ton-kho-phu-kien', label: 'Kho phụ kiện', icon: Package, permission: 'INVENTORY_ACCESSORY|ACCESSORY_MANAGE' },
       { path: '/lich-su-ban-phu-kien', label: 'Lịch sử bán phụ kiện', icon: History, permission: 'ACCESSORY_HISTORY' },
       { path: '/nhap-linh-kien', label: 'Nhập kho linh kiện', icon: PackagePlus, permission: 'IMPORT_PART' },
-      { path: '/ton-kho-linh-kien', label: 'Kho linh kiện', icon: Cpu, permission: 'INVENTORY_PART' },
+      { path: '/ton-kho-linh-kien', label: 'Kho linh kiện', icon: Cpu, permission: 'INVENTORY_PART|PART_MANAGE' },
     ]
   },
   {
     title: 'BẢO HÀNH & CRM',
     items: [
       { path: '/bao-hanh', label: 'Tra cứu đơn & Bảo hành', icon: ShieldCheck, permission: 'WARRANTY_CHECK' },
-      { path: '/khach-hang', label: 'Khách hàng (CRM)', icon: Users, permission: 'CRM_VIEW' },
-      { path: '/khach-hang/het-han-bao-hanh', label: 'Máy hết hạn bảo hành', icon: Clock, permission: 'CRM_VIEW' },
+      { path: '/khach-hang', label: 'Khách hàng (CRM)', icon: Users, permission: 'CRM_VIEW|CRM_CARE|CRM_MANAGE' },
+      { path: '/khach-hang/het-han-bao-hanh', label: 'Máy hết hạn bảo hành', icon: Clock, permission: 'CRM_VIEW|CRM_CARE|CRM_MANAGE' },
     ]
   },
   {
     title: 'HỆ THỐNG & ĐỐI SOÁT',
     items: [
-      { path: '/doi-soat', label: 'Đối soát Google Sheet', icon: RefreshCw, permission: 'SYNC_MANAGE' },
+      { path: '/doi-soat', label: 'Đối soát Google Sheet', icon: RefreshCw, permission: 'SYNC_VIEW|SYNC_MANAGE' },
       { path: '/nhat-ky', label: 'Nhật ký hoạt động', icon: FileText, permission: 'LOGS_VIEW' },
       { path: '/he-thong', label: 'Cấu hình & Phân quyền', icon: Settings, permission: 'SYSTEM_MANAGE|USER_MANAGE' },
     ]

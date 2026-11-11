@@ -46,15 +46,17 @@ axiosClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    if (!config.silent) {
+    if (!config.silent && !config._loadingTracked) {
+      config._loadingTracked = true;
       activeRequests++;
       notifyLoading();
     }
     return config;
   },
   (error) => {
-    if (!error?.config?.silent && activeRequests > 0) {
-      activeRequests--;
+    if (error?.config?._loadingTracked) {
+      error.config._loadingTracked = false;
+      activeRequests = Math.max(activeRequests - 1, 0);
       notifyLoading();
     }
     return Promise.reject(error);
@@ -64,23 +66,23 @@ axiosClient.interceptors.request.use(
 // Response interceptor - tự động làm mới JWT Token khi hết hạn (Seamless Token Refresh)
 axiosClient.interceptors.response.use(
   (response) => {
-    if (!response.config?.silent) {
-      setTimeout(() => {
-        activeRequests = Math.max(activeRequests - 1, 0);
-        notifyLoading();
-      }, 200);
+    if (response.config?._loadingTracked) {
+      response.config._loadingTracked = false;
+      activeRequests = Math.max(activeRequests - 1, 0);
+      notifyLoading();
     }
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
 
-    if (!originalRequest?.silent) {
-      setTimeout(() => {
+    const releaseLoading = () => {
+      if (originalRequest?._loadingTracked) {
+        originalRequest._loadingTracked = false;
         activeRequests = Math.max(activeRequests - 1, 0);
         notifyLoading();
-      }, 200);
-    }
+      }
+    };
 
     // Nếu lỗi 401 Unauthorized
     if (error.response?.status === 401 && originalRequest) {
@@ -88,11 +90,13 @@ axiosClient.interceptors.response.use(
       
       // Nếu chính endpoint login hoặc refresh bị 401 thì xóa session và về login
       if (url.includes('/auth/login') || url.includes('/auth/refresh')) {
+        releaseLoading();
         return Promise.reject(error.response?.data || error);
       }
 
       // Nếu đã từng thử refresh cho request này rồi mà vẫn 401
       if (originalRequest._retry) {
+        releaseLoading();
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
@@ -102,6 +106,7 @@ axiosClient.interceptors.response.use(
 
       const refreshToken = localStorage.getItem('refreshToken');
       if (!refreshToken) {
+        releaseLoading();
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -117,7 +122,10 @@ axiosClient.interceptors.response.use(
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return axiosClient(originalRequest);
           })
-          .catch((err) => Promise.reject(err));
+          .catch((err) => {
+            releaseLoading();
+            return Promise.reject(err);
+          });
       }
 
       originalRequest._retry = true;
@@ -151,6 +159,7 @@ axiosClient.interceptors.response.use(
           throw new Error('Không nhận được token mới');
         }
       } catch (refreshErr) {
+        releaseLoading();
         processQueue(refreshErr, null);
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
@@ -162,6 +171,20 @@ axiosClient.interceptors.response.use(
       }
     }
 
+    releaseLoading();
+    if (error.response?.status === 403) {
+      const data = error.response.data || {};
+      const forbiddenMsg =
+        data.userMessage ||
+        data.message ||
+        'Tài khoản của bạn không đủ quyền hạn để thực hiện chức năng hoặc thao tác này. Vui lòng liên hệ Quản trị viên.';
+      return Promise.reject({
+        ...data,
+        status: 403,
+        userMessage: forbiddenMsg,
+        message: forbiddenMsg,
+      });
+    }
     return Promise.reject(error.response?.data || error);
   }
 );

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3, Truck, Clock, Calendar } from 'lucide-react';
+import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3, Truck, Clock, Calendar, Lock } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import ModalChiTietDonHang from './ModalChiTietDonHang';
 import ModalSuaDonMay from './ModalSuaDonMay';
 import ModalSuaDonPhuKien from './ModalSuaDonPhuKien';
@@ -9,7 +10,11 @@ import ModalSuaDonSuaChua from './ModalSuaDonSuaChua';
 import { getCleanWarrantyType, formatCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangKiemTraBaoHanh() {
-  const { showToast } = useToast();
+  const { showToast, confirm } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canEditOrder = hasPermission('ORDER_EDIT');
+  const canManageShip = hasPermission('SHIP_MANAGE');
+  const canReturnOrder = hasPermission('ORDER_RETURN');
   const [keyword, setKeyword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -39,8 +44,40 @@ export default function TrangKiemTraBaoHanh() {
   const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
 
   const handleOpenConfirmDelivery = (order) => {
+    if (!requirePermission('SHIP_MANAGE', showToast, 'Xác nhận khách nhận hàng đơn ship xa')) return;
     setConfirmingDeliveryOrder(order);
     setConfirmDeliveryDate(getTodayDateString());
+  };
+
+  const handleOpenEditMachineOrder = (order) => {
+    if (!requirePermission('ORDER_EDIT', showToast, 'Chỉnh sửa thông tin đơn máy đã bán')) return;
+    setEditingMachineOrder(order);
+  };
+
+  const handleOpenEditAccessoryOrder = (order) => {
+    if (!requirePermission('ORDER_EDIT', showToast, 'Chỉnh sửa hóa đơn phụ kiện đã bán')) return;
+    setEditingAccessoryOrder(order);
+  };
+
+  const handleOpenEditRepairOrder = (order) => {
+    if (!requirePermission('ORDER_EDIT', showToast, 'Chỉnh sửa phiếu dịch vụ sửa chữa')) return;
+    setEditingRepairOrder(order);
+  };
+
+  const handleReturnOrder = async (order) => {
+    if (!requirePermission('ORDER_RETURN', showToast, 'Hoàn trả / Thu hồi máy vào kho')) return;
+    const isConfirmed = await confirm(`Bạn có chắc chắn muốn hoàn trả / thu hồi máy ${order.serialKey} về lại kho sẵn sàng bán?`);
+    if (!isConfirmed) return;
+    try {
+      await apiBaoHanh.returnOrder(order.cycleId, {
+        reason: 'Khách hoàn trả / Đổi trả máy từ màn hình Tra cứu bảo hành'
+      });
+      showToast(`Đã hoàn trả máy ${order.serialKey} về kho thành công!`, 'success');
+      setSelectedOrder(null);
+      handleSearch();
+    } catch (err) {
+      showToast(err.userMessage || err.message || 'Lỗi khi hoàn trả máy về kho', 'danger');
+    }
   };
 
   const handleConfirmDeliverySubmit = async (e) => {
@@ -141,7 +178,7 @@ export default function TrangKiemTraBaoHanh() {
     setSelectedOrder(null);
   };
 
-  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock, isShipping, isDelivered, deliveryDate) => {
+  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock, isShipping, isDelivered, deliveryDate, closeType) => {
     if (isInStock) {
       const now = new Date();
       let end = warrantyExpiry ? new Date(warrantyExpiry) : null;
@@ -174,6 +211,22 @@ export default function TrangKiemTraBaoHanh() {
         badge: 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25',
         icon: ShieldCheck,
         endDate: null
+      };
+    }
+
+    // Đơn hàng đã thu lại hoặc đã vô hiệu hóa vòng bán
+    if (isVoided || closeType === 'CUSTOMER_RETURN') {
+      let end = null;
+      if (warrantyExpiry) {
+        end = new Date(warrantyExpiry);
+        end.setHours(23, 59, 59, 999);
+      }
+      return {
+        status: 'VOIDED',
+        text: 'Đã thu lại (Vô hiệu)',
+        badge: 'bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25',
+        icon: XCircle,
+        endDate: end
       };
     }
 
@@ -524,7 +577,7 @@ export default function TrangKiemTraBaoHanh() {
                         </thead>
                         <tbody>
                           {machines.map((item, index) => {
-                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock, item.isShipping, item.isDelivered, item.deliveryDate);
+                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock, item.isShipping, item.isDelivered, item.deliveryDate, item.closeType);
                             const StatusIcon = statusInfo.icon;
                             return (
                               <tr key={item.cycleId || index} onClick={() => setSelectedOrder(item)} style={{ cursor: 'pointer' }} title="Bấm để xem chi tiết đơn hàng">
@@ -538,7 +591,14 @@ export default function TrangKiemTraBaoHanh() {
                                   <span className="font-monospace fw-semibold bg-light px-2 py-1 rounded border text-dark">{item.serialKey}</span>
                                 </td>
                                 <td className="py-3">
-                                  <div className="fw-semibold text-dark">{item.customerName || 'Khách lẻ'}</div>
+                                  <div className="fw-semibold text-dark d-flex align-items-center gap-1 flex-wrap">
+                                    <span>{item.customerName || 'Khách lẻ'}</span>
+                                    {(item.isVoided || item.closeType === 'CUSTOMER_RETURN') && (
+                                      <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style={{ fontSize: '10px' }}>
+                                        Đã thu máy
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="small text-muted">{item.customerPhone}</div>
                                 </td>
                                 <td className="py-3">
@@ -587,6 +647,17 @@ export default function TrangKiemTraBaoHanh() {
                                     <StatusIcon size={14} className="me-1 mb-1 d-inline" />
                                     {statusInfo.text}
                                   </span>
+                                  {item.currentMachineStateText && (
+                                    <div className="mt-1">
+                                      <span
+                                        className={`badge ${item.isInStockNow ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-light text-secondary border'}`}
+                                        style={{ fontSize: '10px', whiteSpace: 'normal', display: 'inline-block', lineHeight: 1.2 }}
+                                        title="Trạng thái máy hiện tại trong hệ thống"
+                                      >
+                                        📦 {item.currentMachineStateText}
+                                      </span>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
                                   {!item.isInStock ? (
@@ -596,20 +667,22 @@ export default function TrangKiemTraBaoHanh() {
                                           type="button"
                                           className="btn btn-sm btn-success py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm"
                                           onClick={() => handleOpenConfirmDelivery(item)}
-                                          title="Xác nhận khách đã nhận hàng & Kích hoạt bảo hành"
+                                          title={canManageShip ? 'Xác nhận khách đã nhận hàng & Kích hoạt bảo hành' : 'Yêu cầu quyền: Quản lý đơn ship'}
                                         >
                                           <Truck size={13} />
                                           <span>Đã nhận</span>
+                                          {!canManageShip && <Lock size={11} className="text-warning" />}
                                         </button>
                                       )}
                                       <button
                                         type="button"
                                         className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
-                                        onClick={() => setEditingMachineOrder(item)}
-                                        title="Chỉnh sửa thông tin đơn máy này"
+                                        onClick={() => handleOpenEditMachineOrder(item)}
+                                        title={canEditOrder ? 'Chỉnh sửa thông tin đơn máy này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                                       >
                                         <Edit3 size={13} />
                                         <span>Sửa</span>
+                                        {!canEditOrder && <Lock size={11} className="text-warning" />}
                                       </button>
                                     </div>
                                   ) : (
@@ -717,11 +790,12 @@ export default function TrangKiemTraBaoHanh() {
                                     <button
                                       type="button"
                                       className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
-                                      onClick={() => setEditingAccessoryOrder(ord)}
-                                      title="Chỉnh sửa hóa đơn phụ kiện này"
+                                      onClick={() => handleOpenEditAccessoryOrder(ord)}
+                                      title={canEditOrder ? 'Chỉnh sửa hóa đơn phụ kiện này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                                     >
                                       <Edit3 size={13} />
                                       <span>Sửa</span>
+                                      {!canEditOrder && <Lock size={11} className="text-warning" />}
                                     </button>
                                     <button
                                       type="button"
@@ -837,11 +911,12 @@ export default function TrangKiemTraBaoHanh() {
                                     <button
                                       type="button"
                                       className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
-                                      onClick={() => setEditingRepairOrder(ord)}
-                                      title="Chỉnh sửa phiếu dịch vụ này"
+                                      onClick={() => handleOpenEditRepairOrder(ord)}
+                                      title={canEditOrder ? 'Chỉnh sửa phiếu dịch vụ này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                                     >
                                       <Edit3 size={13} />
                                       <span>Sửa</span>
+                                      {!canEditOrder && <Lock size={11} className="text-warning" />}
                                     </button>
                                     <button
                                       type="button"
@@ -880,9 +955,11 @@ export default function TrangKiemTraBaoHanh() {
             selectedOrder.isInStock,
             selectedOrder.isShipping,
             selectedOrder.isDelivered,
-            selectedOrder.deliveryDate
+            selectedOrder.deliveryDate,
+            selectedOrder.closeType
           )}
           onConfirmDelivery={handleOpenConfirmDelivery}
+          onReturnOrder={handleReturnOrder}
           onClose={() => setSelectedOrder(null)}
         />
       )}
@@ -986,10 +1063,12 @@ export default function TrangKiemTraBaoHanh() {
                   <button
                     type="button"
                     className="btn btn-sm btn-light text-primary fw-bold d-inline-flex align-items-center gap-1 rounded-pill px-3 shadow-sm"
-                    onClick={() => setEditingRepairOrder(selectedRepairOrder)}
+                    onClick={() => handleOpenEditRepairOrder(selectedRepairOrder)}
+                    title={canEditOrder ? 'Sửa phiếu dịch vụ' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                   >
                     <Edit3 size={14} />
                     <span>Sửa phiếu</span>
+                    {!canEditOrder && <Lock size={12} className="text-warning" />}
                   </button>
                   <button
                     type="button"
@@ -1095,10 +1174,12 @@ export default function TrangKiemTraBaoHanh() {
                   <button
                     type="button"
                     className="btn btn-sm btn-light text-primary fw-bold d-inline-flex align-items-center gap-1 rounded-pill px-3 shadow-sm"
-                    onClick={() => setEditingAccessoryOrder(selectedAccessoryOrder)}
+                    onClick={() => handleOpenEditAccessoryOrder(selectedAccessoryOrder)}
+                    title={canEditOrder ? 'Sửa hóa đơn phụ kiện' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                   >
                     <Edit3 size={14} />
                     <span>Sửa hóa đơn</span>
+                    {!canEditOrder && <Lock size={12} className="text-warning" />}
                   </button>
                   <button
                     type="button"

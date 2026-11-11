@@ -118,15 +118,15 @@ public class MachineService {
         List<ActiveInventory> actives = Collections.emptyList();
         if (includeActive) {
             actives = targetState != null
-                    ? activeInventoryRepository.findByState(targetState)
-                    : activeInventoryRepository.findAll();
+                    ? activeInventoryRepository.findByStateWithHierarchy(targetState)
+                    : activeInventoryRepository.findAllWithHierarchy();
         }
 
         List<ClosedCycle> closeds = Collections.emptyList();
         if (includeClosed) {
             closeds = targetCloseType != null
-                    ? closedCycleRepository.findByCloseType(targetCloseType)
-                    : closedCycleRepository.findAll();
+                    ? closedCycleRepository.findByCloseTypeWithHierarchy(targetCloseType)
+                    : closedCycleRepository.findAllWithHierarchy();
         }
 
         // Batch-fetch SerialRegistry một lần duy nhất thay vì N+1 query trên từng dòng
@@ -343,20 +343,24 @@ public class MachineService {
             }
         }
 
-        int updatedCount = 0;
+        Set<String> normalizedKeys = new LinkedHashSet<>();
         for (Object item : rawList) {
             if (item == null) continue;
             String key = SerialRegistry.normalizeSerialKey(item.toString());
-            if (key == null || key.isEmpty()) continue;
-            Optional<ActiveInventory> aiOpt = activeInventoryRepository.findBySerialKey(key);
-            if (aiOpt.isPresent()) {
-                ActiveInventory ai = aiOpt.get();
-                ai.setSalePrice(newPrice);
-                activeInventoryRepository.save(ai);
-                updatedCount++;
+            if (key != null && !key.isEmpty()) {
+                normalizedKeys.add(key);
             }
         }
-        return updatedCount;
+        if (normalizedKeys.isEmpty()) {
+            return 0;
+        }
+
+        List<ActiveInventory> matchedInventories = activeInventoryRepository.findBySerialKeyIn(normalizedKeys);
+        for (ActiveInventory ai : matchedInventories) {
+            ai.setSalePrice(newPrice);
+        }
+        activeInventoryRepository.saveAll(matchedInventories);
+        return matchedInventories.size();
     }
 
     /**

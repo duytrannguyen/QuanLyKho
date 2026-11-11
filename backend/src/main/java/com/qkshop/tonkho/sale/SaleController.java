@@ -3,6 +3,7 @@ package com.qkshop.tonkho.sale;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.inventory.CycleState;
 import com.qkshop.tonkho.inventory.InventoryCycleService;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
 import lombok.RequiredArgsConstructor;
@@ -119,6 +120,7 @@ public class SaleController {
     }
 
     @PostMapping("/submit")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SALE_MACHINE')")
     public ResponseEntity<ApiResponse<ClosedCycle>> submitSale(
             @RequestHeader(value = "X-Request-Id", required = false) String requestId,
             @RequestBody Map<String, Object> payload) {
@@ -161,10 +163,7 @@ public class SaleController {
         String cleanKeyword = (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null;
 
         List<ClosedCycle> list = closedCycleRepository.findShippingOrders(isDelivered, cleanKeyword);
-        List<Map<String, Object>> mappedOrders = new java.util.ArrayList<>();
-        for (ClosedCycle cc : list) {
-            mappedOrders.add(mapClosedCycleToDetail(cc));
-        }
+        List<Map<String, Object>> mappedOrders = mapClosedCyclesBatch(list);
 
         long total = closedCycleRepository.countByIsShippingTrue();
         long pending = closedCycleRepository.countByIsShippingTrueAndIsDeliveredFalse();
@@ -195,16 +194,13 @@ public class SaleController {
 
         // 1. Máy móc từ ClosedCycle
         List<ClosedCycle> list = closedCycleRepository.searchWarranty(cleanKeyword);
-        List<Map<String, Object>> machines = new java.util.ArrayList<>();
-        for (ClosedCycle cc : list) {
-            machines.add(mapClosedCycleToDetail(cc));
-        }
+        List<Map<String, Object>> machines = mapClosedCyclesBatch(list);
 
         // 1b. Máy móc đang tồn kho (ActiveInventory) nếu tra cứu theo serial
         String normSerial = com.qkshop.tonkho.machine.SerialRegistry.normalizeSerialKey(cleanKeyword);
         activeInventoryRepository.findBySerialKey(normSerial).ifPresent(ai -> {
-            boolean alreadyInList = machines.stream().anyMatch(m -> ai.getSerialKey().equalsIgnoreCase((String) m.get("serialKey")));
-            if (!alreadyInList) {
+            boolean alreadySameCycle = machines.stream().anyMatch(m -> ai.getCycleId().equals(m.get("cycleId")));
+            if (!alreadySameCycle) {
                 machines.add(0, mapActiveInventoryToWarrantyDetail(ai));
             }
         });
@@ -334,7 +330,7 @@ public class SaleController {
     }
 
     @PutMapping("/order/{cycleId}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT') or hasAuthority('SALE_MACHINE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateMachineOrder(
             @PathVariable String cycleId,
@@ -486,7 +482,7 @@ public class SaleController {
     }
 
     @PutMapping("/order/{cycleId}/confirm-delivery")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SHIP_MANAGE') or hasAuthority('SALE_MACHINE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SHIP_MANAGE')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> confirmDelivery(
             @PathVariable String cycleId,
@@ -568,7 +564,7 @@ public class SaleController {
     }
 
     @PostMapping({"/order/{cycleId}/return-shipping", "/order/{cycleId}/return-order"})
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_RETURN') or hasAuthority('SHIP_MANAGE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_RETURN')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> returnShippingOrder(
             @PathVariable String cycleId,
@@ -698,7 +694,7 @@ public class SaleController {
     }
 
     @PutMapping("/accessory-order/{orderId}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT') or hasAuthority('SALE_ACCESSORY')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateAccessoryOrder(
             @PathVariable Long orderId,
@@ -779,7 +775,7 @@ public class SaleController {
     }
 
     @PutMapping("/repair-order/{orderId}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT') or hasAuthority('SERVICE_REPAIR')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateRepairOrderWarranty(
             @PathVariable Long orderId,
@@ -871,8 +867,26 @@ public class SaleController {
         map.put("cycleId", ai.getCycleId());
         map.put("serialKey", ai.getSerialKey());
         map.put("sourceModelText", ai.getSourceModelText());
-        map.put("customerName", "Máy đang trong kho (Chưa bán)");
-        map.put("customerPhone", "—");
+
+        String customerName = "Máy đang trong kho (Chưa bán)";
+        String customerPhone = "—";
+        if (ai.getIntakeType() == com.qkshop.tonkho.intake.IntakeType.CUSTOMER_RETURN
+                || ai.getIntakeType() == com.qkshop.tonkho.intake.IntakeType.CUSTOMER_BUYBACK) {
+            java.util.Optional<ClosedCycle> lastCcOpt = closedCycleRepository.findTopBySerialKeyOrderByClosedAtDesc(ai.getSerialKey());
+            if (lastCcOpt.isPresent() && lastCcOpt.get().getCustomerName() != null) {
+                ClosedCycle lastCc = lastCcOpt.get();
+                map.put("previousCustomerName", lastCc.getCustomerName());
+                map.put("previousCustomerPhone", lastCc.getCustomerPhone());
+                map.put("previousSaleDate", lastCc.getSaleDate());
+                map.put("previousOrderCode", lastCc.getSourceReference());
+                customerName = "Máy trong kho (Đã thu lại từ: " + lastCc.getCustomerName() + ")";
+                customerPhone = lastCc.getCustomerPhone();
+            } else {
+                customerName = "Máy đang trong kho (Đã thu lại)";
+            }
+        }
+        map.put("customerName", customerName);
+        map.put("customerPhone", customerPhone);
         map.put("saleDate", null);
         map.put("closedAt", null);
         map.put("intakeAt", ai.getIntakeAt());
@@ -894,7 +908,13 @@ public class SaleController {
         map.put("salesperson", "Kho");
         map.put("isVoided", false);
         map.put("isInStock", true);
+        map.put("isInStockNow", true);
         map.put("currentState", ai.getState() != null ? ai.getState().name() : "READY");
+        map.put("currentInventoryState", ai.getState() != null ? ai.getState().name() : "READY");
+        String stateDesc = (ai.getState() == CycleState.READY)
+                ? "Đang tồn kho (Sẵn sàng bán)"
+                : "Đang tồn kho (Chờ kiểm định)";
+        map.put("currentMachineStateText", stateDesc);
 
         if (ai.getConfig() != null) {
             com.qkshop.tonkho.sale.SalesConfig cfg = ai.getConfig();
@@ -914,7 +934,62 @@ public class SaleController {
         return map;
     }
 
+    private List<Map<String, Object>> mapClosedCyclesBatch(List<ClosedCycle> list) {
+        if (list == null || list.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        java.util.Set<String> eventIds = list.stream()
+                .map(ClosedCycle::getCloseEventId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<String, String> actorByEventId = eventIds.isEmpty()
+                ? java.util.Collections.emptyMap()
+                : eventLogRepository.findByEventIdIn(eventIds).stream()
+                        .filter(ev -> ev.getEventId() != null && ev.getActor() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.qkshop.tonkho.log.EventLog::getEventId,
+                                com.qkshop.tonkho.log.EventLog::getActor,
+                                (a, b) -> a));
+
+        java.util.List<String> serialKeys = list.stream()
+                .map(ClosedCycle::getSerialKey)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+        Map<String, String> currentCycleBySerial = serialKeys.isEmpty()
+                ? java.util.Collections.emptyMap()
+                : serialRegistryRepository.findBySerialKeyIn(serialKeys).stream()
+                        .filter(sr -> sr.getSerialKey() != null && sr.getCurrentCycleId() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.qkshop.tonkho.machine.SerialRegistry::getSerialKey,
+                                com.qkshop.tonkho.machine.SerialRegistry::getCurrentCycleId,
+                                (a, b) -> a));
+
+        Map<String, ActiveInventory> activeInvBySerial = serialKeys.isEmpty()
+                ? java.util.Collections.emptyMap()
+                : activeInventoryRepository.findBySerialKeyIn(serialKeys).stream()
+                        .filter(ai -> ai.getSerialKey() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                ActiveInventory::getSerialKey,
+                                ai -> ai,
+                                (a, b) -> a));
+
+        List<Map<String, Object>> result = new java.util.ArrayList<>(list.size());
+        for (ClosedCycle cc : list) {
+            result.add(mapClosedCycleToDetail(cc, actorByEventId, currentCycleBySerial, activeInvBySerial));
+        }
+        return result;
+    }
+
     private Map<String, Object> mapClosedCycleToDetail(ClosedCycle cc) {
+        return mapClosedCycleToDetail(cc, null, null, null);
+    }
+
+    private Map<String, Object> mapClosedCycleToDetail(
+            ClosedCycle cc,
+            Map<String, String> actorByEventId,
+            Map<String, String> currentCycleBySerial,
+            Map<String, ActiveInventory> activeInvBySerial) {
         Map<String, Object> map = new java.util.HashMap<>();
         map.put("id", cc.getId());
         map.put("cycleId", cc.getCycleId());
@@ -944,22 +1019,60 @@ public class SaleController {
 
         String salesperson = "Không rõ";
         if (cc.getCloseEventId() != null) {
-            java.util.Optional<com.qkshop.tonkho.log.EventLog> eventOpt = eventLogRepository.findByEventId(cc.getCloseEventId());
-            if (eventOpt.isPresent() && eventOpt.get().getActor() != null) {
-                salesperson = eventOpt.get().getActor();
+            if (actorByEventId != null) {
+                salesperson = actorByEventId.getOrDefault(cc.getCloseEventId(), "Không rõ");
+            } else {
+                java.util.Optional<com.qkshop.tonkho.log.EventLog> eventOpt = eventLogRepository.findByEventId(cc.getCloseEventId());
+                if (eventOpt.isPresent() && eventOpt.get().getActor() != null) {
+                    salesperson = eventOpt.get().getActor();
+                }
             }
         }
         map.put("salesperson", salesperson);
 
-        boolean isVoided = false;
-        java.util.Optional<com.qkshop.tonkho.machine.SerialRegistry> regOpt = serialRegistryRepository.findBySerialKey(cc.getSerialKey());
-        if (regOpt.isPresent()) {
-            String currentCycle = regOpt.get().getCurrentCycleId();
-            if (currentCycle != null && !currentCycle.equals(cc.getCycleId())) {
-                isVoided = true;
+        boolean isCustomerReturn = cc.getCloseType() == com.qkshop.tonkho.core.enums.CloseType.CUSTOMER_RETURN;
+        boolean isVoided = isCustomerReturn;
+
+        String currentCycle = null;
+        if (currentCycleBySerial != null) {
+            currentCycle = currentCycleBySerial.get(cc.getSerialKey());
+        } else if (serialRegistryRepository != null) {
+            java.util.Optional<com.qkshop.tonkho.machine.SerialRegistry> regOpt = serialRegistryRepository.findBySerialKey(cc.getSerialKey());
+            if (regOpt.isPresent()) {
+                currentCycle = regOpt.get().getCurrentCycleId();
             }
         }
+        if (currentCycle != null && !currentCycle.equals(cc.getCycleId())) {
+            isVoided = true;
+        }
+
+        ActiveInventory ai = activeInvBySerial != null ? activeInvBySerial.get(cc.getSerialKey()) : null;
+        if (ai == null && activeInventoryRepository != null) {
+            ai = activeInventoryRepository.findBySerialKey(cc.getSerialKey()).orElse(null);
+        }
+
+        if (ai != null) {
+            isVoided = true;
+            map.put("isInStockNow", true);
+            map.put("currentInventoryState", ai.getState() != null ? ai.getState().name() : null);
+            map.put("currentCycleId", ai.getCycleId());
+            String stateDesc = (ai.getState() == CycleState.READY)
+                    ? "Đang tồn kho (Sẵn sàng bán)"
+                    : "Đang tồn kho (Chờ kiểm định)";
+            map.put("currentMachineStateText", stateDesc);
+        } else if (currentCycle != null && !currentCycle.equals(cc.getCycleId())) {
+            map.put("isInStockNow", false);
+            map.put("currentCycleId", currentCycle);
+            map.put("currentMachineStateText", "Đã xuất bán chu kỳ mới (" + currentCycle + ")");
+        } else {
+            map.put("isInStockNow", false);
+            map.put("currentCycleId", cc.getCycleId());
+            map.put("currentMachineStateText", isCustomerReturn ? "Đã thu lại / Khách trả máy" : "Đã xuất bán cho khách");
+        }
+
         map.put("isVoided", isVoided);
+        map.put("closeType", cc.getCloseType() != null ? cc.getCloseType().name() : "SALE");
+        map.put("closeTypeName", isCustomerReturn ? "Khách đổi trả" : "Bán hàng");
         map.put("isShipping", Boolean.TRUE.equals(cc.getIsShipping()));
         map.put("isDelivered", Boolean.TRUE.equals(cc.getIsDelivered()));
         map.put("deliveryDate", cc.getDeliveryDate());

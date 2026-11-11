@@ -115,10 +115,17 @@ export default function ModalCaiDatQuaTang({
                     </tr>
                   </thead>
                   <tbody>
-                    {tempGiftBundle.map((item) => (
+                    {tempGiftBundle.map((item) => {
+                      const fallbackAcc = availableAccessories?.find((a) => a.sku === item.sku);
+                      const displayName = item.name || fallbackAcc?.name || item.sku;
+                      const displayPrice =
+                        item.price !== undefined && item.price !== null
+                          ? item.price
+                          : fallbackAcc?.price || 0;
+                      return (
                       <tr key={item.sku}>
                         <td className="ps-3">
-                          <div className="fw-bold text-dark">{item.name}</div>
+                          <div className="fw-bold text-dark">{displayName}</div>
                           <small className="text-muted font-monospace" style={{ fontSize: '10px' }}>
                             {item.sku}
                           </small>
@@ -137,7 +144,7 @@ export default function ModalCaiDatQuaTang({
                           <input
                             type="text"
                             className="form-control form-control-xs text-end text-primary fw-bold pos-input"
-                            value={formatCurrency(item.price)}
+                            value={formatCurrency(displayPrice)}
                             onChange={(e) => onUpdateTempGift(item.sku, 'price', e.target.value)}
                             placeholder="0"
                             style={{ fontSize: '11px' }}
@@ -153,7 +160,8 @@ export default function ModalCaiDatQuaTang({
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>

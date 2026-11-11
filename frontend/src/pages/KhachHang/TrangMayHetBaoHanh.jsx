@@ -4,14 +4,20 @@ import {
   Clock, ShieldAlert, AlertCircle, Calendar, Search, 
   RefreshCw, Download, FileText, User, Phone, MessageSquare, 
   Copy, Check, ExternalLink, Laptop, Tag, ArrowRight, ChevronLeft, 
-  ChevronRight, Sparkles, Filter, CheckCircle2, X
+  ChevronRight, Sparkles, Filter, CheckCircle2, X, Lock
 } from 'lucide-react';
 import { crmApi } from '../../api';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
 
 export default function TrangMayHetBaoHanh() {
   const navigate = useNavigate();
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canExport = hasPermission('EXPORT_DATA');
+  const canCare = hasPermission('CRM_CARE|CRM_MANAGE');
 
   // State dữ liệu & phân trang
   const [loading, setLoading] = useState(false);
@@ -117,6 +123,7 @@ export default function TrangMayHetBaoHanh() {
 
   // Xuất file Excel
   const handleExportExcel = async () => {
+    if (!requirePermission('EXPORT_DATA', showToast, 'Xuất file Excel danh sách máy hết hạn bảo hành')) return;
     setExporting(true);
     try {
       const res = await crmApi.exportExpiredWarrantyExcel({
@@ -135,9 +142,10 @@ export default function TrangMayHetBaoHanh() {
       link.click();
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
+      showToast('Đã xuất file Excel danh sách máy hết hạn bảo hành!', 'success');
     } catch (err) {
       console.error('Lỗi xuất file Excel:', err);
-      alert('Không thể xuất file Excel. Vui lòng thử lại sau.');
+      showToast(err?.userMessage || 'Không thể xuất file Excel. Vui lòng thử lại sau.', 'error');
     } finally {
       setExporting(false);
     }
@@ -197,9 +205,11 @@ export default function TrangMayHetBaoHanh() {
             className="btn btn-outline-success rounded-pill d-inline-flex align-items-center gap-1.5 px-3 py-1.5 small fw-medium shadow-2xs"
             onClick={handleExportExcel}
             disabled={exporting || totalElements === 0}
+            title={canExport ? 'Xuất file Excel danh sách máy hết hạn bảo hành' : 'Yêu cầu quyền: Xuất file Excel'}
           >
             <Download size={14} />
             <span>{exporting ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
+            {!canExport && <Lock size={12} className="text-warning" />}
           </button>
         </div>
       </div>
@@ -589,11 +599,15 @@ export default function TrangMayHetBaoHanh() {
                         {/* Nút Tin nhắn mẫu hậu mãi */}
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-warning text-dark p-1.5 rounded-3 shadow-2xs"
-                          title="Gửi tin nhắn mời bảo dưỡng / tri ân hậu mãi"
-                          onClick={() => setMessagingOrder(o)}
+                          className="btn btn-sm btn-outline-warning text-dark p-1.5 rounded-3 shadow-2xs d-inline-flex align-items-center gap-0.5"
+                          title={canCare ? 'Gửi tin nhắn mời bảo dưỡng / tri ân hậu mãi' : 'Yêu cầu quyền: Chăm sóc khách hàng (CSKH)'}
+                          onClick={() => {
+                            if (!requirePermission('CRM_CARE|CRM_MANAGE', showToast, 'Chăm sóc khách hàng & gửi tin nhắn hậu mãi')) return;
+                            setMessagingOrder(o);
+                          }}
                         >
                           <Sparkles size={13} className="text-warning" />
+                          {!canCare && <Lock size={10} className="text-warning" />}
                         </button>
 
                         {/* Nút Xem chi tiết hóa đơn */}

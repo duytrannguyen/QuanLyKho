@@ -29,12 +29,14 @@ public class RepairController {
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('SERVICE_REPAIR')")
     public ResponseEntity<ApiResponse<RepairOrder>> createOrder(@RequestBody Map<String, Object> payload) {
         RepairOrder created = repairOrderService.createRepairOrder(payload);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Lưu đơn dịch vụ sửa chữa thành công", created));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SERVICE_REPAIR', 'ORDER_EDIT')")
     public ResponseEntity<ApiResponse<RepairOrder>> updateOrder(
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload) {
@@ -43,6 +45,7 @@ public class RepairController {
     }
 
     @PutMapping("/{id}/status")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('SERVICE_REPAIR')")
     public ResponseEntity<ApiResponse<RepairOrder>> updateOrderStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> payload) {

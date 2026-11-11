@@ -23,6 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,8 +40,10 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.task.scheduling.enabled=false",
         "gsheet.enabled=false",
         "gsheet.cron-enabled=false",
-        "gsheet.scheduler.enabled=false"
+        "gsheet.scheduler.enabled=false",
+        "crm.startup-sync.enabled=false"
 })
+@Transactional
 class OrderSyncIntegrationTest {
 
     @Autowired
@@ -73,6 +78,13 @@ class OrderSyncIntegrationTest {
 
     @Autowired
     private RepairOrderRepository repairOrderRepo;
+
+    @BeforeEach
+    void setUpSecurityContext() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))
+        );
+    }
 
     @Test
     void testAccessoryOrderSyncsToSalesOrder() {

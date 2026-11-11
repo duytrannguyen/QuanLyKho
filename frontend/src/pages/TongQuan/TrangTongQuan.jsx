@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye, ShoppingBag, ClipboardCheck, AlertTriangle,
-  PackagePlus, Search, RefreshCw, ArrowRight, Truck
+  PackagePlus, Search, RefreshCw, ArrowRight, Truck, Lock
 } from 'lucide-react';
 import { dashboardApi, syncApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatEventType } from '../../utils/dinh_dang';
 
 export default function TrangTongQuan() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
   const [summary, setSummary] = useState(null);
   const [priorities, setPriorities] = useState(null);
   const [activities, setActivities] = useState([]);
@@ -46,6 +49,7 @@ export default function TrangTongQuan() {
   };
 
   const handleManualSync = async () => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Đồng bộ Google Sheet')) return;
     if (syncing) return;
     setSyncing(true);
     try {
@@ -56,6 +60,13 @@ export default function TrangTongQuan() {
       showToast(err.userMessage || err.message || 'Lỗi khi đồng bộ Google Sheet', 'danger');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleGuardedNavigate = (path, permissionCode, actionName) => (e) => {
+    e.preventDefault();
+    if (requirePermission(permissionCode, showToast, actionName)) {
+      navigate(path);
     }
   };
 
@@ -76,9 +87,25 @@ export default function TrangTongQuan() {
 
   return (
     <div className="container-fluid p-0">
-      <div className="mb-4">
-        <h2 className="fw-bold m-0">Điều hành kho hàng</h2>
-        <p className="text-secondary">Tình trạng hệ thống và công việc cần xử lý hôm nay</p>
+      <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+          <h2 className="fw-bold m-0">Điều hành kho hàng</h2>
+          <p className="text-secondary mb-0">Tình trạng hệ thống và công việc cần xử lý hôm nay</p>
+        </div>
+        <div>
+          <button
+            className={`btn d-flex align-items-center gap-2 shadow-sm ${
+              hasPermission('SYNC_MANAGE') ? 'btn-primary' : 'btn-outline-secondary'
+            }`}
+            onClick={handleManualSync}
+            disabled={syncing}
+            title={!hasPermission('SYNC_MANAGE') ? 'Cần quyền Đồng bộ CSDL (SYNC_MANAGE)' : 'Đồng bộ Google Sheet thủ công'}
+          >
+            <RefreshCw size={16} className={syncing ? 'spinner-border spinner-border-sm' : ''} />
+            <span>{syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</span>
+            {!hasPermission('SYNC_MANAGE') && <Lock size={14} className="text-muted" />}
+          </button>
+        </div>
       </div>
 
       {/* Stat Cards */}
@@ -124,7 +151,15 @@ export default function TrangTongQuan() {
                 <span className="badge rounded-circle bg-danger d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P0</span>
                 <span className="fw-medium text-dark">{prio.p0_data_errors} lỗi dữ liệu đang mở</span>
               </div>
-              <Link to="/doi-soat" className="btn btn-sm btn-outline-primary">Xử lý</Link>
+              <button
+                type="button"
+                onClick={handleGuardedNavigate('/doi-soat', 'SYNC_VIEW', 'Xem trang đối soát')}
+                className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                title={!hasPermission('SYNC_VIEW') ? 'Cần quyền Đối soát (SYNC_VIEW)' : ''}
+              >
+                <span>Xử lý</span>
+                {!hasPermission('SYNC_VIEW') && <Lock size={12} className="text-muted" />}
+              </button>
             </div>
             
             <div className="d-flex align-items-center justify-content-between border-bottom pb-3 mb-3">
@@ -132,7 +167,15 @@ export default function TrangTongQuan() {
                 <span className="badge rounded-circle bg-warning text-dark d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P1</span>
                 <span className="fw-medium text-dark">{prio.p1_pending_inspections} máy chờ kiểm tra</span>
               </div>
-              <Link to="/kiem-tra" className="btn btn-sm btn-outline-primary">Xử lý</Link>
+              <button
+                type="button"
+                onClick={handleGuardedNavigate('/kiem-tra', 'INSPECTION', 'Kiểm tra máy')}
+                className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                title={!hasPermission('INSPECTION') ? 'Cần quyền Kiểm tra máy (INSPECTION)' : ''}
+              >
+                <span>Xử lý</span>
+                {!hasPermission('INSPECTION') && <Lock size={12} className="text-muted" />}
+              </button>
             </div>
 
             <div className="d-flex align-items-center justify-content-between">
@@ -140,7 +183,15 @@ export default function TrangTongQuan() {
                 <span className="badge rounded-circle bg-info text-dark d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P2</span>
                 <span className="fw-medium text-dark">{prio.p2_without_price} máy chưa có giá bán</span>
               </div>
-              <Link to="/tra-cuu" className="btn btn-sm btn-outline-primary">Xử lý</Link>
+              <button
+                type="button"
+                onClick={handleGuardedNavigate('/tra-cuu', 'INVENTORY_VIEW', 'Tra cứu tồn kho')}
+                className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                title={!hasPermission('INVENTORY_VIEW') ? 'Cần quyền Tra cứu tồn kho (INVENTORY_VIEW)' : ''}
+              >
+                <span>Xử lý</span>
+                {!hasPermission('INVENTORY_VIEW') && <Lock size={12} className="text-muted" />}
+              </button>
             </div>
           </div>
         </div>
@@ -150,28 +201,64 @@ export default function TrangTongQuan() {
             <h5 className="fw-bold mb-4">Thao tác nhanh</h5>
             <div className="row g-3">
               <div className="col-6">
-                <Link to="/nhap-may" className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2">
-                  <PackagePlus size={28} className="text-primary" />
-                  <span className="fw-medium text-dark">Nhập máy</span>
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleGuardedNavigate('/nhap-may', 'IMPORT_MACHINE', 'Nhập máy vào kho')}
+                  className={`btn w-100 py-3 border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2 position-relative ${
+                    hasPermission('IMPORT_MACHINE') ? 'btn-light' : 'btn-light opacity-75'
+                  }`}
+                >
+                  <PackagePlus size={28} className={hasPermission('IMPORT_MACHINE') ? 'text-primary' : 'text-secondary'} />
+                  <span className="fw-medium text-dark d-flex align-items-center gap-1">
+                    Nhập máy
+                    {!hasPermission('IMPORT_MACHINE') && <Lock size={13} className="text-muted" />}
+                  </span>
+                </button>
               </div>
               <div className="col-6">
-                <Link to="/tra-cuu" className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2">
-                  <Search size={28} className="text-primary" />
-                  <span className="fw-medium text-dark">Tra serial</span>
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleGuardedNavigate('/tra-cuu', 'INVENTORY_VIEW', 'Tra cứu tồn kho')}
+                  className={`btn w-100 py-3 border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2 position-relative ${
+                    hasPermission('INVENTORY_VIEW') ? 'btn-light' : 'btn-light opacity-75'
+                  }`}
+                >
+                  <Search size={28} className={hasPermission('INVENTORY_VIEW') ? 'text-primary' : 'text-secondary'} />
+                  <span className="fw-medium text-dark d-flex align-items-center gap-1">
+                    Tra serial
+                    {!hasPermission('INVENTORY_VIEW') && <Lock size={13} className="text-muted" />}
+                  </span>
+                </button>
               </div>
               <div className="col-6">
-                <Link to="/kiem-tra" className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2">
-                  <ClipboardCheck size={28} className="text-primary" />
-                  <span className="fw-medium text-dark">Kiểm tra máy</span>
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleGuardedNavigate('/kiem-tra', 'INSPECTION', 'Kiểm tra kỹ thuật máy')}
+                  className={`btn w-100 py-3 border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2 position-relative ${
+                    hasPermission('INSPECTION') ? 'btn-light' : 'btn-light opacity-75'
+                  }`}
+                >
+                  <ClipboardCheck size={28} className={hasPermission('INSPECTION') ? 'text-primary' : 'text-secondary'} />
+                  <span className="fw-medium text-dark d-flex align-items-center gap-1">
+                    Kiểm tra máy
+                    {!hasPermission('INSPECTION') && <Lock size={13} className="text-muted" />}
+                  </span>
+                </button>
               </div>
               <div className="col-6">
-                <Link to="/don-ship" className="btn btn-light w-100 py-3 text-decoration-none border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2">
-                  <Truck size={28} className="text-primary" />
-                  <span className="fw-medium text-dark">Đơn ship</span>
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleGuardedNavigate('/don-ship', 'SHIP_MANAGE', 'Quản lý đơn ship')}
+                  className={`btn w-100 py-3 border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2 position-relative ${
+                    hasPermission('SHIP_MANAGE') ? 'btn-light' : 'btn-light opacity-75'
+                  }`}
+                >
+                  <Truck size={28} className={hasPermission('SHIP_MANAGE') ? 'text-primary' : 'text-secondary'} />
+                  <span className="fw-medium text-dark d-flex align-items-center gap-1">
+                    Đơn ship
+                    {!hasPermission('SHIP_MANAGE') && <Lock size={13} className="text-muted" />}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -182,9 +269,15 @@ export default function TrangTongQuan() {
       <div className="card shadow-sm border-0 p-4">
         <div className="d-flex align-items-center justify-content-between mb-4">
           <h5 className="fw-bold m-0">Hoạt động gần đây</h5>
-          <Link to="/nhat-ky" className="text-decoration-none text-primary fw-medium small d-flex align-items-center gap-1">
-            Mở nhật ký đầy đủ <ArrowRight size={14} />
-          </Link>
+          <button
+            type="button"
+            onClick={handleGuardedNavigate('/nhat-ky', 'LOGS_VIEW', 'Xem nhật ký hoạt động')}
+            className="btn btn-link p-0 text-decoration-none text-primary fw-medium small d-flex align-items-center gap-1"
+          >
+            <span>Mở nhật ký đầy đủ</span>
+            {!hasPermission('LOGS_VIEW') && <Lock size={12} className="text-muted" />}
+            <ArrowRight size={14} />
+          </button>
         </div>
 
         <div className="table-responsive">

@@ -12,6 +12,7 @@ import com.qkshop.tonkho.inspection.InspectionRequestStatus;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,13 +23,31 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DashboardController {
 
+    private static final long SNAPSHOT_TTL_MS = 8_000L;
+
     private final ActiveInventoryRepository activeInventoryRepo;
     private final DataIssueRepository dataIssueRepo;
     private final EventLogRepository eventLogRepo;
     private final InspectionRequestRepository inspectionRequestRepo;
 
-    @GetMapping("/summary")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getSummary() {
+    private record DashboardCounts(
+            long totalActive,
+            long readyToSell,
+            long needInspection,
+            long errorCount,
+            long withoutPrice,
+            long pendingInspections,
+            long expiresAt
+    ) {}
+
+    private volatile DashboardCounts cachedCounts;
+
+    private DashboardCounts getCountsSnapshot() {
+        long now = System.currentTimeMillis();
+        DashboardCounts current = cachedCounts;
+        if (current != null && now < current.expiresAt()) {
+            return current;
+        }
         long totalActive = activeInventoryRepo.count();
         long readyToSell = activeInventoryRepo.countByState(CycleState.READY);
         long needInspection = activeInventoryRepo.countByState(CycleState.NEEDS_INSPECTION);
@@ -36,29 +55,40 @@ public class DashboardController {
         long withoutPrice = activeInventoryRepo.countWithoutPrice();
         long pendingInspections = inspectionRequestRepo.countByStatus(InspectionRequestStatus.OPEN);
 
+        DashboardCounts fresh = new DashboardCounts(
+                totalActive, readyToSell, needInspection, errorCount, withoutPrice, pendingInspections, now + SNAPSHOT_TTL_MS
+        );
+        cachedCounts = fresh;
+        return fresh;
+    }
+
+    @GetMapping("/summary")
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getSummary() {
+        DashboardCounts c = getCountsSnapshot();
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
-                "totalActive", totalActive,
-                "readyToSell", readyToSell,
-                "needInspection", needInspection,
-                "errorCount", errorCount,
-                "withoutPrice", withoutPrice,
-                "pendingInspections", pendingInspections
+                "totalActive", c.totalActive(),
+                "readyToSell", c.readyToSell(),
+                "needInspection", c.needInspection(),
+                "errorCount", c.errorCount(),
+                "withoutPrice", c.withoutPrice(),
+                "pendingInspections", c.pendingInspections()
         )));
     }
 
     @GetMapping("/priorities")
+    @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<Map<String, Object>>> getPriorities() {
-        long pendingInspections = inspectionRequestRepo.countByStatus(InspectionRequestStatus.OPEN);
-        long withoutPrice = activeInventoryRepo.countWithoutPrice();
-        long errorCount = dataIssueRepo.countByStatusIn(List.of(IssueStatus.OPEN, IssueStatus.IN_REVIEW));
+        DashboardCounts c = getCountsSnapshot();
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "p0_data_errors", errorCount,
-            "p1_pending_inspections", pendingInspections,
-            "p2_without_price", withoutPrice
+            "p0_data_errors", c.errorCount(),
+            "p1_pending_inspections", c.pendingInspections(),
+            "p2_without_price", c.withoutPrice()
         )));
     }
 
     @GetMapping("/recent-activity")
+    @Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<List<EventLog>>> getRecentActivity() {
         List<EventLog> logs = eventLogRepo.findAllByOrderByEventAtDesc(PageRequest.of(0, 20)).getContent();
         return ResponseEntity.ok(ApiResponse.ok(logs));

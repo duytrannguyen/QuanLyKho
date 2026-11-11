@@ -2,12 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
-  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench
+  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench, RotateCcw, Lock
 } from 'lucide-react';
 import { apiSuaChua } from '../../api';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { getCleanWarrantyType } from '../../utils/dinh_dang';
 
-export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery }) {
+export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery, onReturnOrder }) {
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canManageShip = hasPermission('SHIP_MANAGE');
+  const canReturnOrder = hasPermission('ORDER_RETURN');
+  const canRepair = hasPermission('SERVICE_REPAIR');
   const [copiedKey, setCopiedKey] = useState(null);
   const [repairHistory, setRepairHistory] = useState([]);
   const [isLoadingRepairs, setIsLoadingRepairs] = useState(false);
@@ -426,6 +433,33 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               </div>
             </div>
 
+            {/* Thông báo trạng thái hiện tại của chiếc máy nếu đã thu lại hoặc chuyển chu kỳ */}
+            {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.currentMachineStateText) && (
+              <div className="alert alert-info border border-info border-opacity-25 d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between p-3 rounded-3 mb-4 shadow-sm gap-2">
+                <div className="d-flex align-items-center gap-2">
+                  <Package className="text-primary flex-shrink-0" size={22} />
+                  <div>
+                    <div className="fw-bold text-dark">
+                      Trạng thái hiện tại của chiếc máy này:
+                    </div>
+                    <div className="small text-secondary">
+                      {order.currentMachineStateText || (order.isInStockNow ? 'Máy đang trong kho' : 'Đã thu lại')}
+                      {order.currentCycleId && (
+                        <span className="ms-2 font-monospace text-muted">
+                          (Chu kỳ: {order.currentCycleId})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {order.isInStockNow && (
+                  <span className="badge bg-primary px-3 py-2 rounded-pill text-white fw-medium">
+                    Đang có sẵn trong kho
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="row g-4">
               
               {/* Left Column: Khách hàng & Thanh toán */}
@@ -525,9 +559,11 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                                   type="button"
                                   className="btn btn-sm btn-success w-100 fw-bold d-flex align-items-center justify-content-center gap-2 py-2 shadow-sm rounded-3 text-white"
                                   onClick={() => onConfirmDelivery(order)}
+                                  title={canManageShip ? 'Xác nhận khách đã nhận & Kích hoạt BH' : 'Yêu cầu quyền: Quản lý đơn ship'}
                                 >
                                   <Truck size={15} />
                                   <span>Xác nhận khách đã nhận & Kích hoạt BH</span>
+                                  {!canManageShip && <Lock size={13} className="text-warning" />}
                                 </button>
                               )}
                             </div>
@@ -910,16 +946,30 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               >
                 Đóng
               </button>
+              {!order.isInStock && !order.isVoided && onReturnOrder && (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm fw-semibold"
+                  onClick={() => onReturnOrder(order)}
+                  title={canReturnOrder ? 'Hoàn trả / Thu hồi máy về kho' : 'Yêu cầu quyền: Hoàn hàng & Trả máy'}
+                >
+                  <RotateCcw size={15} />
+                  <span>Hoàn trả về kho</span>
+                  {!canReturnOrder && <Lock size={12} className="text-warning" />}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
                 onClick={() => {
+                  if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
                   window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
                 }}
-                title="Tạo phiếu dịch vụ tiếp nhận bảo hành máy này"
+                title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
               >
                 <ShieldCheck size={16} />
                 <span>Tiếp nhận Bảo hành (RMA)</span>
+                {!canRepair && <Lock size={12} className="text-danger" />}
               </button>
               <button 
                 type="button" 

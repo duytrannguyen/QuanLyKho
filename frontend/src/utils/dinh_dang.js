@@ -74,7 +74,19 @@ export const getCleanWarrantyType = (warrantyPeriod) => {
 export const tinhNgayHetHanBaoHanh = (baseDate, warrantyText) => {
   if (!warrantyText) return '';
   const cleanText = warrantyText.trim().toLowerCase();
-  if (cleanText === 'không bh' || cleanText === 'không bảo hành' || cleanText === '0' || cleanText === '0 tháng' || cleanText === '0 ngày') {
+  if (
+    cleanText.includes('không bh') || 
+    cleanText.includes('không bảo hành') || 
+    cleanText.includes('khong bh') || 
+    cleanText.includes('từ chối') || 
+    cleanText.includes('tu choi') || 
+    cleanText.includes('theo bh') || 
+    cleanText.includes('theo bảo hành') || 
+    cleanText === '0' || 
+    cleanText === '0 tháng' || 
+    cleanText === '0 ngày' ||
+    cleanText === 'none'
+  ) {
     return '';
   }
 

@@ -2,16 +2,21 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Truck, Clock, CheckCircle2, Search, RotateCcw, Edit3, Eye,
   Calendar, ShieldCheck, AlertCircle, FileText, User, Phone,
-  Hash, DollarSign, Package, Check, RefreshCw, ChevronLeft, ChevronRight
+  Hash, DollarSign, Package, Check, RefreshCw, ChevronLeft, ChevronRight, Lock
 } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import ModalChiTietDonHang from '../KiemTraBaoHanh/ModalChiTietDonHang';
 import ModalSuaDonMay from '../KiemTraBaoHanh/ModalSuaDonMay';
 import { formatCurrency, formatDate, getCleanWarrantyType, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangDonShip() {
   const { showToast } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canConfirmShip = hasPermission('SHIP_MANAGE');
+  const canEditOrder = hasPermission('ORDER_EDIT');
+  const canReturnOrder = hasPermission('ORDER_RETURN');
 
   // Active Tab: 'PENDING' (Chờ giao) | 'DELIVERED' (Đã hoàn thành)
   const [activeTab, setActiveTab] = useState('PENDING');
@@ -21,6 +26,14 @@ export default function TrangDonShip() {
   const [summary, setSummary] = useState({ total: 0, pending: 0, delivered: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,7 +61,7 @@ export default function TrangDonShip() {
       const statusParam = activeTab === 'PENDING' ? 'pending' : 'delivered';
       const res = await apiBaoHanh.getShippingOrders({
         status: statusParam,
-        keyword: searchTerm.trim() || undefined
+        keyword: debouncedSearchTerm.trim() || undefined
       });
       const data = res.data?.data || res.data || {};
       setOrders(data.orders || []);
@@ -63,7 +76,7 @@ export default function TrangDonShip() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, searchTerm, showToast]);
+  }, [activeTab, debouncedSearchTerm, showToast]);
 
   useEffect(() => {
     fetchOrders();
@@ -80,6 +93,7 @@ export default function TrangDonShip() {
 
   // Xử lý xác nhận khách đã nhận hàng
   const handleOpenConfirm = (order) => {
+    if (!requirePermission('SHIP_MANAGE', showToast, 'Xác nhận giao đơn ship thành công')) return;
     setConfirmingOrder(order);
     setConfirmDeliveryDate(getTodayDateString());
   };
@@ -108,6 +122,7 @@ export default function TrangDonShip() {
 
   // Xử lý hoàn hàng / hủy giao
   const handleOpenReturn = (order) => {
+    if (!requirePermission('ORDER_RETURN', showToast, 'Đổi trả & Hoàn đơn hàng ship về kho')) return;
     setReturningOrder(order);
     setReturnReason('Khách từ chối nhận hàng / Hoàn hàng về kho');
     setReturnState('READY');
@@ -497,11 +512,11 @@ export default function TrangDonShip() {
                                   </button>
                                   <button
                                     type="button"
-                                    className="btn btn-sm btn-outline-danger py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill"
+                                    className={`btn btn-sm py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill ${canReturnOrder ? 'btn-outline-danger' : 'btn-light text-muted border'}`}
                                     onClick={() => handleOpenReturn(order)}
-                                    title="Khách từ chối nhận hàng / Hủy giao / Hoàn hàng về kho"
+                                    title={canReturnOrder ? 'Khách từ chối nhận hàng / Hủy giao / Hoàn hàng về kho' : 'Cần quyền: Đổi trả & Hoàn đơn hàng về kho (ORDER_RETURN)'}
                                   >
-                                    <RotateCcw size={13} />
+                                    {canReturnOrder ? <RotateCcw size={13} /> : <Lock size={12} />}
                                     <span>Hoàn hàng</span>
                                   </button>
                                 </>
@@ -509,11 +524,14 @@ export default function TrangDonShip() {
 
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-primary py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill"
-                                onClick={() => setEditingOrder(order)}
-                                title="Sửa thông tin đơn máy"
+                                className={`btn btn-sm py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill ${canEditOrder ? 'btn-outline-primary' : 'btn-light text-muted border'}`}
+                                onClick={() => {
+                                  if (!requirePermission('ORDER_EDIT', showToast, 'Sửa hóa đơn & đơn hàng đã xuất')) return;
+                                  setEditingOrder(order);
+                                }}
+                                title={canEditOrder ? 'Sửa thông tin đơn máy' : 'Cần quyền: Sửa hóa đơn & Đơn hàng đã xuất (ORDER_EDIT)'}
                               >
-                                <Edit3 size={13} />
+                                {canEditOrder ? <Edit3 size={13} /> : <Lock size={12} />}
                                 <span>Sửa</span>
                               </button>
                             </div>

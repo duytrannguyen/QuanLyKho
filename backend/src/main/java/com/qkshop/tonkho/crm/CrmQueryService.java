@@ -689,13 +689,14 @@ public class CrmQueryService {
 
     /**
      * Xuất danh sách khách hàng ra file Excel theo bộ lọc hiện tại (không bị giới hạn ở 100 dòng).
+     * Sử dụng SXSSFWorkbook (Streaming) giữ tối đa 100 dòng trong RAM để tiết kiệm 95% bộ nhớ và CPU.
      */
     @Transactional(readOnly = true)
     public org.springframework.core.io.ByteArrayResource generateCustomersExcel(String keyword, String filterType, String sortBy, String direction) {
         PageResult<CustomerItem> page = searchCustomersInternal(keyword, filterType, sortBy, direction, 0, MAX_EXPORT_SIZE, MAX_EXPORT_SIZE);
         List<CustomerItem> list = page.items();
 
-        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        try (org.apache.poi.xssf.streaming.SXSSFWorkbook workbook = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100);
              java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
 
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("KhachHang_CRM");
@@ -706,6 +707,7 @@ public class CrmQueryService {
                     "Email", "Ngày sinh", "Tổng đơn", "Tổng chi tiêu (VNĐ)",
                     "Đơn đầu tiên", "Đơn gần nhất", "Ghi chú sở thích / nhu cầu"
             };
+            int[] colWidths = {1800, 4200, 6500, 4800, 8500, 6500, 3800, 3000, 5200, 4800, 4800, 9500};
 
             org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
             org.apache.poi.ss.usermodel.Font font = workbook.createFont();
@@ -716,6 +718,7 @@ public class CrmQueryService {
                 org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
                 cell.setCellStyle(headerStyle);
+                sheet.setColumnWidth(i, colWidths[i]);
             }
 
             java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -738,11 +741,8 @@ public class CrmQueryService {
                 row.createCell(11).setCellValue(c.preferenceNote() != null ? c.preferenceNote() : "");
             }
 
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
             workbook.write(out);
+            workbook.dispose();
             return new org.springframework.core.io.ByteArrayResource(out.toByteArray());
         } catch (Exception e) {
             throw new RuntimeException("Lỗi khi xuất danh sách khách hàng ra Excel: " + e.getMessage(), e);

@@ -1,5 +1,7 @@
 # 🏬 QKShop Warehouse Management System (WMS)
-> Hệ thống quản lý kho máy tính, phụ kiện và theo dõi vòng đời thiết bị theo Serial/IMEI.
+> Hệ thống quản lý kho máy tính, phụ kiện, linh kiện và theo dõi vòng đời thiết bị theo Serial/IMEI.
+
+---
 
 ## 📌 Tính Năng Cốt Lõi
 
@@ -13,14 +15,16 @@
 
 ---
 
-## 🛠️ Công Nghệ Sử Dụng
+## 🛠️ Công Nghệ & Môi Trường Tối Ưu
 
-| Thành phần | Công nghệ chính |
+| Thành phần | Công nghệ & Phiên bản khuyên dùng |
 |:---|:---|
-| **Backend** | Java 21, Spring Boot 3.3.5, Spring Data JPA, Spring Security (JWT), JasperReports |
+| **Backend** | Java 21 LTS (`eclipse-temurin:21-jre-jammy`, Virtual Threads + G1GC đàn hồi), Spring Boot 3.3.5, Spring Data JPA, Spring Security (JWT), JasperReports |
 | **Frontend** | React 19, Vite 6, Bootstrap 5.3, Lucide Icons, Recharts, Axios |
-| **Cơ sở dữ liệu** | MySQL 8.0 (InnoDB, UTF8MB4) |
-| **Triển khai** | Docker, Docker Compose, Nginx Reverse Proxy (Alpine) |
+| **Cơ sở dữ liệu** | MySQL 8.0 LTS (`mysql:8.0`, InnoDB tối ưu RAM, UTF8MB4) |
+| **Docker & Proxy** | **Docker Engine CE `v27+ / v28+` (Stable)** + **Docker Compose V2 (`v2.32+`)**, Nginx Reverse Proxy (`nginx:alpine` ~25MB) |
+| **Công cụ giải nén** | **VPS Linux:** `unzip`, `zip`, `p7zip-full` (`7z`), `tar` \| **Windows:** `7-Zip v24.09+` / `NanaZip` |
+| **Cấu hình VPS chuẩn** | **1 – 2 vCPU / 2 GB RAM vật lý + 4 GB Swap (RAM ảo) / 20–30 GB SSD** (Ubuntu 24.04 LTS) |
 
 ---
 
@@ -28,42 +32,53 @@
 
 ```text
 QuanLyKho/
-├── backend/          # Mã nguồn Backend (Spring Boot 3 / Java 21)
+├── backend/          # Mã nguồn Backend (Spring Boot 3.3.5 / Java 21)
 ├── frontend/         # Mã nguồn Frontend (React 19 / Vite 6)
-├── database/         # Cơ sở dữ liệu: Schema tạo bảng & Dữ liệu mặc định
-├── deploy/           # Trọn gói triển khai Docker & file nén ZIP chạy VPS
-├── docs/             # Toàn bộ tài liệu chi tiết (Kiến trúc, API, HDSD, Deploy)
+├── database/         # Cơ sở dữ liệu: Schema tạo bảng & hướng dẫn sao lưu
+├── deploy/           # Trọn gói triển khai Docker & file nén qkshop-vps-deploy.zip
+├── docs/             # Tài liệu tổng hợp hệ thống (Kiến trúc, Nghiệp vụ, HDSD, VPS)
 ├── .env.example      # Mẫu biến môi trường an toàn
-└── README.md         # Tài liệu tổng quan này
+└── README.md         # Tài liệu tổng quan dự án
 ```
 
 ---
 
 ## ⚡ Hướng Dẫn Khởi Chạy Nhanh
 
-### 1. Triển khai nhanh trên Server VPS (Docker)
-Trọn gói chạy VPS đã được đóng gói sẵn trong thư mục [`deploy/`](./deploy). Trên server bạn chỉ cần:
+### 1. Triển khai trên Server VPS (Docker)
+Trọn gói chạy VPS đã được đóng gói sẵn trong thư mục [`deploy/`](./deploy) và file nén [`deploy/qkshop-vps-deploy.zip`](./deploy/qkshop-vps-deploy.zip).  
+👉 *Xem hướng dẫn chi tiết từng bước tại: **[`deploy/HUONG_DAN_VPS.md`](./deploy/HUONG_DAN_VPS.md)***.
 
+**Bước chuẩn bị (Chỉ chạy 1 lần nếu VPS Ubuntu 24.04 mới tinh):**
 ```bash
-# 1. Chuyển vào thư mục deploy
-cd deploy
+# 1. Cài đặt công cụ giải nén (unzip, 7z, tar) & Docker Engine CE + Compose V2
+sudo apt-get update && sudo apt-get install -y unzip zip tar p7zip-full curl ca-certificates gnupg nano
+curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER
 
-# 2. Tạo file cấu hình môi trường
+# 2. Tạo 4 GB RAM ảo (Swap) trên SSD chống tràn bộ nhớ
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo sysctl vm.swappiness=10 vm.vfs_cache_pressure=50
+printf "vm.swappiness=10\nvm.vfs_cache_pressure=50\n" | sudo tee -a /etc/sysctl.conf
+```
+
+**3 Bước giải nén & khởi chạy hệ thống:**
+```bash
+# Bước 1: Giải nén gói cài đặt vào /opt/qkshop
+sudo mkdir -p /opt/qkshop && sudo unzip -o qkshop-vps-deploy.zip -d /opt/qkshop && cd /opt/qkshop
+
+# Bước 2: Tạo file cấu hình môi trường
 cp .env.example .env
 
-# 3. Khởi chạy toàn bộ hệ thống (MySQL tự nạp database & tạo admin)
+# Bước 3: Khởi chạy toàn bộ hệ thống (MySQL + Backend + Frontend Nginx)
 docker compose up -d --build
 ```
-*Truy cập:* `http://<IP_VPS>` (Cổng 80)
+- **Truy cập Web:** `http://<IP_VPS>` (Cổng 80) — Tổng RAM tiêu thụ thực tế chỉ **~850 MB – 1.25 GB**.
 
 ---
 
 ### 2. Chạy ở môi trường lập trình (Local Dev)
 
-**Cách nhanh nhất (Windows):**  
-Chỉ cần nhấp đúp chuột vào file: [`deploy/scripts/run-local.bat`](./deploy/scripts/run-local.bat) để tự động mở cả Backend và Frontend.
-
-**Khởi chạy thủ công bằng lệnh:**
 ```bash
 # Terminal 1: Chạy Backend (Cổng 8080)
 cd backend && mvn spring-boot:run
@@ -74,22 +89,19 @@ cd frontend && npm install && npm run dev
 
 ---
 
-## 🔑 Tài Khoản Quản Trị Mặc Định
+## 🔑 Tài Khoản Quản Trị Hệ Thống
 
-Khi cài đặt mới, hệ thống tự động khởi tạo tài khoản Super Admin:
-- **Tên đăng nhập:** `admin`
-- **Mật khẩu:** `admin123`
-
-> ⚠️ *Lưu ý:* Sau khi đăng nhập lần đầu, hãy vào **Cài Đặt Hệ Thống -> Đổi Mật Khẩu** để đảm bảo an toàn.
+- Trong gói cơ sở dữ liệu khởi tạo (`deploy/database/init/01_qkshop_tonkho_full.sql`) đã có sẵn tài khoản **Quản trị viên (`ADMIN`)** cùng toàn bộ dữ liệu phân quyền của cửa hàng.
+- Khi triển khai lên VPS, hệ thống sử dụng trực tiếp tài khoản quản trị sẵn có trong CSDL, **không cần cấu hình hay tạo thêm tài khoản admin mặc định mới**.
 
 ---
 
 ## 📚 Tài Liệu Tổng Hợp Hệ Thống (Docs)
 
-Toàn bộ giải thích luồng xử lý nghiệp vụ, hướng dẫn sử dụng 24 màn hình và cẩm nang vận hành VPS được tổng hợp duy nhất tại thư mục [`docs/`](./docs):
+Toàn bộ giải thích luồng xử lý nghiệp vụ, hướng dẫn sử dụng 24 màn hình và cẩm nang vận hành VPS được tổng hợp tại thư mục [`docs/`](./docs):
 
-- 📕 **[Bản PDF Trực Quan (docs/TONG_HOP_HE_THONG.pdf)](./docs/TONG_HOP_HE_THONG.pdf):** Tài liệu PDF trình bày màu kèm sơ đồ luồng xử lý trực quan, dễ đọc và in ấn.
-- 📘 **[Bản Markdown (docs/TONG_HOP_HE_THONG.md)](./docs/TONG_HOP_HE_THONG.md):** Bản gốc Markdown để xem trực tiếp trên trình soạn thảo code.
+- 📘 **[Bản Markdown (`docs/TONG_HOP_HE_THONG.md`)](./docs/TONG_HOP_HE_THONG.md):** Bản tài liệu gốc đầy đủ sơ đồ luồng nghiệp vụ, hướng dẫn 24 màn hình và vận hành VPS.
+- 📕 **[Bản PDF Trực Quan (`docs/TONG_HOP_HE_THONG.pdf`)](./docs/TONG_HOP_HE_THONG.pdf):** Tài liệu PDF trình bày màu trực quan, dễ đọc và in ấn.
 
 ---
 

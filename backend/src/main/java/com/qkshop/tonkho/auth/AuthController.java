@@ -38,21 +38,22 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        String username = request.getUsername().trim();
+        String loginIdentifier = request.getUsername().trim();
 
-        // 1. Kiểm tra tài khoản tồn tại và trạng thái kích hoạt trước khi xác thực
-        User user = userRepository.findByUsername(username)
+        // 1. Kiểm tra tài khoản tồn tại (ưu tiên khớp chính xác username trước, sau đó mới tìm theo email để tránh lỗi trùng email)
+        User user = userRepository.findByUsername(loginIdentifier)
+                .or(() -> userRepository.findFirstByEmailOrderByIdDesc(loginIdentifier))
                 .orElseThrow(() -> new BadCredentialsException("Tên đăng nhập hoặc mật khẩu không chính xác."));
 
         if (Boolean.FALSE.equals(user.getIsActive())) {
-            log.warn("Cố gắng đăng nhập vào tài khoản đã bị khóa: {}", username);
+            log.warn("Cố gắng đăng nhập vào tài khoản đã bị khóa: {}", loginIdentifier);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.error("ACCOUNT_LOCKED", "Tài khoản này đã bị khóa. Vui lòng liên hệ với quản trị viên hệ thống."));
         }
 
-        // 2. Xác thực credentials qua AuthenticationManager
+        // 2. Xác thực credentials qua AuthenticationManager với username thực của user
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(username, request.getPassword())
+                new UsernamePasswordAuthenticationToken(user.getUsername(), request.getPassword())
         );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -76,7 +77,7 @@ public class AuthController {
                 .expiresInMs(jwtTokenProvider.getExpirationMs())
                 .build();
 
-        log.info("Người dùng '{}' đăng nhập thành công. Vai trò: {}", username, user.getRole());
+        log.info("Người dùng '{}' đăng nhập thành công. Vai trò: {}", user.getUsername(), user.getRole());
         return ResponseEntity.ok(ApiResponse.okWithMessage("Đăng nhập thành công", response));
     }
 

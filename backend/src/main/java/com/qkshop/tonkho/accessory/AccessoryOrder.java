@@ -9,7 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "accessory_orders")
+@Table(name = "accessory_orders", indexes = {
+    @Index(name = "idx_ao_sale_date", columnList = "sale_date"),
+    @Index(name = "idx_ao_phone", columnList = "customer_phone")
+})
 @Getter
 @Setter
 @NoArgsConstructor

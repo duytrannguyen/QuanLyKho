@@ -12,10 +12,10 @@ import ModalXemQuyen from './ModalXemQuyen';
 
 export default function TrangCaiDatHeThong() {
   const { showToast } = useToast();
-  const { user: currentUser, hasPermission } = useAuth();
+  const { user: currentUser, hasPermission, refreshUser } = useAuth();
 
   const canManageSystem = hasPermission('SYSTEM_MANAGE');
-  const canManageUsers = hasPermission('USER_MANAGE') || canManageSystem;
+  const canManageUsers = hasPermission('USER_MANAGE');
 
   const [activeTab, setActiveTab] = useState(() => {
     return canManageSystem ? 'general' : 'users';
@@ -84,11 +84,11 @@ export default function TrangCaiDatHeThong() {
   const handleSaveConfig = async (keys) => {
     setSaving(true);
     try {
-      for (const key of keys) {
-        if (config[key] !== undefined) {
-          await systemApi.updateConfig(key, config[key]);
-        }
-      }
+      await Promise.all(
+        keys
+          .filter(key => config[key] !== undefined)
+          .map(key => systemApi.updateConfig(key, config[key]))
+      );
       showToast('Đã lưu cấu hình thành công!', 'success');
     } catch (err) {
       showToast('Lỗi lưu cấu hình: ' + (err.userMessage || err.message || 'Lỗi không xác định'), 'danger');
@@ -502,7 +502,10 @@ export default function TrangCaiDatHeThong() {
           setUserModalOpen(false);
           setEditingUser(null);
         }}
-        onSuccess={loadUsers}
+        onSuccess={() => {
+          loadUsers();
+          refreshUser();
+        }}
         editingUser={editingUser}
         availablePermissions={availablePermissions}
         showToast={showToast}

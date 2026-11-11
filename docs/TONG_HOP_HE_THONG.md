@@ -288,11 +288,66 @@ Thanh điều hướng bên trái được chia thành **6 nhóm nghiệp vụ**
 
 # PHẦN IV: HƯỚNG DẪN TRIỂN KHAI, CẬP NHẬT & SAO LƯU TRÊN SERVER / VPS
 
-## 4.1. Khởi chạy nhanh trên Server VPS chỉ với 3 bước
-Thư mục `deploy/` đã đóng gói sẵn toàn bộ hệ thống. Trên VPS Ubuntu đã cài Docker, bạn chỉ cần chạy:
+## 4.1. Cấu Hình VPS & Công Cụ Tối Ưu Khuyên Dùng
 
+| Hạng mục | Cấu hình / Phiên bản tối ưu | Ghi chú chi tiết |
+|:---|:---|:---|
+| **Phần cứng VPS** | **1 – 2 vCPU / 2 GB RAM / 20–30 GB SSD** | Kết hợp **4 GB Swap (RAM ảo)** trên SSD = **6 GB tổng bộ nhớ**. |
+| **Hệ điều hành** | **Ubuntu 24.04 LTS** *(hoặc 22.04 LTS)* | Tương thích tốt cả bản chuẩn và bản Minimal. |
+| **Docker trên VPS** | **Docker Engine CE `v27+ / v28+`** + **Compose V2** | Viết bằng Go nguyên bản, hỗ trợ chuẩn `cgroup v2` & BuildKit. |
+| **Docker Local** | **Docker Desktop `v4.36+` (WSL 2 Backend)** | Tự động thu hồi RAM (`autoMemoryReclaim`) trên Windows 10/11. |
+| **Công cụ giải nén** | **VPS Linux:** `unzip`, `zip`, `p7zip-full` (`7z`), `tar`<br>**Windows:** `7-Zip v24.09+` / `NanaZip` | Gói `qkshop-vps-deploy.zip` đã chuẩn hóa đường dẫn Linux (`/`). |
+
+**Thông số 3 Container trong gói triển khai:**
+- **`qkshop_db` (`mysql:8.0` LTS — trần `550 MB RAM`):** `innodb_buffer_pool_size=256M`, tắt `performance_schema`, `skip-name-resolve`, tự dọn binlog sau 3 ngày.
+- **`qkshop_backend` (`eclipse-temurin:21-jre-jammy` — trần `850 MB RAM`):** Java 21 Virtual Threads, G1GC tự co giãn trả RAM về OS, kèm `fontconfig` & font `DejaVu` xuất PDF/Excel.
+- **`qkshop_frontend` (`nginx:alpine` ~25MB — trần `80 MB RAM`):** Nén Gzip mức 6, `keepalive 32` kết nối nội bộ tới Backend, cache tĩnh `/assets/` 1 năm.
+
+---
+
+## 4.2. Chuẩn Bị VPS Mới & Khởi Chạy Nhanh Chỉ Với 3 Bước
+
+### Bước 0: Thiết lập VPS Ubuntu mới tinh (Chỉ làm 1 lần đầu tiên)
 ```bash
-# Bước 1: Di chuyển vào thư mục chứa bộ cài trên VPS
+# 1. Cài đặt bộ giải nén (unzip, 7z, tar) & tiện ích cơ bản
+sudo apt-get update
+sudo apt-get install -y unzip zip tar p7zip-full curl ca-certificates gnupg nano
+
+# 2. Cài đặt Docker Engine CE & Docker Compose V2 chính thức
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+
+# 3. Cấu hình tối ưu Docker Daemon (overlay2, live-restore, tự nén & xoay vòng log)
+sudo mkdir -p /etc/docker
+cat << 'EOF' | sudo tee /etc/docker/daemon.json
+{
+  "storage-driver": "overlay2",
+  "live-restore": true,
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3", "compress": "true" },
+  "default-ulimits": { "nofile": { "Name": "nofile", "Hard": 65536, "Soft": 65536 } }
+}
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart docker
+
+# 4. Tạo 4 GB Swap (RAM ảo trên SSD kết hợp 2 GB RAM vật lý = 6 GB tổng bộ nhớ)
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo sysctl vm.swappiness=10 vm.vfs_cache_pressure=50
+printf "vm.swappiness=10\nvm.vfs_cache_pressure=50\n" | sudo tee -a /etc/sysctl.conf
+
+# 5. Kiểm tra bộ nhớ RAM & Swap
+free -h
+```
+
+### 3 Bước giải nén & khởi chạy gói `qkshop-vps-deploy.zip`
+```bash
+# Bước 1: Giải nén gói cài đặt vào /opt/qkshop
+sudo mkdir -p /opt/qkshop
+sudo unzip -o qkshop-vps-deploy.zip -d /opt/qkshop
 cd /opt/qkshop
 
 # Bước 2: Tạo file cấu hình môi trường từ file mẫu
@@ -302,26 +357,31 @@ cp .env.example .env
 docker compose up -d --build
 ```
 - **Truy cập Web:** `http://<IP_CỦA_VPS>` (Cổng 80 mặc định).
-- **Tài khoản Admin mặc định:** `admin` / `admin123` *(Hãy đổi mật khẩu ngay sau lần đăng nhập đầu tiên)*.
+- **Tài khoản Quản trị viên:** Sử dụng trực tiếp tài khoản Quản trị đã có sẵn trong CSDL khởi tạo (`database/init/01_qkshop_tonkho_full.sql`) — hệ thống giữ nguyên tài khoản quản trị sẵn có, **không cần tạo thêm tài khoản admin mặc định mới**.
 
-## 4.2. Cập nhật phiên bản mới (Không mất dữ liệu)
-Khi có bản cập nhật giao diện (`frontend/dist/`) hoặc Backend (`tonkho-2.0.0.jar`), bạn chỉ cần copy đè file mới lên VPS và chạy:
+---
+
+## 4.3. Cập Nhật Phiên Bản Mới (Không Mất Dữ Liệu)
+Khi có bản cập nhật giao diện (`frontend/dist/`) hoặc Backend (`tonkho-2.0.0.jar`), bạn chỉ cần giải nén/copy đè file mới lên `/opt/qkshop` và chạy:
 ```bash
-# Cập nhật lại container mà không làm ảnh hưởng dữ liệu MySQL
 docker compose up -d --build
 ```
 *(Sau đó nhấn `Ctrl + Shift + R` trên trình duyệt để tải giao diện mới).*
 
-## 4.3. Sao lưu (Backup) & Khôi phục (Restore) Cơ sở dữ liệu
-- **Sao lưu toàn bộ dữ liệu ra file `.sql`:**
+---
+
+## 4.4. Sao Lưu (Backup) & Khôi Phục (Restore) Cơ Sở Dữ Liệu
+- **Sao lưu & nén trực tiếp ra file `.sql.gz` (Tiết kiệm 85% dung lượng):**
   ```bash
-  docker exec qkshop_db mysqldump -uroot -pqkshop123@@ qkshop_tonkho > backup_qkshop.sql
+  docker exec qkshop_db mysqldump -uroot -p"$(grep '^DB_PASSWORD=' .env | cut -d '=' -f2-)" \
+    --single-transaction --routines --triggers qkshop_tonkho | gzip > backup_qkshop_$(date +%Y%m%d).sql.gz
   ```
-- **Khôi phục dữ liệu từ file `.sql`:**
+- **Khôi phục dữ liệu từ file nén `.sql.gz`:**
   ```bash
-  docker exec -i qkshop_db mysql -uroot -pqkshop123@@ qkshop_tonkho < backup_qkshop.sql
+  gunzip < backup_qkshop_YYYYMMDD.sql.gz | docker exec -i qkshop_db \
+    mysql -uroot -p"$(grep '^DB_PASSWORD=' .env | cut -d '=' -f2-)" qkshop_tonkho
   ```
-> ⚠️ **Lưu ý tối quan trọng:** Tuyệt đối **KHÔNG** chạy lệnh `docker compose down -v` vì cờ `-v` sẽ xóa ổ đĩa dữ liệu MySQL. Chỉ dùng `docker compose stop`, `docker compose start` hoặc `docker compose restart`.
+> ⚠️ **Lưu ý tối quan trọng:** Tuyệt đối **KHÔNG** chạy lệnh `docker compose down -v` vì cờ `-v` sẽ xóa ổ đĩa dữ liệu MySQL (`mysql_data`). Chỉ dùng `docker compose stop`, `docker compose start` hoặc `docker compose restart`.
 
 ---
 

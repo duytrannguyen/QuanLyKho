@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import ThanhBen from './ThanhBen';
 import PhanDau from './PhanDau';
@@ -6,19 +6,22 @@ import TaiToanCuc from '../TaiToanCuc';
 
 export default function BoCucChinh() {
   const [collapsed, setCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 992 : false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 992;
-      setIsMobile(mobile);
-      if (!mobile) setMobileOpen(false);
+    const mql = window.matchMedia('(max-width: 991.98px)');
+    const handleMediaChange = (e) => {
+      setIsMobile(e.matches);
+      if (!e.matches) setMobileOpen(false);
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    setIsMobile(mql.matches);
+    mql.addEventListener('change', handleMediaChange);
+    return () => mql.removeEventListener('change', handleMediaChange);
   }, []);
+
+  const handleToggleSidebar = useCallback(() => setCollapsed(prev => !prev), []);
+  const handleOpenMobileMenu = useCallback(() => setMobileOpen(true), []);
 
   const sidebarWidth = collapsed ? '72px' : '240px';
   const marginGap = isMobile ? '0px' : '0px';
@@ -28,7 +31,7 @@ export default function BoCucChinh() {
     <div className="d-flex" style={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
       <ThanhBen 
         collapsed={collapsed} 
-        onToggle={() => setCollapsed(!collapsed)} 
+        onToggle={handleToggleSidebar} 
         width={sidebarWidth} 
         isMobile={isMobile}
         mobileOpen={mobileOpen}
@@ -41,7 +44,7 @@ export default function BoCucChinh() {
           sidebarWidth={sidebarWidth} 
           marginGap={marginGap}
           isMobile={isMobile}
-          onOpenMenu={() => setMobileOpen(true)}
+          onOpenMenu={handleOpenMobileMenu}
         />
         
         <main className="flex-grow-1 position-relative" style={{ paddingTop: '64px' }}>

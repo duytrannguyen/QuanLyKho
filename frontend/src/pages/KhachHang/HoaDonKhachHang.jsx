@@ -5,9 +5,11 @@ import {
   CheckCircle2, FileText, Package, User, Eye,
   MessageSquare, PhoneCall, Edit3, MapPin, Mail,
   Sparkles, Clock, Copy, Check, Columns, Maximize2,
-  Crown, Star, UserCheck, ShieldAlert, CheckCheck, RotateCcw, XCircle
+  Crown, Star, UserCheck, ShieldAlert, CheckCheck, RotateCcw, XCircle, Lock
 } from 'lucide-react';
 import { crmApi } from '../../api';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
 import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
@@ -261,6 +263,10 @@ export const getCustomerTier = (totalSpent = 0, totalOrders = 0) => {
 };
 
 export default function HoaDonKhachHang({ customer, onBack, onCustomerUpdated }) {
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canManage = hasPermission('CRM_MANAGE');
+  const canCare = hasPermission('CRM_CARE|CRM_MANAGE');
   const [currentCustomer, setCurrentCustomer] = useState(customer);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
@@ -345,6 +351,7 @@ export default function HoaDonKhachHang({ customer, onBack, onCustomerUpdated })
   };
 
   const handleCareForOrder = (order) => {
+    if (!requirePermission('CRM_CARE|CRM_MANAGE', showToast, 'Ghi nhận chăm sóc khách hàng (CSKH)')) return;
     setSelectedOrderForCare(order);
     if (viewMode === 'orders') {
       setViewMode('split');
@@ -533,10 +540,14 @@ export default function HoaDonKhachHang({ customer, onBack, onCustomerUpdated })
                         type="button"
                         className="btn btn-sm btn-light border text-primary rounded-pill d-inline-flex align-items-center gap-1 py-0.5 px-2 hover-primary flex-shrink-0"
                         style={{ fontSize: '0.75rem' }}
-                        onClick={() => setIsEditingCustomer(true)}
-                        title="Chỉnh sửa thông tin khách"
+                        onClick={() => {
+                          if (!requirePermission('CRM_MANAGE', showToast, 'Chỉnh sửa thông tin hồ sơ khách hàng')) return;
+                          setIsEditingCustomer(true);
+                        }}
+                        title={canManage ? 'Chỉnh sửa thông tin khách' : 'Yêu cầu quyền: Quản trị dữ liệu CRM'}
                       >
                         <Edit3 size={12} /> <span>Sửa</span>
+                        {!canManage && <Lock size={10} className="text-warning" />}
                       </button>
                     </div>
 
@@ -1079,10 +1090,11 @@ export default function HoaDonKhachHang({ customer, onBack, onCustomerUpdated })
                                 }`}
                                 style={{ fontSize: '0.75rem' }}
                                 onClick={() => handleCareForOrder(o)}
-                                title="Ghi chú chăm sóc riêng cho hóa đơn này"
+                                title={canCare ? 'Ghi chú chăm sóc riêng cho hóa đơn này' : 'Yêu cầu quyền: Chăm sóc khách hàng (CSKH)'}
                               >
                                 <MessageSquare size={11} />
                                 <span>CSKH</span>
+                                {!canCare && <Lock size={10} className="text-warning" />}
                               </button>
 
                               {/* Nút Xem chi tiết */}

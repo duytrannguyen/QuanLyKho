@@ -33,7 +33,10 @@ public class InspectionController {
     public ResponseEntity<ApiResponse<List<InspectionDTO>>> getInspections(
             @RequestParam(required = false) String status) {
         List<InspectionRequest> requests = inspectionService.getActiveRequests(status);
-        List<InspectionDTO> result = requests.stream().map(this::toDTO).collect(Collectors.toList());
+        java.util.Map<String, ActiveInventory> inventoryMap = preloadInventories(requests);
+        List<InspectionDTO> result = requests.stream()
+                .map(req -> toDTO(req, inventoryMap.get(req.getCycleId())))
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -44,12 +47,14 @@ public class InspectionController {
             @RequestParam(defaultValue = "20") int size) {
         Page<InspectionRequest> paged = inspectionService.getAllRequests(
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-        Page<InspectionDTO> dtoPaged = paged.map(this::toDTO);
+        java.util.Map<String, ActiveInventory> inventoryMap = preloadInventories(paged.getContent());
+        Page<InspectionDTO> dtoPaged = paged.map(req -> toDTO(req, inventoryMap.get(req.getCycleId())));
         return ResponseEntity.ok(ApiResponse.ok(dtoPaged));
     }
 
     /** Lưu tiến độ kiểm tra */
     @PutMapping("/{id}/progress")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<InspectionRequest>> updateProgress(
             @PathVariable String id,
             @RequestBody UpdateInspectionProgressRequest request,
@@ -61,6 +66,7 @@ public class InspectionController {
 
     /** Gửi kiểm tra lại */
     @PostMapping("/{id}/recheck")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<InspectionRequest>> sendToRecheck(
             @PathVariable String id, Authentication authentication) {
         InspectionRequest updated = inspectionService.sendToRecheck(id, authentication.getName());
@@ -69,6 +75,7 @@ public class InspectionController {
 
     /** Bắt đầu kiểm tra */
     @PostMapping("/{id}/start")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<InspectionRequest>> startInspection(
             @PathVariable String id, Authentication authentication) {
         InspectionRequest updated = inspectionService.startInspection(id, authentication.getName());
@@ -77,6 +84,7 @@ public class InspectionController {
 
     /** Xác nhận Đạt */
     @PostMapping("/{id}/approve")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<InspectionRequest>> approveInspection(
             @PathVariable String id, 
             @RequestBody(required = false) java.util.Map<String, String> payload,
@@ -88,6 +96,7 @@ public class InspectionController {
 
     /** Hủy/Trả máy */
     @PostMapping("/{id}/reject")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<InspectionRequest>> rejectInspection(
             @PathVariable String id, 
             @RequestBody(required = false) java.util.Map<String, String> payload,
@@ -99,8 +108,22 @@ public class InspectionController {
 
     // ==================== MAPPER ====================
 
-    private InspectionDTO toDTO(InspectionRequest req) {
-        ActiveInventory inventory = activeInventoryRepo.findByCycleId(req.getCycleId()).orElse(null);
+    private java.util.Map<String, ActiveInventory> preloadInventories(List<InspectionRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Set<String> cycleIds = requests.stream()
+                .map(InspectionRequest::getCycleId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (cycleIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return activeInventoryRepo.findByCycleIdIn(cycleIds).stream()
+                .collect(Collectors.toMap(ActiveInventory::getCycleId, ai -> ai, (a, b) -> a));
+    }
+
+    private InspectionDTO toDTO(InspectionRequest req, ActiveInventory inventory) {
         
         String machineName = inventory != null && inventory.getSourceModelText() != null ? inventory.getSourceModelText() : "-";
         String config = "-";

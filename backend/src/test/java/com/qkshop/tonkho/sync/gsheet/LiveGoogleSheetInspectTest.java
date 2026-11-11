@@ -11,7 +11,7 @@ public class LiveGoogleSheetInspectTest {
     @Disabled("Ad-hoc live inspection only")
     void inspectLiveSheet() throws Exception {
         GoogleSheetProperties props = new GoogleSheetProperties();
-        props.setSpreadsheetId("13gxMGT1dDwlK-ncXi3fUx2nY17U3ax2v1hxNRt2oIqs");
+        props.setSpreadsheetId("TEST_SPREADSHEET_ID_QKSHOP_DEMO");
         props.setSheetName("DATABASE_BÁN HÀNG");
         props.setReadRange("A1:AE");
         props.setCredentialsPath("secrets/service_account.json");

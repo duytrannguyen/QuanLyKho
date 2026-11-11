@@ -3,12 +3,25 @@ import { subscribeLoading } from '../api/axiosClient';
 
 export default function TaiToanCuc() {
   const [loadingCount, setLoadingCount] = useState(0);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     return subscribeLoading(setLoadingCount);
   }, []);
 
-  if (loadingCount === 0) return null;
+  useEffect(() => {
+    if (loadingCount === 0) {
+      setVisible(false);
+      return;
+    }
+    // Chỉ hiển thị lớp phủ nếu tác vụ mất nhiều hơn 150ms để tránh nháy màn hình với các API nhanh
+    const timer = setTimeout(() => {
+      setVisible(true);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [loadingCount]);
+
+  if (!visible) return null;
 
   return (
     <div style={{

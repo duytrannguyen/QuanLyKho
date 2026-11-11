@@ -4,7 +4,7 @@ import {
   Search, RefreshCw, Settings, Plus, Menu, Bell, CheckCircle2,
   AlertTriangle, ArrowRight, Trash2, Check, CheckCheck, Info,
   AlertCircle, Package, Clock, ExternalLink, X,
-  User, KeyRound, Shield, LogOut, Sliders
+  User, KeyRound, Shield, LogOut, Sliders, Lock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
@@ -12,9 +12,11 @@ import { syncApi, notificationApi } from '../../api';
 import ModalCaiDatCaNhan from './ModalCaiDatCaNhan';
 
 export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', isMobile, onOpenMenu }) {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission, requirePermission } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const canManageSync = hasPermission('SYNC_MANAGE');
+  const canViewSync = hasPermission('SYNC_VIEW|SYNC_MANAGE');
 
   const [time] = useState(() => {
     const now = new Date();
@@ -118,11 +120,14 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
       console.warn('Không thể khởi tạo EventSource:', err);
     }
 
-    // Polling định kỳ kiểm tra thông báo và đồng bộ mỗi 45 giây (dự phòng)
+    // Polling định kỳ kiểm tra thông báo và đồng bộ mỗi 60 giây (dự phòng khi tab đang mở)
     const interval = setInterval(() => {
+      if (document.hidden) return;
       fetchSyncStatus();
-      fetchUnreadCount();
-    }, 45000);
+      if (!eventSource || eventSource.readyState !== EventSource.OPEN) {
+        fetchUnreadCount();
+      }
+    }, 60000);
 
     return () => {
       if (eventSource) eventSource.close();
@@ -236,6 +241,7 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
 
   // Nút đồng bộ nhanh Google Sheet
   const handleQuickSync = async () => {
+    if (!requirePermission('SYNC_MANAGE', showToast, 'Chạy đồng bộ Google Sheet')) return;
     setIsQuickSyncing(true);
     try {
       const res = await syncApi.run('MANUAL');
@@ -595,19 +601,23 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
                     style={{ fontSize: '0.8rem' }}
                     onClick={handleQuickSync}
                     disabled={isQuickSyncing}
+                    title={canManageSync ? 'Chạy đồng bộ Google Sheet ngay' : 'Yêu cầu quyền: Quản lý đồng bộ'}
                   >
                     <RefreshCw size={13} className={isQuickSyncing ? 'spinner-border spinner-border-sm' : ''} />
                     {isQuickSyncing ? 'Đang chạy...' : 'Đồng bộ ngay'}
+                    {!canManageSync && <Lock size={12} className="text-warning" />}
                   </button>
                   <button
                     className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
                     style={{ fontSize: '0.8rem' }}
                     onClick={() => {
+                      if (!requirePermission('SYNC_VIEW|SYNC_MANAGE', showToast, 'Xem màn hình Đối soát & Đồng bộ')) return;
                       setShowNotiDropdown(false);
                       navigate('/doi-soat');
                     }}
+                    title={canViewSync ? 'Mở màn hình Đối soát' : 'Yêu cầu quyền: Xem đối soát'}
                   >
-                    Đối soát <ArrowRight size={13} />
+                    Đối soát {canViewSync ? <ArrowRight size={13} /> : <Lock size={12} className="text-warning" />}
                   </button>
                 </div>
               </div>
@@ -774,12 +784,14 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
         </div>
       </div>
 
-      {/* Modal Cài đặt cá nhân */}
-      <ModalCaiDatCaNhan 
-        show={showPersonalModal}
-        onClose={() => setShowPersonalModal(false)}
-        initialTab={personalModalTab}
-      />
+      {/* Modal Cài đặt cá nhân - chỉ mount khi mở */}
+      {showPersonalModal && (
+        <ModalCaiDatCaNhan 
+          show={showPersonalModal}
+          onClose={() => setShowPersonalModal(false)}
+          initialTab={personalModalTab}
+        />
+      )}
     </header>
   );
 }

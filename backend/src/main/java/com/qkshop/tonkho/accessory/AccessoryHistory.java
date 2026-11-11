@@ -5,7 +5,11 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "accessory_history")
+@Table(name = "accessory_history", indexes = {
+    @Index(name = "idx_ah_created_at", columnList = "created_at"),
+    @Index(name = "idx_ah_sku", columnList = "sku"),
+    @Index(name = "idx_ah_action", columnList = "action")
+})
 @Data
 public class AccessoryHistory {
     @Id

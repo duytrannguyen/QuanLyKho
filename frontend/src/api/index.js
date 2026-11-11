@@ -12,21 +12,21 @@ const generateUUID = () => {
 
 export const authApi = {
   login: (credentials) => axiosClient.post('/auth/login', credentials),
-  refreshToken: (refreshToken) => axiosClient.post('/auth/refresh', { refreshToken }),
-  getMe: () => axiosClient.get('/auth/me'),
+  refreshToken: (refreshToken) => axiosClient.post('/auth/refresh', { refreshToken }, { silent: true }),
+  getMe: () => axiosClient.get('/auth/me', { silent: true }),
 };
 
 export const userApi = {
-  getProfile: () => axiosClient.get('/users/me'),
+  getProfile: () => axiosClient.get('/users/me', { silent: true }),
   updateProfile: (data) => axiosClient.put('/users/me', data),
   changePassword: (data) => axiosClient.put('/users/me/change-password', data),
-  getPermissions: () => axiosClient.get('/users/permissions'),
+  getPermissions: () => axiosClient.get('/users/permissions', { silent: true }),
 };
 
 export const dashboardApi = {
-  getSummary: () => axiosClient.get('/dashboard/summary'),
-  getPriorities: () => axiosClient.get('/dashboard/priorities'),
-  getRecentActivity: () => axiosClient.get('/dashboard/recent-activity'),
+  getSummary: () => axiosClient.get('/dashboard/summary', { silent: true }),
+  getPriorities: () => axiosClient.get('/dashboard/priorities', { silent: true }),
+  getRecentActivity: () => axiosClient.get('/dashboard/recent-activity', { silent: true }),
 };
 
 export const apiMayMoc = {
@@ -137,6 +137,8 @@ export const apiCatalog = {
 };
 
 export const priceListApi = {
+  getPlatformsByModelLine: (modelLineId) =>
+    axiosClient.get('/pricelist/platforms', { params: modelLineId ? { modelLineId } : {}, silent: true }),
   getConfigsByGroup: (platformIds) =>
     axiosClient.get('/pricelist/configs-by-group', { params: { platformIds: platformIds.join(',') }, silent: true }),
   exportPdf: (payload) =>

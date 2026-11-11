@@ -1,5 +1,9 @@
 package com.qkshop.tonkho.accessory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +24,7 @@ public class AccessoryController {
     private final AccessoryHistoryRepository accessoryHistoryRepository;
     private final AccessoryOrderRepository accessoryOrderRepository;
     private final com.qkshop.tonkho.system.SystemConfigService systemConfigService;
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/next-sku")
     public ResponseEntity<ApiResponse<String>> getNextSku(
@@ -55,6 +60,7 @@ public class AccessoryController {
     }
 
     @PostMapping("/sell-standalone")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SALE_ACCESSORY')")
     public ResponseEntity<ApiResponse<AccessoryOrder>> sellStandalone(@RequestBody Map<String, Object> payload) {
         AccessoryOrder order = accessoryService.createAccessoryOrder(payload);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Xuất phụ kiện thành công", order));
@@ -63,15 +69,49 @@ public class AccessoryController {
     @GetMapping("/default-gifts")
     public ResponseEntity<ApiResponse<String>> getDefaultGifts() {
         String giftsJson = systemConfigService.getConfig("DEFAULT_GIFT_BUNDLE", "[]");
-        return ResponseEntity.ok(ApiResponse.okWithMessage("Lấy danh sách bộ quà tặng mặc định thành công", giftsJson));
+        String enrichedJson = enrichDefaultGiftsJson(giftsJson);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Lấy danh sách bộ quà tặng mặc định thành công", enrichedJson));
     }
 
     @PostMapping("/default-gifts/save")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE')")
     public ResponseEntity<ApiResponse<String>> saveDefaultGifts(@RequestBody Map<String, String> payload) {
         String giftsJson = payload.getOrDefault("bundleJson", "[]");
-        systemConfigService.upsertConfig("DEFAULT_GIFT_BUNDLE", giftsJson, "Bộ quà tặng mặc định khi bán máy");
-        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật bộ quà tặng mặc định thành công", giftsJson));
+        String enrichedJson = enrichDefaultGiftsJson(giftsJson);
+        systemConfigService.upsertConfig("DEFAULT_GIFT_BUNDLE", enrichedJson, "Bộ quà tặng mặc định khi bán máy");
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật bộ quà tặng mặc định thành công", enrichedJson));
+    }
+
+    private String enrichDefaultGiftsJson(String rawJson) {
+        if (rawJson == null || rawJson.isBlank()) return "[]";
+        try {
+            JsonNode root = objectMapper.readTree(rawJson);
+            if (!root.isArray()) return "[]";
+            ArrayNode arr = (ArrayNode) root;
+            for (JsonNode node : arr) {
+                if (!node.isObject()) continue;
+                ObjectNode obj = (ObjectNode) node;
+                String sku = obj.hasNonNull("sku") ? obj.get("sku").asText().trim() : "";
+                if (sku.isEmpty()) continue;
+
+                accessoryRepository.findBySku(sku).ifPresent(acc -> {
+                    boolean missingName = !obj.hasNonNull("name") || obj.get("name").asText().isBlank();
+                    if (missingName && acc.getName() != null) {
+                        obj.put("name", acc.getName());
+                    }
+                    boolean missingPrice = !obj.hasNonNull("price") || obj.get("price").asDouble(0) <= 0;
+                    if (missingPrice && acc.getPrice() != null) {
+                        obj.put("price", acc.getPrice());
+                    }
+                });
+                if (!obj.hasNonNull("quantity") || obj.get("quantity").asInt(0) <= 0) {
+                    obj.put("quantity", 1);
+                }
+            }
+            return objectMapper.writeValueAsString(arr);
+        } catch (Exception e) {
+            return rawJson;
+        }
     }
 
     @GetMapping("/orders")
@@ -164,7 +204,7 @@ public class AccessoryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE') or hasAuthority('IMPORT_ACCESSORY')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ACCESSORY_MANAGE')")
     public ResponseEntity<ApiResponse<Accessory>> updateAccessory(
             @PathVariable Long id,
             @RequestBody Map<String, Object> payload) {

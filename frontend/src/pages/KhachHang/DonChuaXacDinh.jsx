@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   AlertCircle, UserPlus, Phone, User, 
   Save, X, Calendar, CheckCircle2, SearchX, Eye,
-  Search, Filter, Package, Wrench, Monitor, Headphones
+  Search, Filter, Package, Wrench, Monitor, Headphones, Lock
 } from 'lucide-react';
 import { crmApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
@@ -15,6 +16,7 @@ import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
  */
 export default function DonChuaXacDinh({ canManage, onChanged }) {
   const { showToast } = useToast();
+  const { requirePermission } = useAuth();
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [page, setPage] = useState(0);
@@ -60,12 +62,14 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
   }, [load]);
 
   const startEdit = (order) => {
+    if (!requirePermission('CRM_MANAGE', showToast, 'Gán đơn hàng chưa xác định vào hồ sơ khách')) return;
     setEditingId(order.id);
     setPhone(order.customerPhone || '');
     setName(order.customerName || '');
   };
 
   const handleAssign = async (orderId) => {
+    if (!requirePermission('CRM_MANAGE', showToast, 'Gán đơn hàng chưa xác định vào hồ sơ khách')) return;
     const cleanPhone = phone.trim().replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
       showToast('Vui lòng nhập số điện thoại hợp lệ gồm 10 chữ số (bắt đầu bằng 0)', 'error');
@@ -213,7 +217,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                 <th className="py-3 text-secondary fw-semibold" style={{ minWidth: 220 }}>Sản phẩm</th>
                 <th className="py-3 text-secondary fw-semibold text-center">Trạng thái</th>
                 <th className="py-3 text-secondary fw-semibold text-end">Thành tiền</th>
-                {canManage && <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '280px' }}>Thao tác</th>}
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '280px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody className="border-top-0">
@@ -283,77 +287,77 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     </td>
 
                     {/* Thao tác / Gán khách */}
-                    {canManage && (
-                      <td className="text-center px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                        {isEditing ? (
-                          <div className="d-flex flex-column gap-2 bg-white p-3 rounded-4 border shadow-sm">
-                            <div className="text-start small fw-bold text-dark mb-1">
-                              Gán SĐT định danh khách hàng:
-                            </div>
-                            <div className="input-group input-group-sm">
-                              <span className="input-group-text bg-light text-secondary"><Phone size={14} /></span>
-                              <input
-                                id={`crm-assign-phone-${o.id}`}
-                                className="form-control font-monospace text-primary fw-bold"
-                                placeholder="Nhập SĐT chuẩn 10 số (0...)"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                autoFocus
-                              />
-                            </div>
-                            <div className="input-group input-group-sm">
-                              <span className="input-group-text bg-light text-secondary"><User size={14} /></span>
-                              <input
-                                id={`crm-assign-name-${o.id}`}
-                                className="form-control"
-                                placeholder="Họ và tên khách (tùy chọn)"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                              />
-                            </div>
-                            <div className="d-flex gap-2 mt-1">
-                              <button 
-                                type="button" 
-                                className="btn btn-sm btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1 rounded-pill" 
-                                disabled={saving} 
-                                onClick={() => handleAssign(o.id)}
-                              >
-                                {saving ? <span className="spinner-border spinner-border-sm" /> : <Save size={14} />}
-                                Lưu gán
-                              </button>
-                              <button 
-                                type="button" 
-                                className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center gap-1 text-secondary rounded-pill" 
-                                disabled={saving} 
-                                onClick={() => setEditingId(null)}
-                              >
-                                <X size={14} /> Hủy
-                              </button>
-                            </div>
+                    <td className="text-center px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      {isEditing ? (
+                        <div className="d-flex flex-column gap-2 bg-white p-3 rounded-4 border shadow-sm">
+                          <div className="text-start small fw-bold text-dark mb-1">
+                            Gán SĐT định danh khách hàng:
                           </div>
-                        ) : (
-                          <div className="d-flex align-items-center justify-content-center gap-2">
+                          <div className="input-group input-group-sm">
+                            <span className="input-group-text bg-light text-secondary"><Phone size={14} /></span>
+                            <input
+                              id={`crm-assign-phone-${o.id}`}
+                              className="form-control font-monospace text-primary fw-bold"
+                              placeholder="Nhập SĐT chuẩn 10 số (0...)"
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              autoFocus
+                            />
+                          </div>
+                          <div className="input-group input-group-sm">
+                            <span className="input-group-text bg-light text-secondary"><User size={14} /></span>
+                            <input
+                              id={`crm-assign-name-${o.id}`}
+                              className="form-control"
+                              placeholder="Họ và tên khách (tùy chọn)"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                            />
+                          </div>
+                          <div className="d-flex gap-2 mt-1">
                             <button 
                               type="button" 
-                              className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
-                              onClick={() => setSelectedOrder(o)}
-                              title="Xem chi tiết hóa đơn"
+                              className="btn btn-sm btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center gap-1 rounded-pill" 
+                              disabled={saving} 
+                              onClick={() => handleAssign(o.id)}
                             >
-                              <Eye size={14} />
-                              <span>Xem</span>
+                              {saving ? <span className="spinner-border spinner-border-sm" /> : <Save size={14} />}
+                              Lưu gán
                             </button>
                             <button 
                               type="button" 
-                              id={`crm-assign-btn-${o.id}`} 
-                              className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1 shadow-xs hover-primary" 
-                              onClick={() => startEdit(o)}
+                              className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center gap-1 text-secondary rounded-pill" 
+                              disabled={saving} 
+                              onClick={() => setEditingId(null)}
                             >
-                              <UserPlus size={14} /> Gán SĐT
+                              <X size={14} /> Hủy
                             </button>
                           </div>
-                        )}
-                      </td>
-                    )}
+                        </div>
+                      ) : (
+                        <div className="d-flex align-items-center justify-content-center gap-2">
+                          <button 
+                            type="button" 
+                            className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1"
+                            onClick={() => setSelectedOrder(o)}
+                            title="Xem chi tiết hóa đơn"
+                          >
+                            <Eye size={14} />
+                            <span>Xem</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            id={`crm-assign-btn-${o.id}`} 
+                            className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1 rounded-pill px-3 py-1 shadow-xs hover-primary" 
+                            onClick={() => startEdit(o)}
+                            title={canManage ? 'Gán SĐT khách hàng' : 'Yêu cầu quyền: Quản trị dữ liệu CRM'}
+                          >
+                            <UserPlus size={14} /> Gán SĐT
+                            {!canManage && <Lock size={12} className="text-warning" />}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -361,7 +365,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
               {/* Trạng thái trống (Tốt) */}
               {!loading && displayedOrders.length === 0 && !error && (
                 <tr>
-                  <td colSpan={canManage ? 8 : 7} className="text-center py-5">
+                  <td colSpan={8} className="text-center py-5">
                     <div className="d-flex flex-column align-items-center text-muted">
                       <div className="bg-success bg-opacity-10 text-success p-3 rounded-circle mb-3">
                         <CheckCircle2 size={44} />

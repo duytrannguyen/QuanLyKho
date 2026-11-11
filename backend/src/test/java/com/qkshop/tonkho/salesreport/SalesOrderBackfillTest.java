@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,8 +14,10 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.task.scheduling.enabled=false",
         "gsheet.enabled=false",
         "gsheet.cron-enabled=false",
-        "gsheet.scheduler.enabled=false"
+        "gsheet.scheduler.enabled=false",
+        "crm.startup-sync.enabled=false"
 })
+@Transactional
 class SalesOrderBackfillTest {
 
     @Autowired

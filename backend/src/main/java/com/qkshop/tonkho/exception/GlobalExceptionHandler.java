@@ -39,7 +39,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("FORBIDDEN", "Bạn không có quyền thực hiện thao tác này"));
+                .body(ApiResponse.error("FORBIDDEN", "Tài khoản của bạn không đủ quyền hạn để thực hiện chức năng hoặc thao tác này. Vui lòng liên hệ Quản trị viên để được cấp quyền."));
     }
 
     @ExceptionHandler(AuthenticationException.class)

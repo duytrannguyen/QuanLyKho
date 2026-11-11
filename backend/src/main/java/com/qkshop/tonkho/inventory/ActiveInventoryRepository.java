@@ -16,12 +16,29 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
 
     @Query("SELECT ai.serialKey FROM ActiveInventory ai WHERE ai.serialKey IN (:serialKeys)")
     java.util.Set<String> findExistingSerialKeysIn(@Param("serialKeys") java.util.Collection<String> serialKeys);
+
+    List<ActiveInventory> findBySerialKeyIn(java.util.Collection<String> serialKeys);
+
+    @Query("SELECT ai FROM ActiveInventory ai LEFT JOIN FETCH ai.config WHERE ai.cycleId IN (:cycleIds)")
+    List<ActiveInventory> findByCycleIdIn(@Param("cycleIds") java.util.Collection<String> cycleIds);
+
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "LEFT JOIN FETCH p.modelLine m LEFT JOIN FETCH m.brand b")
+    List<ActiveInventory> findAllWithHierarchy();
+
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "LEFT JOIN FETCH p.modelLine m LEFT JOIN FETCH m.brand b " +
+           "WHERE ai.state = :state")
+    List<ActiveInventory> findByStateWithHierarchy(@Param("state") CycleState state);
+
     List<ActiveInventory> findByState(CycleState state);
     long countByState(CycleState state);
     long count();
 
     @Query("SELECT ai FROM ActiveInventory ai " +
-           "LEFT JOIN ai.config c " +
+           "LEFT JOIN FETCH ai.config c " +
            "WHERE (LOWER(ai.serialKey) LIKE LOWER(CONCAT('%', :kw, '%')) " +
            "   OR LOWER(ai.sourceModelText) LIKE LOWER(CONCAT('%', :kw, '%')) " +
            "   OR LOWER(c.configId) LIKE LOWER(CONCAT('%', :kw, '%')) " +
@@ -33,8 +50,15 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
 
     Page<ActiveInventory> findByState(CycleState state, Pageable pageable);
 
-    @Query("SELECT ai FROM ActiveInventory ai WHERE ai.config.variant.platform.platformId = :platformId")
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "WHERE p.platformId = :platformId")
     List<ActiveInventory> findByPlatformId(@Param("platformId") String platformId);
+
+    @Query("SELECT ai FROM ActiveInventory ai " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "WHERE p.platformId IN :platformIds")
+    List<ActiveInventory> findByPlatformIds(@Param("platformIds") java.util.Collection<String> platformIds);
 
     List<ActiveInventory> findByIntakeAtBetween(java.time.LocalDateTime from, java.time.LocalDateTime to);
 
@@ -76,9 +100,9 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
     List<com.qkshop.tonkho.analytics.dto.AgeGroupProjection> getInventoryAgeGrouped(@Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
 
     @Query("SELECT ai FROM ActiveInventory ai " +
-           "LEFT JOIN ai.config c LEFT JOIN c.variant v LEFT JOIN v.platform p " +
-           "LEFT JOIN p.modelLine m " +
-           "LEFT JOIN m.brand b " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "LEFT JOIN FETCH p.modelLine m " +
+           "LEFT JOIN FETCH m.brand b " +
            "WHERE ai.intakeAt >= :from AND ai.intakeAt <= :to " +
            "  AND (:brandId IS NULL OR b.brandId = :brandId) " +
            "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
@@ -86,9 +110,9 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
     List<ActiveInventory> findFilteredImported(@Param("from") java.time.LocalDateTime from, @Param("to") java.time.LocalDateTime to, @Param("brandId") String brandId, @Param("segmentCode") com.qkshop.tonkho.core.enums.SegmentCode segmentCode, @Param("modelLineId") String modelLineId);
 
     @Query("SELECT ai FROM ActiveInventory ai " +
-           "LEFT JOIN ai.config c LEFT JOIN c.variant v LEFT JOIN v.platform p " +
-           "LEFT JOIN p.modelLine m " +
-           "LEFT JOIN m.brand b " +
+           "LEFT JOIN FETCH ai.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
+           "LEFT JOIN FETCH p.modelLine m " +
+           "LEFT JOIN FETCH m.brand b " +
            "WHERE (:brandId IS NULL OR b.brandId = :brandId) " +
            "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
            "  AND (:modelLineId IS NULL OR m.modelLineId = :modelLineId)")

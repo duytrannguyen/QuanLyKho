@@ -3,9 +3,11 @@ import {
   PhoneCall, MessageSquare, User, Wrench, Calendar, 
   Clock, Plus, CheckCircle2, AlertCircle, Send, MessageCircle,
   ShoppingBag, Check, Laptop, Sparkles, CheckCheck, ShieldCheck, 
-  RotateCcw, ArrowRight, Info, Filter, History, PenLine, Dot, XCircle
+  RotateCcw, ArrowRight, Info, Filter, History, PenLine, Dot, XCircle, Lock
 } from 'lucide-react';
 import { crmApi } from '../../api';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatDate } from '../../utils/dinh_dang';
 
 const INTERACTION_TYPES = [
@@ -63,6 +65,9 @@ export default function TabNhatKyChamSoc({
   onCareUpdated = null,
   isCompact = false 
 }) {
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canCare = hasPermission('CRM_CARE|CRM_MANAGE');
   const [activeTab, setActiveTab] = useState('timeline');
   
   const [notes, setNotes] = useState([]);
@@ -168,6 +173,7 @@ export default function TabNhatKyChamSoc({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!requirePermission('CRM_CARE|CRM_MANAGE', showToast, 'Ghi nhận nhật ký chăm sóc khách hàng (CSKH)')) return;
     if (!targetOrderId || !currentSelectedOrder) {
       setError('Mục hóa đơn / thiết bị cần chăm sóc là bắt buộc.');
       return;
@@ -261,10 +267,15 @@ export default function TabNhatKyChamSoc({
                 : 'btn-light border-0 text-secondary'
             }`}
             style={{ fontSize: '0.8rem' }}
-            onClick={() => setActiveTab('create')}
+            onClick={() => {
+              if (!requirePermission('CRM_CARE|CRM_MANAGE', showToast, 'Ghi nhận nhật ký chăm sóc khách hàng (CSKH)')) return;
+              setActiveTab('create');
+            }}
+            title={canCare ? 'Thêm ghi nhận chăm sóc mới' : 'Yêu cầu quyền: Chăm sóc khách hàng (CSKH)'}
           >
             <PenLine size={14} />
             <span>+ Ghi nhận CSKH</span>
+            {!canCare && <Lock size={11} className="text-warning" />}
           </button>
         </div>
       </div>
@@ -913,9 +924,13 @@ export default function TabNhatKyChamSoc({
                 type="button"
                 className="btn btn-sm btn-primary rounded-pill px-3 py-1 d-inline-flex align-items-center gap-1 shadow-xs"
                 style={{ fontSize: '0.78rem' }}
-                onClick={() => setActiveTab('create')}
+                onClick={() => {
+                  if (!requirePermission('CRM_CARE|CRM_MANAGE', showToast, 'Ghi nhận nhật ký chăm sóc khách hàng (CSKH)')) return;
+                  setActiveTab('create');
+                }}
               >
                 <Plus size={14} /> <span>+ Thêm ghi nhận CSKH</span>
+                {!canCare && <Lock size={11} className="text-warning" />}
               </button>
             </div>
           ) : (

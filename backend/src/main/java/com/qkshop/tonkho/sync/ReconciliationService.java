@@ -213,14 +213,14 @@ public class ReconciliationService {
         return dataIssueRepo.save(issue);
     }
 
+    @Transactional(readOnly = true)
     public java.util.List<DataIssue> getAllOpenIssues() {
         return dataIssueRepo.findByStatusIn(java.util.List.of(IssueStatus.OPEN, IssueStatus.IN_REVIEW, IssueStatus.FIXED_WAIT_RESCAN));
     }
 
+    @Transactional(readOnly = true)
     public java.util.List<SyncRun> getRecentSyncRuns() {
-        java.util.List<SyncRun> all = new java.util.ArrayList<>(syncRunRepo.findAll());
-        all.sort((a, b) -> b.getStartedAt().compareTo(a.getStartedAt()));
-        return all;
+        return syncRunRepo.findTop50ByOrderByStartedAtDesc();
     }
 
     @Transactional

@@ -42,6 +42,7 @@ public class SalesReportController {
      * Đồng bộ lại dữ liệu lịch sử từ bảng qk_migration_sales vào sales_orders.
      */
     @PostMapping("/rebuild")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_MANAGE', 'SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildData() {
         log.info("[SALES_REPORT] Yêu cầu nạp lại toàn bộ dữ liệu đơn hàng sales_orders.");
         int count = backfillService.backfillAllSales();

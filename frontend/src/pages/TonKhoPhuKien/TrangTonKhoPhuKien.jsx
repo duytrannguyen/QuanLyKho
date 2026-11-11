@@ -2,15 +2,20 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Search, PackageMinus, X, Plus, Edit3, Trash2, History,
-  AlertTriangle, CheckCircle2, XCircle, RotateCcw, SlidersHorizontal, Save
+  AlertTriangle, CheckCircle2, XCircle, RotateCcw, SlidersHorizontal, Save, Lock
 } from 'lucide-react';
 import { apiPhuKien } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatCurrency, parseCurrency } from '../../utils/dinh_dang';
 
 export default function TrangTonKhoPhuKien() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canImportAccessory = hasPermission('IMPORT_ACCESSORY');
+  const canManageAccessory = hasPermission('ACCESSORY_MANAGE');
+  const canViewHistory = hasPermission('ACCESSORY_HISTORY');
   const [accessories, setAccessories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,6 +66,7 @@ export default function TrangTonKhoPhuKien() {
 
   // Mở modal sửa
   const handleOpenEdit = (acc) => {
+    if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Chỉnh sửa thông tin phụ kiện')) return;
     setEditingItem(acc);
     setEditForm({
       name: acc.name || '',
@@ -71,9 +77,15 @@ export default function TrangTonKhoPhuKien() {
     });
   };
 
+  const handleOpenDelete = (acc) => {
+    if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Xóa phụ kiện khỏi kho')) return;
+    setDeletingItem(acc);
+  };
+
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingItem) return;
+    if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Cập nhật phụ kiện')) return;
     if (!editForm.name.trim()) {
       showToast('Vui lòng nhập tên phụ kiện', 'warning');
       return;
@@ -100,6 +112,7 @@ export default function TrangTonKhoPhuKien() {
   // Xóa phụ kiện
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
+    if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Xóa phụ kiện')) return;
     setIsDeleting(true);
     try {
       await apiPhuKien.deleteAccessory(deletingItem.id);
@@ -115,6 +128,7 @@ export default function TrangTonKhoPhuKien() {
 
   // Xem lịch sử nhập/xuất của 1 SKU hoặc toàn bộ
   const handleOpenHistory = async (acc = null) => {
+    if (!requirePermission('ACCESSORY_HISTORY', showToast, 'Xem lịch sử xuất/nhập phụ kiện')) return;
     setHistoryItem(acc || { sku: 'ALL', name: 'Toàn bộ kho phụ kiện' });
     setLoadingHistory(true);
     try {
@@ -122,7 +136,7 @@ export default function TrangTonKhoPhuKien() {
       const list = res.data || [];
       setHistoryList(acc?.sku ? list.filter(h => h.sku === acc.sku) : list);
     } catch (err) {
-      showToast('Lỗi tải lịch sử biến động phụ kiện', 'danger');
+      showToast(err.userMessage || 'Lỗi tải lịch sử biến động phụ kiện', 'danger');
     } finally {
       setLoadingHistory(false);
     }
@@ -221,9 +235,11 @@ export default function TrangTonKhoPhuKien() {
           <button
             className="btn btn-white border shadow-sm rounded-pill px-3 d-flex align-items-center gap-2"
             onClick={() => handleOpenHistory(null)}
+            title={canViewHistory ? 'Xem lịch sử xuất/nhập kho phụ kiện' : 'Yêu cầu quyền: Lịch sử phụ kiện'}
           >
             <History size={16} className="text-primary" />
             <span className="fw-medium">Lịch sử xuất/nhập</span>
+            {!canViewHistory && <Lock size={13} className="text-warning" />}
           </button>
           <button
             className="btn btn-white border shadow-sm rounded-pill px-3 d-flex align-items-center gap-2"
@@ -235,10 +251,15 @@ export default function TrangTonKhoPhuKien() {
           </button>
           <button
             className="btn btn-primary shadow-sm rounded-pill px-4 d-flex align-items-center gap-2 fw-semibold"
-            onClick={() => navigate('/nhap-phu-kien')}
+            onClick={() => {
+              if (!requirePermission('IMPORT_ACCESSORY', showToast, 'Nhập kho phụ kiện')) return;
+              navigate('/nhap-phu-kien');
+            }}
+            title={canImportAccessory ? 'Nhập phụ kiện vào kho' : 'Yêu cầu quyền: Nhập kho phụ kiện'}
           >
             <Plus size={18} />
             <span>Nhập phụ kiện</span>
+            {!canImportAccessory && <Lock size={13} className="text-warning" />}
           </button>
         </div>
       </div>
@@ -415,25 +436,28 @@ export default function TrangTonKhoPhuKien() {
                       <td className="text-center pe-4">
                         <div className="d-flex justify-content-center gap-1">
                           <button
-                            className="btn btn-sm btn-light border text-secondary"
-                            title="Lịch sử nhập/xuất"
+                            className="btn btn-sm btn-light border text-secondary d-inline-flex align-items-center gap-1"
+                            title={canViewHistory ? 'Lịch sử nhập/xuất' : 'Yêu cầu quyền: Lịch sử phụ kiện'}
                             onClick={() => handleOpenHistory(acc)}
                           >
                             <History size={15} />
+                            {!canViewHistory && <Lock size={11} className="text-warning" />}
                           </button>
                           <button
-                            className="btn btn-sm btn-light border text-primary"
-                            title="Chỉnh sửa thông tin / Giá / Tồn kho"
+                            className="btn btn-sm btn-light border text-primary d-inline-flex align-items-center gap-1"
+                            title={canManageAccessory ? 'Chỉnh sửa thông tin / Giá / Tồn kho' : 'Yêu cầu quyền: Quản lý kho phụ kiện'}
                             onClick={() => handleOpenEdit(acc)}
                           >
                             <Edit3 size={15} />
+                            {!canManageAccessory && <Lock size={11} className="text-warning" />}
                           </button>
                           <button
-                            className="btn btn-sm btn-light border text-danger"
-                            title="Xóa phụ kiện"
-                            onClick={() => setDeletingItem(acc)}
+                            className="btn btn-sm btn-light border text-danger d-inline-flex align-items-center gap-1"
+                            title={canManageAccessory ? 'Xóa phụ kiện' : 'Yêu cầu quyền: Quản lý kho phụ kiện'}
+                            onClick={() => handleOpenDelete(acc)}
                           >
                             <Trash2 size={15} />
+                            {!canManageAccessory && <Lock size={11} className="text-warning" />}
                           </button>
                         </div>
                       </td>

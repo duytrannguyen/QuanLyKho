@@ -43,6 +43,7 @@ public class MachineController {
 
     /** Nhập đơn 1 máy */
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<ActiveInventory>> importSingleMachine(
             @Valid @RequestBody MachineImportRequest request,
             Authentication authentication) {
@@ -52,6 +53,7 @@ public class MachineController {
 
     /** Nhập lô nhiều máy cùng cấu hình (từ text form) */
     @PostMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> importBulkMachines(
             @Valid @RequestBody BulkMachineImportRequest request,
             Authentication authentication) {
@@ -61,6 +63,7 @@ public class MachineController {
 
     /** Nhập lô từ file Excel */
     @PostMapping("/bulk/excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> importBulkFromExcel(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             Authentication authentication) {
@@ -70,6 +73,7 @@ public class MachineController {
 
     /** Xem trước lô từ file Excel */
     @PostMapping("/bulk/preview-excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('IMPORT_MACHINE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> previewBulkFromExcel(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         Map<String, Object> result = machineService.previewBulkFromExcel(file);
@@ -88,7 +92,7 @@ public class MachineController {
 
     /** Cập nhật giá hàng loạt cho danh sách serial */
     @PutMapping("/bulk-price")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_UPDATE') or hasAuthority('PRICING_MANAGE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_UPDATE')")
     public ResponseEntity<ApiResponse<Integer>> updateBulkPrice(@RequestBody Map<String, Object> payload) {
         int updatedCount = machineService.updateBulkPrice(payload);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật giá hàng loạt thành công", updatedCount));
@@ -96,11 +100,34 @@ public class MachineController {
 
     /** Cập nhật thông tin máy (giá, ghi chú, trạng thái) */
     @PutMapping("/{serial}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_UPDATE') or hasAuthority('IMPORT_MACHINE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'IMPORT_MACHINE', 'INSPECTION')")
     public ResponseEntity<ApiResponse<ActiveInventory>> updateMachine(
             @PathVariable String serial,
             @RequestBody Map<String, Object> updates,
             Authentication authentication) {
+        boolean isAdmin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (!isAdmin && updates != null) {
+            var authSet = authentication != null
+                    ? authentication.getAuthorities().stream().map(org.springframework.security.core.GrantedAuthority::getAuthority).collect(java.util.stream.Collectors.toSet())
+                    : java.util.Collections.<String>emptySet();
+            if (updates.containsKey("status")) {
+                String statusStr = String.valueOf(updates.get("status"));
+                if ("NEEDS_INSPECTION".equalsIgnoreCase(statusStr) || "DANG_KIEM_TRA".equalsIgnoreCase(statusStr)
+                        || "CAN_KIEM_TRA".equalsIgnoreCase(statusStr) || "CLOSED".equalsIgnoreCase(statusStr)
+                        || "HUY_TRA".equalsIgnoreCase(statusStr)) {
+                    if (!authSet.contains("MACHINE_EXPORT_OTHER")) {
+                        throw new org.springframework.security.access.AccessDeniedException("Không có quyền xuất khác hoặc đưa máy về kiểm tra");
+                    }
+                }
+            }
+            if ((updates.containsKey("price") || updates.containsKey("warrantyPeriod") || updates.containsKey("warrantyExpiry"))
+                    && !updates.containsKey("status")) {
+                if (!authSet.contains("MACHINE_UPDATE") && !authSet.contains("IMPORT_MACHINE")) {
+                    throw new org.springframework.security.access.AccessDeniedException("Không có quyền sửa giá bán hoặc bảo hành máy");
+                }
+            }
+        }
         ActiveInventory updated = machineService.updateMachine(serial, updates, authentication.getName());
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thành công", updated));
     }

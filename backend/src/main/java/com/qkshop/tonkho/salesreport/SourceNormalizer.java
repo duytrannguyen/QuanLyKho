@@ -131,7 +131,10 @@ public final class SourceNormalizer {
             return null;
         }
         String p = warrantyPeriod.trim().toLowerCase(Locale.ROOT);
-        if (p.contains("không bh") || p.contains("không bảo hành") || p.equals("0") || p.equals("0t")) {
+        if (p.contains("không bh") || p.contains("không bảo hành") || p.contains("khong bh") 
+                || p.contains("từ chối") || p.contains("tu choi") 
+                || p.contains("theo bh") || p.contains("theo bảo hành") 
+                || p.equals("0") || p.equals("0t") || p.equals("none")) {
             return null;
         }
 

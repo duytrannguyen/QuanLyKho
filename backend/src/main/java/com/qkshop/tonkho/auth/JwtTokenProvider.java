@@ -94,14 +94,21 @@ public class JwtTokenProvider {
      * Xác thực Access Token dùng cho các API thông thường
      */
     public boolean validateAccessToken(String token) {
+        return validateAccessTokenAndGetUsername(token) != null;
+    }
+
+    /**
+     * Xác thực Access Token và trích xuất luôn username trong 1 lần giải mã duy nhất
+     */
+    public String validateAccessTokenAndGetUsername(String token) {
         Claims claims = getClaims(token);
-        if (claims == null) return false;
+        if (claims == null) return null;
         String type = claims.get(CLAIM_TYPE, String.class);
         if (TYPE_REFRESH.equals(type)) {
             log.warn("Từ chối truy cập: Người dùng cố tình sử dụng Refresh Token để gọi API thông thường.");
-            return false;
+            return null;
         }
-        return true;
+        return claims.getSubject();
     }
 
     /**

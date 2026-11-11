@@ -11,7 +11,8 @@ import org.springframework.test.context.TestPropertySource;
         "spring.task.scheduling.enabled=false",
         "gsheet.enabled=false",
         "gsheet.cron-enabled=false",
-        "gsheet.scheduler.enabled=false"
+        "gsheet.scheduler.enabled=false",
+        "crm.startup-sync.enabled=false"
 })
 class TonKhoApplicationTests {
 

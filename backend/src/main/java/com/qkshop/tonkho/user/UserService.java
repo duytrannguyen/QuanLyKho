@@ -21,6 +21,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CustomUserDetailsService userDetailsService;
 
     @Transactional(readOnly = true)
     public List<User> getAllUsers() {
@@ -64,7 +65,7 @@ public class UserService {
         Set<String> assignedPermissions;
         if (request.getRole() == UserRole.ADMIN) {
             assignedPermissions = AppPermission.allCodes();
-        } else if (request.getPermissions() != null && !request.getPermissions().isEmpty()) {
+        } else if (request.getPermissions() != null) {
             assignedPermissions = new HashSet<>(request.getPermissions());
         } else {
             assignedPermissions = AppPermission.getDefaultPermissionsForRole(request.getRole());
@@ -84,7 +85,9 @@ public class UserService {
         log.info("Tạo tài khoản người dùng mới: {} với vai trò: {}, số lượng quyền: {}", 
                 user.getUsername(), user.getRole(), user.getPermissions().size());
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        userDetailsService.clearCache();
+        return saved;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -126,7 +129,9 @@ public class UserService {
         }
 
         log.info("Cập nhật thông tin và phân quyền cho người dùng: {} (ID: {})", user.getUsername(), id);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        userDetailsService.clearCache();
+        return saved;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -139,6 +144,7 @@ public class UserService {
 
         user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
         userRepository.save(user);
+        userDetailsService.clearCache();
         log.info("Đã thay đổi mật khẩu thành công cho người dùng: {}", user.getUsername());
     }
 
@@ -154,7 +160,9 @@ public class UserService {
         boolean newStatus = !Boolean.TRUE.equals(user.getIsActive());
         user.setIsActive(newStatus);
         log.info("Chuyển trạng thái người dùng {}: {}", user.getUsername(), newStatus ? "Kích hoạt" : "Đã khóa");
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        userDetailsService.clearCache();
+        return saved;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -170,6 +178,7 @@ public class UserService {
         }
 
         userRepository.delete(user);
+        userDetailsService.clearCache();
         log.info("Đã xóa tài khoản người dùng: {} (ID: {}) bởi {}", user.getUsername(), id, currentUsername);
     }
 
@@ -188,7 +197,9 @@ public class UserService {
         }
 
         log.info("Người dùng '{}' đã cập nhật thông tin cá nhân thành công.", username);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        userDetailsService.clearCache();
+        return saved;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -209,6 +220,7 @@ public class UserService {
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
         userRepository.save(user);
+        userDetailsService.clearCache();
         log.info("Người dùng '{}' đã tự đổi mật khẩu thành công.", username);
     }
 

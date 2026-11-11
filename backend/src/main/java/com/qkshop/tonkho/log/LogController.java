@@ -20,6 +20,7 @@ public class LogController {
     private final EventLogRepository eventLogRepository;
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('LOGS_VIEW', 'LOG_VIEW')")
     public ResponseEntity<ApiResponse<Page<EventLog>>> getLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,

@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Laptop, X, PackageOpen, Filter } from 'lucide-react';
+import { Search, Download, Laptop, X, PackageOpen, Lock } from 'lucide-react';
 import { apiMayMoc, apiTonKho } from '../../api';
 import { formatCurrency } from '../../utils/dinh_dang';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
+import { useToast } from '../../contexts/notification/NguCanhThongBao';
 
 import { formatCycleState, formatIntakeType, formatCloseType } from '../../constants/trangThai';
 
 export default function TrangQuanLyMaMay() {
+  const { hasPermission, requirePermission } = useAuth();
+  const { showToast } = useToast();
+  const canExport = hasPermission('EXPORT_DATA');
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [tab, setTab] = useState('ACTIVE');
   const [brand, setBrand] = useState('Tất cả');
   const [status, setStatus] = useState('Tất cả');
@@ -34,7 +40,7 @@ export default function TrangQuanLyMaMay() {
       if (status === 'Tất cả') {
         effectiveStatus = tab === 'ACTIVE' ? 'ACTIVE_ONLY' : 'CLOSED_ONLY';
       }
-      const res = await apiMayMoc.searchHistory({ query, brand, status: effectiveStatus, page, size: pageSize });
+      const res = await apiMayMoc.searchHistory({ query: debouncedQuery, brand, status: effectiveStatus, page, size: pageSize });
       if (res.data && res.data.content) {
         setResults(res.data.content);
         setPageInfo({
@@ -50,14 +56,22 @@ export default function TrangQuanLyMaMay() {
     }
   };
 
-  // Debounce tìm kiếm
+  // Chỉ debounce cho từ khóa gõ tìm kiếm (300ms)
   useEffect(() => {
-    const timer = setTimeout(() => fetchMachines(), 500);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(0);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [query, brand, status, tab, page, pageSize]);
+  }, [query]);
+
+  // Tải ngay lập tức (0ms) khi mở trang, chuyển tab, lọc hoặc phân trang
+  useEffect(() => {
+    fetchMachines();
+  }, [debouncedQuery, brand, status, tab, page, pageSize]);
 
   // Reset trang về 0 khi đổi bộ lọc
-  useEffect(() => { setPage(0); }, [query, brand, status, tab, pageSize]);
+  useEffect(() => { setPage(0); }, [brand, status, tab, pageSize]);
   
   // Reset trạng thái khi đổi Tab
   useEffect(() => { setStatus('Tất cả'); }, [tab]);
@@ -118,8 +132,40 @@ export default function TrangQuanLyMaMay() {
           </h3>
           <p className="text-secondary m-0 mt-1 small">Sổ lưu trữ toàn bộ mã máy và lịch sử kinh doanh</p>
         </div>
-        <button className="btn btn-outline-primary d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm" onClick={() => {/* TODO: xuất Excel */ }}>
-          <Download size={18} />
+        <button
+          className={`btn d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm ${canExport ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75'}`}
+          title={canExport ? 'Xuất danh sách mã máy ra file CSV/Excel' : 'Cần quyền: Xuất dữ liệu báo cáo ra file Excel (EXPORT_DATA)'}
+          onClick={() => {
+            if (!requirePermission('EXPORT_DATA', showToast, 'Xuất danh sách mã máy ra file Excel')) return;
+            if (!results || results.length === 0) {
+              showToast('Không có dữ liệu mã máy để xuất', 'warning');
+              return;
+            }
+            const headers = ['STT', 'Serial', 'Tên máy / Model', 'Cấu hình', 'Giá bán', 'Loại nhập', 'Trạng thái', 'Số ngày lưu kho'];
+            const rows = results.map((r, i) => [
+              i + 1,
+              r.serialKey || '',
+              (r.sourceModelText || r.configId || '').replace(/,/g, ' '),
+              (r.configDisplayName || '').replace(/,/g, ' '),
+              r.salePriceSnapshot || '',
+              r.intakeType ? formatIntakeType(r.intakeType) : '',
+              r.closeType ? formatCloseType(r.closeType) : (r.state ? formatCycleState(r.state) : ''),
+              r.storageDays ?? ''
+            ]);
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Quan_Ly_Ma_May_${tab}_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast('Đã tải xuống file danh sách mã máy!', 'success');
+          }}
+        >
+          {canExport ? <Download size={18} /> : <Lock size={16} />}
           Xuất Excel
         </button>
       </div>

@@ -19,6 +19,9 @@ public class DefaultDataSeeder implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.admin.auto-create:false}")
+    private boolean autoCreateAdmin;
+
     @Value("${app.admin.username:admin}")
     private String adminUsername;
 
@@ -33,6 +36,11 @@ public class DefaultDataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        // Nếu trong CSDL đã có sẵn tài khoản (từ file SQL khởi tạo) hoặc tắt auto-create thì không tạo thêm tài khoản admin mặc định
+        if (userRepository.count() > 0 || !autoCreateAdmin) {
+            return;
+        }
+
         if (!userRepository.existsByUsername(adminUsername)) {
             User admin = User.builder()
                     .username(adminUsername)
@@ -45,14 +53,6 @@ public class DefaultDataSeeder implements CommandLineRunner {
                     .build();
             userRepository.save(admin);
             log.info("======== ĐÃ KHỞI TẠO TÀI KHOẢN QUẢN TRỊ VIÊN MẶC ĐỊNH (Username: {}) ========", adminUsername);
-            log.warn("LƯU Ý BẢO MẬT: Hãy đổi mật khẩu quản trị viên ngay trên giao diện cài đặt sau khi đăng nhập để đảm bảo an toàn.");
-        } else {
-            userRepository.findByUsername(adminUsername).ifPresent(admin -> {
-                if (admin.getPermissions() == null || admin.getPermissions().isEmpty()) {
-                    admin.setPermissions(AppPermission.allCodes());
-                    userRepository.save(admin);
-                }
-            });
         }
     }
 }

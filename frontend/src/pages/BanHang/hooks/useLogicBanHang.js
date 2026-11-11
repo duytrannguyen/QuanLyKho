@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../../contexts/NguCanhXacThuc';
 import { apiBanHang, apiPhuKien, apiLinhKien, crmApi } from '../../../api';
 import {
   formatCurrency,
@@ -10,6 +11,7 @@ import {
 
 export function useLogicBanHang() {
   const { showToast, confirm } = useToast();
+  const { requirePermission } = useAuth();
 
   // State: Tìm kiếm máy
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,7 +137,8 @@ export function useLogicBanHang() {
         apiPhuKien.getDefaultGifts().catch(() => ({ data: { data: '[]' } })),
         apiLinhKien.getAvailable().catch(() => ({ data: { data: [] } }))
       ]);
-      setAvailableAccessories(accRes.data || []);
+      const accList = accRes.data || [];
+      setAvailableAccessories(accList);
       setAvailableParts(partsRes.data?.data || partsRes.data || []);
 
       let bundle = [];
@@ -145,6 +148,18 @@ export function useLogicBanHang() {
       } catch {
         bundle = [];
       }
+      bundle = (Array.isArray(bundle) ? bundle : []).map(item => {
+        const matched = accList.find(a => a.sku === item.sku);
+        return {
+          ...item,
+          sku: item.sku,
+          name: (item.name && item.name.trim()) ? item.name : (matched?.name || item.sku),
+          quantity: Number(item.quantity) || 1,
+          price: (item.price !== undefined && item.price !== null && Number(item.price) > 0)
+            ? Number(item.price)
+            : (Number(matched?.price) || 0)
+        };
+      });
       setDefaultGiftBundle(bundle);
       defaultGiftBundleRef.current = bundle;
     } catch (err) {
@@ -343,6 +358,7 @@ export function useLogicBanHang() {
   const handleRemoveTempGift = (sku) => setTempGiftBundle(prev => prev.filter(g => g.sku !== sku));
 
   const handleSaveGiftBundle = async () => {
+    if (!requirePermission('ACCESSORY_MANAGE', showToast, 'Cài đặt bộ quà tặng mặc định')) return;
     setIsSavingGift(true);
     try {
       await apiPhuKien.saveDefaultGifts(JSON.stringify(tempGiftBundle));
@@ -442,6 +458,7 @@ export function useLogicBanHang() {
   };
 
   const handleSale = async () => {
+    if (!requirePermission('SALE_MACHINE', showToast, 'Tạo đơn bán máy')) return;
     if (!isReady || !formData.customer.trim() || !formData.customerPhone.trim()) {
       showToast('Vui lòng nhập đầy đủ thông tin Khách hàng và Số điện thoại', 'danger');
       return;

@@ -5,7 +5,7 @@ import {
   ArrowRight, X, Filter, Phone, MessageSquare, PhoneCall,
   Edit3, ShieldAlert, Wrench, Calendar, CheckCircle2, Download,
   Copy, Check, Crown, Star, UserCheck, Sparkles, ChevronRight,
-  ExternalLink, Eye, ArrowUpRight, XCircle, RotateCcw, Clock
+  ExternalLink, Eye, ArrowUpRight, XCircle, RotateCcw, Clock, Lock
 } from 'lucide-react';
 import { crmApi } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
@@ -46,9 +46,10 @@ const getRelativeTime = (dateStr) => {
 
 export default function TrangKhachHang() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, requirePermission } = useAuth();
   const { showToast } = useToast();
   const canManage = hasPermission('CRM_MANAGE');
+  const canExport = hasPermission('EXPORT_DATA');
 
   // Phân hệ chính: 'customers' | 'unlinked'
   const [activeTab, setActiveTab] = useState('customers');
@@ -76,6 +77,7 @@ export default function TrangKhachHang() {
   const requestSeq = useRef(0);
 
   const handleExportExcel = async () => {
+    if (!requirePermission('EXPORT_DATA', showToast, 'Xuất file Excel danh sách khách hàng CRM')) return;
     try {
       setExporting(true);
       const [sortBy, sortDir] = sort.split(':');
@@ -172,6 +174,7 @@ export default function TrangKhachHang() {
   };
 
   const handleRebuild = async () => {
+    if (!requirePermission('CRM_MANAGE', showToast, 'Đồng bộ lại toàn bộ dữ liệu khách hàng CRM')) return;
     if (!window.confirm('Dựng lại toàn bộ dữ liệu khách hàng từ các đơn hàng? Thao tác có thể mất vài phút.')) return;
     try {
       setRebuilding(true);
@@ -231,24 +234,24 @@ export default function TrangKhachHang() {
             className="btn btn-sm btn-outline-success rounded-pill px-3 py-2 fw-medium d-inline-flex align-items-center gap-2 shadow-xs bg-white"
             onClick={handleExportExcel}
             disabled={exporting}
-            title="Xuất file Excel danh sách khách hàng theo điều kiện lọc hiện tại"
+            title={canExport ? 'Xuất file Excel danh sách khách hàng theo điều kiện lọc hiện tại' : 'Yêu cầu quyền: Xuất file Excel'}
           >
             {exporting ? <span className="spinner-border spinner-border-sm" /> : <Download size={15} />}
             <span>{exporting ? 'Đang xuất...' : 'Xuất Excel'}</span>
+            {!canExport && <Lock size={12} className="text-warning" />}
           </button>
 
-          {canManage && (
-            <button
-              type="button"
-              className="btn btn-sm btn-primary rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2 shadow-xs"
-              disabled={rebuilding}
-              onClick={handleRebuild}
-              title="Đồng bộ và tính toán lại các chỉ số khách hàng từ toàn bộ hóa đơn"
-            >
-              <RefreshCw size={15} className={rebuilding ? 'spin' : ''} />
-              <span>{rebuilding ? 'Đang xử lý...' : 'Đồng bộ lại'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-sm btn-primary rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2 shadow-xs"
+            disabled={rebuilding}
+            onClick={handleRebuild}
+            title={canManage ? 'Đồng bộ và tính toán lại các chỉ số khách hàng từ toàn bộ hóa đơn' : 'Yêu cầu quyền: Quản trị dữ liệu CRM'}
+          >
+            <RefreshCw size={15} className={rebuilding ? 'spin' : ''} />
+            <span>{rebuilding ? 'Đang xử lý...' : 'Đồng bộ lại'}</span>
+            {!canManage && <Lock size={12} className="text-warning" />}
+          </button>
         </div>
       </div>
 
@@ -687,11 +690,15 @@ export default function TrangKhachHang() {
                           {/* Nút Sửa hồ sơ */}
                           <button
                             type="button"
-                            className="btn btn-sm btn-light border text-secondary rounded-circle p-1 hover-primary transition-all shadow-xs"
-                            onClick={() => setEditingCustomer(c)}
-                            title="Chỉnh sửa nhanh hồ sơ khách"
+                            className="btn btn-sm btn-light border text-secondary rounded-circle p-1 hover-primary transition-all shadow-xs d-inline-flex align-items-center"
+                            onClick={() => {
+                              if (!requirePermission('CRM_MANAGE', showToast, 'Chỉnh sửa thông tin hồ sơ khách hàng')) return;
+                              setEditingCustomer(c);
+                            }}
+                            title={canManage ? 'Chỉnh sửa nhanh hồ sơ khách' : 'Yêu cầu quyền: Quản trị dữ liệu CRM'}
                           >
                             <Edit3 size={13} />
+                            {!canManage && <Lock size={10} className="text-warning ms-0.5" />}
                           </button>
                         </div>
                       </td>

@@ -4,7 +4,7 @@ import {
   ShoppingCart, Users, Percent, Award, ArrowUpRight, CheckCircle2,
   AlertCircle, Filter, Layers, Smartphone, Laptop, MessageSquare,
   ShieldAlert, Sparkles, Activity, BarChart3, LineChart,
-  Package, Wrench, Info, HelpCircle
+  Package, Wrench, Info, HelpCircle, Lock
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
@@ -13,6 +13,7 @@ import {
 import { salesReportApi } from '../../api';
 import { dinhDangTien } from '../../utils/dinh_dang';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 
 // Bảng màu nhận diện thương hiệu cho các kênh bán hàng
 const BRAND_CHANNEL_COLORS = {
@@ -34,6 +35,8 @@ const PIE_COLORS = [
 
 export default function TrangBaoCaoBanHang() {
   const { showToast, confirm } = useToast();
+  const { hasPermission, requirePermission } = useAuth();
+  const canRebuild = hasPermission('SYNC_MANAGE|SYSTEM_MANAGE');
 
   const [preset, setPreset] = useState('THIS_MONTH');
   const [customFrom, setCustomFrom] = useState('');
@@ -83,6 +86,7 @@ export default function TrangBaoCaoBanHang() {
   };
 
   const handleRebuild = async () => {
+    if (!requirePermission('SYNC_MANAGE|SYSTEM_MANAGE', showToast, 'Đồng bộ lại cơ sở dữ liệu báo cáo bán hàng')) return;
     const isConfirmed = await confirm('Hệ thống sẽ đồng bộ và làm mới lại toàn bộ dữ liệu đơn hàng vào bảng sales_orders. Bạn có chắc chắn muốn thực hiện?');
     if (!isConfirmed) return;
 
@@ -304,9 +308,11 @@ export default function TrangBaoCaoBanHang() {
             className="btn btn-white border bg-white shadow-sm btn-sm d-inline-flex align-items-center gap-2 px-3 py-2 fw-semibold rounded-pill hover-lift"
             onClick={handleRebuild}
             disabled={rebuilding}
+            title={canRebuild ? 'Đồng bộ lại dữ liệu đơn hàng vào CSDL báo cáo' : 'Yêu cầu quyền: Quản lý đồng bộ hoặc Quản trị hệ thống'}
           >
             {rebuilding ? <div className="spinner-border spinner-border-sm text-secondary" role="status"></div> : <RefreshCw size={16} className="text-secondary" />}
             <span className="text-secondary">{rebuilding ? 'Đang đồng bộ...' : 'Đồng bộ CSDL'}</span>
+            {!canRebuild && <Lock size={13} className="text-warning" />}
           </button>
           <button
             className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-4 py-2 fw-semibold rounded-pill shadow-sm hover-lift"

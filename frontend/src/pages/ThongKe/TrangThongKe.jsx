@@ -15,6 +15,48 @@ const CHART_COLORS = {
   grid: '#e9ecef'
 };
 
+const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+const formatCurrency = (val) => vndFormatter.format(val);
+const compactCurrency = (val) => {
+  if (val >= 1000000000) return (val / 1000000000).toFixed(1) + ' Tỷ';
+  if (val >= 1000000) return (val / 1000000).toFixed(1) + ' Tr';
+  return formatCurrency(val);
+};
+
+// Component render bộ lọc dạng Grid (Đưa ra ngoài để tránh unmount/mount lại mỗi lần state thay đổi)
+const FilterGrid = React.memo(({ title, options, selected, onChange, columnCount = 2 }) => {
+  const allOptions = [{ value: '', label: 'Tất cả' }, ...options];
+  
+  return (
+    <div className="mb-4">
+      <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: '13px', textTransform: 'uppercase' }}>{title}</h6>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columnCount}, 1fr)`, gap: '4px' }}>
+        {allOptions.map(opt => {
+          const isSelected = selected === opt.value;
+          return (
+            <div 
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              className={`px-2 py-1 text-center rounded-2 transition-all ${isSelected ? 'bg-primary text-white border-primary shadow-sm' : 'bg-light text-secondary border border-light'}`}
+              style={{ 
+                cursor: 'pointer',
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '30px',
+                fontWeight: isSelected ? '600' : '500'
+              }}
+            >
+              {opt.label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export default function TrangThongKe() {
   const { showToast } = useToast();
   
@@ -109,47 +151,6 @@ export default function TrangThongKe() {
   const exportedCount = summary?.soldCount || 0;
   const inventoryCount = summary?.inventoryCount || 0;
   const inventoryValue = summary?.inventoryValue || 0;
-  
-  const formatCurrency = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
-  const compactCurrency = (val) => {
-    if (val >= 1000000000) return (val / 1000000000).toFixed(1) + ' Tỷ';
-    if (val >= 1000000) return (val / 1000000).toFixed(1) + ' Tr';
-    return formatCurrency(val);
-  };
-
-  // Component render bộ lọc dạng Grid (Áp dụng màu hiện đại)
-  const FilterGrid = ({ title, options, selected, onChange, columnCount = 2 }) => {
-    const allOptions = [{ value: '', label: 'Tất cả' }, ...options];
-    
-    return (
-      <div className="mb-4">
-        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: '13px', textTransform: 'uppercase' }}>{title}</h6>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columnCount}, 1fr)`, gap: '4px' }}>
-          {allOptions.map(opt => {
-            const isSelected = selected === opt.value;
-            return (
-              <div 
-                key={opt.value}
-                onClick={() => onChange(opt.value)}
-                className={`px-2 py-1 text-center rounded-2 transition-all ${isSelected ? 'bg-primary text-white border-primary shadow-sm' : 'bg-light text-secondary border border-light'}`}
-                style={{ 
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '30px',
-                  fontWeight: isSelected ? '600' : '500'
-                }}
-              >
-                {opt.label}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="container-fluid bg-light min-vh-100 py-4">

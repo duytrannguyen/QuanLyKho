@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ==========================================
   # 1. DATABASE: MySQL 8
@@ -19,10 +17,10 @@ services:
     healthcheck:
       # Đã bổ sung -u và -p để ping không bị từ chối truy cập (Access denied)
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
-      interval: 5s
+      interval: 20s
       timeout: 5s
-      retries: 25
-      start_period: 30s
+      retries: 15
+      start_period: 25s
     ports:
       # Cổng MySQL chỉ mở trên localhost của server để bảo mật
       # Dùng DB_PORT_LOCAL để tránh trùng lặp với DB_PORT (3306) của container
@@ -31,7 +29,30 @@ services:
       - mysql_data:/var/lib/mysql
       # Tự động khởi tạo schema bảng và seed data ban đầu khi chạy lần đầu
       - ./database/init:/docker-entrypoint-initdb.d:ro
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone='+07:00'
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone='+07:00'
+      --skip-name-resolve
+      --performance-schema=OFF
+      --innodb-buffer-pool-size=256M
+      --innodb-log-file-size=64M
+      --innodb-log-buffer-size=8M
+      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-method=O_DIRECT
+      --max-connections=60
+      --thread-cache-size=16
+      --table-open-cache=400
+      --table-definition-cache=400
+      --temptable-max-ram=16M
+      --binlog-expire-logs-seconds=259200
+    mem_limit: 550m
+    mem_reservation: 256m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ==========================================
   # 2. BACKEND: Spring Boot
@@ -42,7 +63,7 @@ services:
       dockerfile: Dockerfile
     container_name: qkshop_backend
     restart: always
-    # Tự động bơm TOÀN BỘ biến trong .env (JWT, ADMIN, GSHEET...) vào Spring Boot
+    # Tự động bơm TOÀN BỘ biến trong .env (DB, JWT, GSHEET...) vào Spring Boot
     env_file:
       - .env
     environment:
@@ -56,9 +77,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    mem_limit: 850m
+    mem_reservation: 384m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ==========================================
-  # 3. FRONTEND: React
+  # 3. FRONTEND: React (Nginx Reverse Proxy)
   # ==========================================
   frontend:
     build:
@@ -66,13 +94,18 @@ services:
       dockerfile: Dockerfile
     container_name: qkshop_frontend
     restart: always
-    env_file:
-      - .env
     ports:
       # Lắng nghe trên IP tĩnh server: BIND_IP:HTTP_PORT
       - "${BIND_IP:-0.0.0.0}:${HTTP_PORT:-80}:80"
     depends_on:
       - backend
+    mem_limit: 80m
+    mem_reservation: 24m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   mysql_data:
