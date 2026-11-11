@@ -581,6 +581,8 @@ public class SaleController {
         cc.setCloseType(com.qkshop.tonkho.core.enums.CloseType.CUSTOMER_RETURN);
         cc.setCloseReason(reason);
         cc.setSaleNote((cc.getSaleNote() != null ? cc.getSaleNote() + " | " : "") + "[HOÀN HÀNG/TRẢ MÁY]: " + reason);
+        cc.setWarrantyExpiry(null);
+        cc.setWarrantyPeriod("Đã hủy (Đã thu lại máy)");
         ClosedCycle savedCc = closedCycleRepository.save(cc);
 
         // 2. Tái tạo ActiveInventory
@@ -588,6 +590,10 @@ public class SaleController {
                 ? com.qkshop.tonkho.inventory.CycleState.NEEDS_INSPECTION
                 : com.qkshop.tonkho.inventory.CycleState.READY;
         String newCycleId = "CYC-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+
+        boolean isCompanyWarranty = cc.getWarrantyPeriod() != null && cc.getWarrantyPeriod().toLowerCase().contains("hãng");
+        String invWp = isCompanyWarranty ? cc.getWarrantyPeriod() : null;
+        java.time.LocalDate invExp = isCompanyWarranty ? cc.getWarrantyExpiry() : null;
 
         com.qkshop.tonkho.inventory.ActiveInventory ai = com.qkshop.tonkho.inventory.ActiveInventory.builder()
                 .cycleId(newCycleId)
@@ -600,8 +606,8 @@ public class SaleController {
                 .readyAt(nextState == com.qkshop.tonkho.inventory.CycleState.READY ? LocalDateTime.now() : null)
                 .salePrice(cc.getSalePriceSnapshot() != null ? cc.getSalePriceSnapshot() : cc.getGrossRevenue())
                 .note("Nhập lại từ đơn hoàn " + cc.getCycleId() + ": " + reason)
-                .warrantyPeriod(cc.getWarrantyPeriod())
-                .warrantyExpiry(cc.getWarrantyExpiry())
+                .warrantyPeriod(invWp)
+                .warrantyExpiry(invExp)
                 .build();
         activeInventoryRepository.save(ai);
 
@@ -678,6 +684,8 @@ public class SaleController {
                 .ifPresent(so -> {
                     so.setOrderStatus("Trả hàng");
                     so.setNetRevenue(BigDecimal.ZERO);
+                    so.setWarrantyExpiry(null);
+                    so.setWarrantyPeriod("Đã hủy (Đã thu máy)");
                     salesOrderRepository.save(so);
                 });
 
@@ -1076,6 +1084,22 @@ public class SaleController {
         map.put("isShipping", Boolean.TRUE.equals(cc.getIsShipping()));
         map.put("isDelivered", Boolean.TRUE.equals(cc.getIsDelivered()));
         map.put("deliveryDate", cc.getDeliveryDate());
+
+        if (isVoided) {
+            map.put("warrantyCancelled", true);
+            map.put("isWarrantyEligible", false);
+            map.put("warrantyExpiry", null);
+            map.put("warrantyPeriod", "Đã hủy (Đã thu lại máy)");
+            map.put("warrantyStatus", "VOIDED");
+            map.put("warrantyStatusText", "Đã hủy bảo hành (Đã thu máy)");
+            map.put("warrantyDenialReason", "Máy đã được shop thu lại về kho. Toàn bộ chính sách và quyền lợi bảo hành cho khách hàng này đã chấm dứt.");
+        } else {
+            map.put("warrantyCancelled", false);
+            map.put("isWarrantyEligible", true);
+            map.put("warrantyStatus", "ACTIVE");
+            map.put("warrantyStatusText", "Đang áp dụng bảo hành");
+            map.put("warrantyDenialReason", null);
+        }
 
         String configInfo = "";
         if (cc.getConfig() != null) {

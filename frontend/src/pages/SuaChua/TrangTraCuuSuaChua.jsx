@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiSuaChua } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
-import { formatCurrency, formatDate } from '../../utils/dinh_dang';
+import { formatCurrency, formatDate, getItemExpiryStatus } from '../../utils/dinh_dang';
 
 export default function TrangTraCuuSuaChua() {
   const { showToast } = useToast();
@@ -34,50 +34,6 @@ export default function TrangTraCuuSuaChua() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getItemExpiryStatus = (expiryDate, periodText = '') => {
-    const lower = (periodText || '').toLowerCase();
-    if (lower.includes('từ chối') || lower.includes('tu choi')) {
-      return {
-        text: 'Từ chối bảo hành',
-        badge: 'bg-danger-subtle text-danger border border-danger-subtle',
-        icon: AlertCircle
-      };
-    }
-    if (lower.includes('theo bh') || lower.includes('theo bảo hành')) {
-      return {
-        text: 'Theo BH máy (Còn hạn)',
-        badge: 'bg-primary-subtle text-primary border border-primary-subtle',
-        icon: ShieldCheck
-      };
-    }
-
-    if (!expiryDate) {
-      return {
-        text: periodText || 'Không bảo hành',
-        badge: 'bg-secondary-subtle text-secondary',
-        icon: AlertCircle
-      };
-    }
-    const now = new Date();
-    const end = new Date(expiryDate);
-    end.setHours(23, 59, 59, 999);
-    const diffTime = end.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return {
-        text: `Hết hạn (${Math.abs(diffDays)} ngày trước)`,
-        badge: 'bg-danger-subtle text-danger',
-        icon: AlertCircle
-      };
-    }
-    return {
-      text: `Còn hạn (${diffDays} ngày)`,
-      badge: 'bg-success-subtle text-success',
-      icon: ShieldCheck
-    };
   };
 
   return (

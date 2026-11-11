@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, X, CheckCircle2, XCircle, Layers, Search } from 'lucide-react';
+import { CRITICAL_PERMISSIONS } from '../../contexts/NguCanhXacThuc';
 
 export default function ModalXemQuyen({ show, onClose, user, availablePermissions }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,6 +148,14 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
                                           style={{ fontSize: '0.62rem' }}
                                         >
                                           {p.type === 'ACTION' ? 'Thao tác' : 'Chức năng'}
+                                        </span>
+                                      )}
+                                      {(p.critical || CRITICAL_PERMISSIONS.has(p.code)) && (
+                                        <span
+                                          className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle"
+                                          style={{ fontSize: '0.62rem' }}
+                                        >
+                                          ⚠️ Rủi ro cao
                                         </span>
                                       )}
                                     </div>

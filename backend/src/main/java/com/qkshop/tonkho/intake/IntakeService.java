@@ -162,9 +162,9 @@ public class IntakeService {
                 }
             }
 
-            // Nếu là Khách đổi/trả (CUSTOMER_RETURN), đồng bộ chu kỳ đóng gần nhất & SalesOrder tương ứng
-            if (intakeType == IntakeType.CUSTOMER_RETURN) {
-                reconcileCustomerReturn(serialKey, cycleId);
+            // Nếu là Khách đổi/trả (CUSTOMER_RETURN) hoặc Thu mua lại từ khách (CUSTOMER_BUYBACK), đồng bộ chu kỳ đóng gần nhất & hủy bảo hành đơn cũ
+            if (intakeType == IntakeType.CUSTOMER_RETURN || intakeType == IntakeType.CUSTOMER_BUYBACK) {
+                reconcileCustomerReturn(serialKey, cycleId, intakeType);
             }
 
             registry.setCurrentCycleId(cycleId);
@@ -244,7 +244,7 @@ public class IntakeService {
         }
     }
 
-    private void reconcileCustomerReturn(String serialKey, String newCycleId) {
+    private void reconcileCustomerReturn(String serialKey, String newCycleId, IntakeType intakeType) {
         if (closedCycleRepo == null) return;
         try {
             ClosedCycle closedCycle = closedCycleRepo.findTopBySerialKeyOrderByClosedAtDesc(serialKey)
@@ -254,7 +254,12 @@ public class IntakeService {
 
             if (closedCycle != null) {
                 closedCycle.setCloseType(CloseType.CUSTOMER_RETURN);
-                closedCycle.setCloseReason("Khách trả máy - nhập lại kho với chu kỳ " + newCycleId);
+                String reason = (intakeType == IntakeType.CUSTOMER_BUYBACK)
+                        ? "Shop thu mua lại máy từ khách - nhập lại kho với chu kỳ " + newCycleId
+                        : "Khách đổi/trả máy - nhập lại kho với chu kỳ " + newCycleId;
+                closedCycle.setCloseReason(reason);
+                closedCycle.setWarrantyExpiry(null);
+                closedCycle.setWarrantyPeriod("Đã hủy (Đã thu lại máy)");
                 closedCycleRepo.save(closedCycle);
             }
 
@@ -274,7 +279,12 @@ public class IntakeService {
                 matchedSo.ifPresent(so -> {
                     so.setOrderStatus("Trả hàng");
                     so.setNetRevenue(BigDecimal.ZERO);
-                    so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newCycleId);
+                    so.setWarrantyExpiry(null);
+                    so.setWarrantyPeriod("Đã hủy (Đã thu máy)");
+                    String noteText = (intakeType == IntakeType.CUSTOMER_BUYBACK)
+                            ? "Shop thu mua lại máy - nhập lại kho " + newCycleId
+                            : "Khách trả máy - nhập lại kho " + newCycleId;
+                    so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + noteText);
                     salesOrderRepo.save(so);
                 });
 

@@ -9,6 +9,8 @@ import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import ModalChiTietDonHang from '../KiemTraBaoHanh/ModalChiTietDonHang';
 import ModalSuaDonMay from '../KiemTraBaoHanh/ModalSuaDonMay';
+import ModalXacNhanGiaoHang from '../KiemTraBaoHanh/ModalXacNhanGiaoHang';
+import PhanTrang from '../../components/common/PhanTrang';
 import { formatCurrency, formatDate, getCleanWarrantyType, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangDonShip() {
@@ -544,49 +546,21 @@ export default function TrangDonShip() {
               </div>
 
               {/* 5. Phân Trang (Pagination Footer) */}
-              <div className="card-footer bg-white border-top py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div className="d-flex align-items-center gap-2 text-muted small">
-                  <span>Hiển thị</span>
-                  <select
-                    className="form-select form-select-sm w-auto"
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>trong tổng số <strong>{orders.length}</strong> đơn ship</span>
-                </div>
-
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm px-3 rounded-pill d-flex align-items-center gap-1"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft size={16} />
-                    <span>Trước</span>
-                  </button>
-
-                  <span className="small fw-semibold px-2 text-dark">
-                    Trang {currentPage} / {totalPages || 1}
-                  </span>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm px-3 rounded-pill d-flex align-items-center gap-1"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                  >
-                    <span>Sau</span>
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+              <div className="card-footer bg-white border-top py-3 px-4">
+                <PhanTrang
+                  page={currentPage}
+                  totalPages={totalPages}
+                  totalItems={orders.length}
+                  itemsPerPage={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(newSize) => {
+                    setPageSize(newSize);
+                    setCurrentPage(1);
+                  }}
+                  pageSizeOptions={[10, 20, 50]}
+                  itemName="đơn ship"
+                  showPageNumbers={false}
+                />
               </div>
             </>
           )}
@@ -617,88 +591,14 @@ export default function TrangDonShip() {
 
       {/* 8. Modal Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành */}
       {confirmingOrder && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1070 }} tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content shadow border-0 rounded-4">
-              <div className="modal-header bg-success text-white py-3">
-                <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
-                  <Truck size={20} />
-                  Xác Nhận Khách Đã Nhận Hàng
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setConfirmingOrder(null)}
-                  disabled={isSubmittingDelivery}
-                />
-              </div>
-
-              <form onSubmit={handleConfirmSubmit}>
-                <div className="modal-body p-4">
-                  <div className="p-3 bg-light rounded-3 border mb-3">
-                    <div className="fw-bold text-dark mb-1">
-                      {confirmingOrder.sourceModelText || 'Máy tính'}
-                    </div>
-                    <div className="small text-muted font-monospace mb-1">
-                      Serial: <strong className="text-primary">{confirmingOrder.serialKey}</strong>
-                    </div>
-                    <div className="small text-muted">
-                      Khách hàng: <strong className="text-dark">{confirmingOrder.customerName || 'Khách lẻ'}</strong> - {confirmingOrder.customerPhone || '—'}
-                    </div>
-                    <div className="small text-muted mt-1">
-                      Gói bảo hành: <span className="badge bg-primary ms-1">{confirmingOrder.warrantyPeriod || 'Theo máy'}</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-dark mb-1 d-flex align-items-center gap-1">
-                      <Calendar size={15} className="text-success" />
-                      Ngày khách nhận hàng thực tế <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="form-control border-success fw-medium"
-                      value={confirmDeliveryDate}
-                      onChange={(e) => setConfirmDeliveryDate(e.target.value)}
-                      required
-                    />
-                    <div className="form-text small text-muted">
-                      Thời gian bảo hành của máy sẽ bắt đầu được tính từ mốc ngày này.
-                    </div>
-                  </div>
-
-                  <div className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-0 rounded-3">
-                    <AlertCircle size={16} className="text-info flex-shrink-0" />
-                    <span>Sau khi xác nhận, đơn sẽ hoàn tất và kích hoạt hạn bảo hành tương ứng với gói của máy.</span>
-                  </div>
-                </div>
-
-                <div className="modal-footer bg-light d-flex justify-content-end gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-secondary px-4 rounded-pill"
-                    onClick={() => setConfirmingOrder(null)}
-                    disabled={isSubmittingDelivery}
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-success px-4 rounded-pill fw-bold d-flex align-items-center gap-2 text-white"
-                    disabled={isSubmittingDelivery}
-                  >
-                    {isSubmittingDelivery ? (
-                      <span className="spinner-border spinner-border-sm" />
-                    ) : (
-                      <CheckCircle2 size={16} />
-                    )}
-                    <span>Xác nhận & Kích hoạt BH</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ModalXacNhanGiaoHang
+          order={confirmingOrder}
+          confirmDeliveryDate={confirmDeliveryDate}
+          setConfirmDeliveryDate={setConfirmDeliveryDate}
+          isConfirmingDelivery={isSubmittingDelivery}
+          onSubmit={handleConfirmSubmit}
+          onClose={() => setConfirmingOrder(null)}
+        />
       )}
 
       {/* Modal Hoàn hàng / Hủy giao */}

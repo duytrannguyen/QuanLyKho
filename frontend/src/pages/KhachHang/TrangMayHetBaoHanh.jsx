@@ -11,6 +11,8 @@ import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 export default function TrangMayHetBaoHanh() {
   const navigate = useNavigate();
@@ -424,12 +426,7 @@ export default function TrangMayHetBaoHanh() {
             </thead>
             <tbody className="border-top-0">
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-5 text-secondary">
-                    <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-                    <span>Đang tải danh sách thiết bị hết hạn bảo hành...</span>
-                  </td>
-                </tr>
+                <BangLoading colSpan={7} message="Đang tải danh sách thiết bị hết hạn bảo hành..." />
               ) : orders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-5 text-muted">
@@ -643,65 +640,21 @@ export default function TrangMayHetBaoHanh() {
 
         {/* 5. Phân Trang (Pagination) */}
         {totalPages > 1 && (
-          <div className="card-footer bg-white border-top p-2.5 px-3.5 d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div className="small text-secondary">
-              Trang <strong>{page + 1}</strong> / <strong>{totalPages}</strong> (Tổng {totalElements} kết quả)
-            </div>
-
-            <div className="d-flex align-items-center gap-1">
-              <button
-                type="button"
-                className="btn btn-sm btn-white border px-2 py-1 rounded-2 shadow-2xs"
-                disabled={page === 0 || loading}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                <ChevronLeft size={14} />
-              </button>
-
-              {/* Các nút trang số */}
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pNum = page - 2 + i;
-                if (pNum < 0) pNum = i;
-                if (pNum >= totalPages) return null;
-
-                return (
-                  <button
-                    key={pNum}
-                    type="button"
-                    className={`btn btn-sm rounded-2 px-2.5 py-1 ${
-                      page === pNum ? 'btn-primary shadow-2xs fw-bold' : 'btn-white border text-secondary'
-                    }`}
-                    style={{ fontSize: '0.78rem' }}
-                    onClick={() => setPage(pNum)}
-                  >
-                    {pNum + 1}
-                  </button>
-                );
-              })}
-
-              <button
-                type="button"
-                className="btn btn-sm btn-white border px-2 py-1 rounded-2 shadow-2xs"
-                disabled={page >= totalPages - 1 || loading}
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              >
-                <ChevronRight size={14} />
-              </button>
-
-              <select
-                className="form-select form-select-sm ms-2"
-                style={{ width: '80px', fontSize: '0.78rem' }}
-                value={size}
-                onChange={(e) => {
-                  setSize(Number(e.target.value));
-                  setPage(0);
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
+          <div className="card-footer bg-white border-top p-2.5 px-3.5">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              pageSize={size}
+              onPageChange={setPage}
+              onPageSizeChange={(newSize) => {
+                setSize(newSize);
+                setPage(0);
+              }}
+              pageSizeOptions={[10, 20, 50]}
+              itemName="kết quả"
+            />
           </div>
         )}
 

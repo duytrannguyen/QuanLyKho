@@ -15,6 +15,7 @@ export const PERMISSION_LABELS = {
   PRICING_VIEW: 'Xem bảng giá niêm yết',
   PRICING_MANAGE: 'Quản lý & Chỉnh sửa bảng giá in',
   SEARCH_INVENTORY: 'Tra cứu tồn kho máy',
+  INVENTORY_VIEW: 'Tra cứu tồn kho máy',
   MANAGE_MACHINE_CODES: 'Quản lý mã máy & Lịch sử Serial',
   IMPORT_MACHINE: 'Nhập kho máy',
   MACHINE_UPDATE: 'Sửa giá bán & Bảo hành máy tồn kho',
@@ -41,6 +42,31 @@ export const PERMISSION_LABELS = {
   USER_MANAGE: 'Quản trị người dùng & Phân quyền',
   SYSTEM_MANAGE: 'Cấu hình hệ thống & Bảo trì máy chủ',
 };
+
+// Bản đồ phụ thuộc logic quyền hạn: Khi chọn quyền thao tác (ACTION), tự động bổ sung quyền xem màn hình (VIEW)
+export const PERMISSION_DEPENDENCIES = {
+  MACHINE_UPDATE: ['SEARCH_INVENTORY'],
+  MACHINE_EXPORT_OTHER: ['SEARCH_INVENTORY'],
+  MACHINE_DELETE: ['SEARCH_INVENTORY'],
+  IMPORT_MACHINE: ['SEARCH_INVENTORY'],
+  ACCESSORY_MANAGE: ['INVENTORY_ACCESSORY'],
+  PART_MANAGE: ['INVENTORY_PART'],
+  CRM_CARE: ['CRM_VIEW'],
+  CRM_MANAGE: ['CRM_VIEW'],
+  SYNC_MANAGE: ['SYNC_VIEW'],
+  PRICING_MANAGE: ['PRICING_VIEW'],
+  ORDER_EDIT: ['WARRANTY_CHECK'],
+  ORDER_RETURN: ['WARRANTY_CHECK'],
+};
+
+// Danh sách các quyền nhạy cảm / rủi ro cao cần lưu ý khi cấp
+export const CRITICAL_PERMISSIONS = new Set([
+  'MACHINE_DELETE',
+  'ORDER_RETURN',
+  'ORDER_EDIT',
+  'USER_MANAGE',
+  'SYSTEM_MANAGE',
+]);
 
 export const ROUTE_PERMISSION_MAP = [
   { path: '/', label: 'Bàn điều hành', permission: 'DASHBOARD_VIEW' },
@@ -151,6 +177,8 @@ export function AuthProvider({ children }) {
     return permsToCheck.some(code => {
       if (userPerms.includes(code)) return true;
       // Chỉ giữ từ đồng nghĩa mã quyền để tương thích CSDL cũ, tuyệt đối không tự động leo thang quyền
+      if (code === 'INVENTORY_VIEW' && userPerms.includes('SEARCH_INVENTORY')) return true;
+      if (code === 'SEARCH_INVENTORY' && userPerms.includes('INVENTORY_VIEW')) return true;
       if (code === 'LOGS_VIEW' && userPerms.includes('LOG_VIEW')) return true;
       if (code === 'LOG_VIEW' && userPerms.includes('LOGS_VIEW')) return true;
       if (code === 'MANAGE_MACHINE_CODES' && userPerms.includes('CATALOG_VIEW')) return true;

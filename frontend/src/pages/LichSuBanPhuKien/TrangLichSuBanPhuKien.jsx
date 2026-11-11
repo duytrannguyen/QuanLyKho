@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, History, Package, Search, X } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { apiPhuKien } from '../../api';
+import { formatDate, formatMoney } from '../../utils/dinh_dang';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 export default function TrangLichSuBanPhuKien() {
   const [history, setHistory] = useState([]);
@@ -62,18 +65,6 @@ export default function TrangLichSuBanPhuKien() {
   useEffect(() => {
     setCurrentPage(1);
   }, [filterAction, searchQuery, itemsPerPage]);
-
-  const formatPrice = (price) => {
-    if (!price) return '0 đ';
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
-    });
-  };
 
   // Số lượng cột để hiển thị dòng Loading/Trống cho chuẩn
   const colSpanCount = filterAction === 'SELL' ? 9 : 8;
@@ -157,12 +148,7 @@ export default function TrangLichSuBanPhuKien() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={colSpanCount} className="text-center py-5">
-                      <div className="spinner-border text-primary" role="status"></div>
-                      <div className="mt-2 text-secondary small">Đang tải dữ liệu...</div>
-                    </td>
-                  </tr>
+                  <BangLoading colSpan={colSpanCount} message="Đang tải dữ liệu lịch sử..." />
                 ) : currentItems.length === 0 ? (
                   <tr>
                     <td colSpan={colSpanCount} className="text-center py-5">
@@ -204,9 +190,9 @@ export default function TrangLichSuBanPhuKien() {
                           {item.action === 'SELL' ? '-' : '+'}{item.quantity}
                         </span>
                       </td>
-                      <td className="text-end text-muted small">{formatPrice(item.price)}</td>
+                      <td className="text-end text-muted small">{formatMoney(item.price)}</td>
                       <td className="text-end fw-bold text-primary">
-                        {formatPrice(item.price * item.quantity)}
+                        {formatMoney(item.price * item.quantity)}
                       </td>
                       <td className="text-secondary small fst-italic">
                         {item.note || '—'}
@@ -221,60 +207,19 @@ export default function TrangLichSuBanPhuKien() {
 
         {/* Phân trang */}
         {filteredHistory.length > 0 && (
-          <div className="card-footer bg-white border-top p-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-            
-            {/* Bộ chọn số dòng */}
-            <div className="d-flex align-items-center gap-3 flex-wrap">
-              <span className="small text-muted">
-                Hiển thị <strong>{((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredHistory.length)}</strong> / <strong>{filteredHistory.length}</strong> kết quả
-              </span>
-              <div className="d-flex align-items-center gap-2">
-                <span className="small text-muted">Số dòng:</span>
-                <select 
-                  className="form-select form-select-sm w-auto rounded-3" 
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Các nút chuyển trang */}
-            {totalPages > 1 && (
-              <ul className="pagination pagination-sm mb-0">
-                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>
-                    Trước
-                  </button>
-                </li>
-                {[...Array(totalPages)].map((_, i) => {
-                  // Rút gọn trang nếu quá nhiều
-                  if (totalPages > 5 && (i < currentPage - 2 || i > currentPage) && i !== 0 && i !== totalPages - 1) {
-                    if (i === 1 || i === totalPages - 2) return <li key={i} className="page-item disabled"><span className="page-link border-0 text-muted">...</span></li>;
-                    return null;
-                  }
-                  return (
-                    <li key={i} className={`page-item ${currentPage === i + 1 ? 'active' : ''}`}>
-                      <button className="page-link" onClick={() => setCurrentPage(i + 1)}>
-                        {i + 1}
-                      </button>
-                    </li>
-                  )
-                })}
-                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>
-                    Sau
-                  </button>
-                </li>
-              </ul>
-            )}
+          <div className="card-footer bg-white border-top p-3">
+            <PhanTrang
+              page={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredHistory.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setItemsPerPage(newSize);
+                setCurrentPage(1);
+              }}
+              itemName="kết quả"
+            />
           </div>
         )}
       </div>

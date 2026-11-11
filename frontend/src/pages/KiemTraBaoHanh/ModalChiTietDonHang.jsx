@@ -7,7 +7,7 @@ import {
 import { apiSuaChua } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { getCleanWarrantyType } from '../../utils/dinh_dang';
+import { getCleanWarrantyType, formatDate, formatMoney } from '../../utils/dinh_dang';
 
 export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery, onReturnOrder }) {
   const { hasPermission, requirePermission } = useAuth();
@@ -41,41 +41,6 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatDateOnly = (d) => {
-    if (!d) return '—';
-    try {
-      const date = d instanceof Date ? d : new Date(d);
-      return date.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return String(d);
-    }
-  };
-
-  const formatMoney = (val) => {
-    if (val === null || val === undefined) return '0 đ';
-    const num = Number(val);
-    if (isNaN(num)) return val + ' đ';
-    return num.toLocaleString('vi-VN') + ' đ';
   };
 
   // Trích xuất phụ kiện và quà tặng từ saleNote
@@ -208,6 +173,12 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
           <p>Ngày mua hàng: ${formatDate(order.saleDate)}</p>
         </div>
 
+        ${(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? `
+        <div style="background-color: #fee2e2; border: 2px dashed #dc2626; color: #991b1b; padding: 12px; text-align: center; border-radius: 6px; margin-bottom: 18px;">
+          <div style="font-size: 15px; font-weight: 800; margin-bottom: 2px;">⚠️ ĐƠN HÀNG ĐÃ THU HỒI / TRẢ MÁY — GÓI BẢO HÀNH ĐÃ BỊ HỦY</div>
+          <div style="font-size: 11px;">Chiếc máy này đã được thu lại về kho. Toàn bộ quyền lợi bảo hành đối với đơn hàng này đã chấm dứt.</div>
+        </div>` : ''}
+
         <div class="section">
           <div class="section-title">I. Thông Tin Khách Hàng</div>
           <div class="grid">
@@ -225,7 +196,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             </div>
             <div class="info-row">
               <span class="info-label">Gói bảo hành:</span>
-              <span class="info-val">${getCleanWarrantyType(order.warrantyPeriod)}</span>
+              <span class="info-val">${(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? '<span style="color: #dc2626; font-weight: bold;">ĐÃ HỦY (ĐÃ THU LẠI MÁY)</span>' : getCleanWarrantyType(order.warrantyPeriod)}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Hình thức giao:</span>
@@ -287,7 +258,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             <h4>Quy định bảo hành tại QKShop:</h4>
             <p>1. Sản phẩm còn nguyên tem bảo hành, số Serial phải trùng khớp với phiếu bảo hành và hệ thống.</p>
             <p>2. Không bảo hành các trường hợp máy bị rơi vỡ, cấn móp, vào nước, cháy nổ do nguồn điện không ổn định hoặc có dấu hiệu can thiệp phần cứng trái phép.</p>
-            <p>3. Thời hạn bảo hành: <strong>${getCleanWarrantyType(order.warrantyPeriod)}</strong> (Từ ngày <strong>${formatDateOnly(order.saleDate)}</strong> ${statusInfo?.endDate ? `đến ngày <strong>${formatDateOnly(statusInfo.endDate)}</strong>` : ''}).</p>
+            <p>3. Thời hạn bảo hành: <strong>${getCleanWarrantyType(order.warrantyPeriod)}</strong> (Từ ngày <strong>${formatDate(order.saleDate)}</strong> ${statusInfo?.endDate ? `đến ngày <strong>${formatDate(statusInfo.endDate)}</strong>` : ''}).</p>
           </div>
         </div>
 
@@ -382,39 +353,53 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             {/* Top Warranty Status Banner */}
             <div className="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
               <div className={`p-3 d-flex flex-wrap justify-content-between align-items-center ${
-                statusInfo?.status === 'VALID' ? 'bg-success-subtle text-success-emphasis border-start border-4 border-success' :
-                statusInfo?.status === 'EXPIRED' ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger' :
-                statusInfo?.status === 'VOIDED' ? 'bg-dark-subtle text-dark-emphasis border-start border-4 border-dark' :
-                'bg-info-subtle text-info-emphasis border-start border-4 border-info'
+                (order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                  ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger'
+                  : statusInfo?.status === 'VALID' ? 'bg-success-subtle text-success-emphasis border-start border-4 border-success'
+                  : statusInfo?.status === 'EXPIRED' ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger'
+                  : statusInfo?.status === 'VOIDED' ? 'bg-dark-subtle text-dark-emphasis border-start border-4 border-dark'
+                  : 'bg-info-subtle text-info-emphasis border-start border-4 border-info'
               }`}>
                 <div className="d-flex align-items-center gap-3">
                   <div className="p-2 rounded-circle bg-white shadow-sm">
-                    <StatusIcon size={24} className={
-                      statusInfo?.status === 'VALID' ? 'text-success' :
-                      statusInfo?.status === 'EXPIRED' ? 'text-danger' :
-                      statusInfo?.status === 'VOIDED' ? 'text-dark' : 'text-info'
-                    } />
+                    {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                      <XCircle size={24} className="text-danger" />
+                    ) : (
+                      <StatusIcon size={24} className={
+                        statusInfo?.status === 'VALID' ? 'text-success' :
+                        statusInfo?.status === 'EXPIRED' ? 'text-danger' :
+                        statusInfo?.status === 'VOIDED' ? 'text-dark' : 'text-info'
+                      } />
+                    )}
                   </div>
                   <div>
                     <h6 className="fw-bold mb-0 d-flex align-items-center gap-2">
-                      {statusInfo?.text || 'Trạng thái bảo hành'}
+                      {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                        ? 'Đã hủy bảo hành (Đã thu lại máy)'
+                        : (statusInfo?.text || 'Trạng thái bảo hành')}
                       <span className="badge bg-white text-dark border px-2 py-1 small fw-normal">
-                        Gói: {getCleanWarrantyType(order.warrantyPeriod)}
+                        Gói: {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                          ? 'Đã hủy'
+                          : getCleanWarrantyType(order.warrantyPeriod)}
                       </span>
                     </h6>
                     <div className="small mt-1 opacity-75">
-                      {order.isInStock ? (
+                      {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                        <span className="fw-semibold text-danger">
+                          Máy này đã được shop thu lại về kho. Toàn bộ quyền lợi bảo hành cho khách hàng này đã chấm dứt hoàn toàn.
+                        </span>
+                      ) : order.isInStock ? (
                         statusInfo?.endDate ? (
-                          <>Hạn bảo hành hãng: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
+                          <>Hạn bảo hành hãng: <strong>{formatDate(statusInfo.endDate)}</strong></>
                         ) : (
                           <>Gói bảo hành gán cho máy: <strong>{order.warrantyPeriod || 'Chưa thiết lập'}</strong> (Sẽ kích hoạt tính từ ngày bán máy cho khách)</>
                         )
                       ) : statusInfo?.endDate ? (
-                        <>Hạn bảo hành đến ngày: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
+                        <>Hạn bảo hành đến ngày: <strong>{formatDate(statusInfo.endDate)}</strong></>
                       ) : (
                         'Thời hạn bảo hành theo thỏa thuận hoặc chưa xác định'
                       )}
-                      {!order.isInStock && statusInfo?.diffDays !== undefined && (
+                      {!order.isInStock && !(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) && statusInfo?.diffDays !== undefined && (
                         <span className="ms-2">
                           ({statusInfo.status === 'VALID' 
                             ? `Còn ${statusInfo.diffDays} ngày` 
@@ -425,7 +410,11 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   </div>
                 </div>
 
-                {order.isVoided && (
+                {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                  <div className="badge bg-danger text-white px-3 py-2 rounded-pill mt-2 mt-md-0 fw-bold">
+                    <XCircle size={14} className="me-1 d-inline" /> Đã thu máy — Bảo hành đã hủy
+                  </div>
+                ) : order.isVoided && (
                   <div className="badge bg-danger text-white px-3 py-2 rounded-pill mt-2 mt-md-0">
                     <AlertCircle size={14} className="me-1 d-inline" /> Vòng tồn đã đóng / Đã thu hồi
                   </div>
@@ -958,19 +947,31 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   {!canReturnOrder && <Lock size={12} className="text-warning" />}
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
-                onClick={() => {
-                  if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
-                  window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
-                }}
-                title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
-              >
-                <ShieldCheck size={16} />
-                <span>Tiếp nhận Bảo hành (RMA)</span>
-                {!canRepair && <Lock size={12} className="text-danger" />}
-              </button>
+              {order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm fw-medium disabled"
+                  disabled
+                  title="Gói bảo hành đã bị hủy do máy đã được thu lại về kho. Từ chối tiếp nhận bảo hành theo đơn này."
+                >
+                  <XCircle size={16} className="text-danger" />
+                  <span>Từ chối tiếp nhận BH (Đã thu máy)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
+                  onClick={() => {
+                    if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
+                    window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
+                  }}
+                  title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
+                >
+                  <ShieldCheck size={16} />
+                  <span>Tiếp nhận Bảo hành (RMA)</span>
+                  {!canRepair && <Lock size={12} className="text-danger" />}
+                </button>
+              )}
               <button 
                 type="button" 
                 className="btn btn-primary px-3 rounded-pill d-flex align-items-center gap-2 shadow-sm"

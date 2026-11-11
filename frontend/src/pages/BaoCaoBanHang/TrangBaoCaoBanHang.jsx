@@ -1,37 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, Calendar, DollarSign,
-  ShoppingCart, Users, Percent, Award, ArrowUpRight, CheckCircle2,
-  AlertCircle, Filter, Layers, Smartphone, Laptop, MessageSquare,
-  ShieldAlert, Sparkles, Activity, BarChart3, LineChart,
-  Package, Wrench, Info, HelpCircle, Lock
+  ShoppingCart, Users, Percent, ArrowUpRight, AlertCircle,
+  Filter, Layers, Laptop, ShieldAlert, Activity,
+  Package, Wrench, Info, Lock
 } from 'lucide-react';
-import {
-  ResponsiveContainer, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, CartesianGrid, LabelList
-} from 'recharts';
 import { salesReportApi } from '../../api';
 import { dinhDangTien } from '../../utils/dinh_dang';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
-
-// Bảng màu nhận diện thương hiệu cho các kênh bán hàng
-const BRAND_CHANNEL_COLORS = {
-  'TikTok': { main: '#fe2c55', bg: 'rgba(254, 44, 85, 0.1)', text: '#fe2c55' },
-  'Zalo': { main: '#0068ff', bg: 'rgba(0, 104, 255, 0.1)', text: '#0068ff' },
-  'Facebook': { main: '#1877f2', bg: 'rgba(24, 119, 242, 0.1)', text: '#1877f2' },
-  'Google': { main: '#ea4335', bg: 'rgba(234, 67, 53, 0.1)', text: '#ea4335' },
-  'Người quen giới thiệu': { main: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#059669' },
-  'Trực tiếp / Vãng lai': { main: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)', text: '#7c3aed' },
-  'Khác': { main: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706' },
-  'Chưa rõ': { main: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)', text: '#64748b' }
-};
-
-const PIE_COLORS = [
-  '#2563eb', '#10b981', '#f59e0b', '#ec4899',
-  '#8b5cf6', '#06b6d4', '#f97316', '#64748b',
-  '#14b8a6', '#6366f1', '#84cc16', '#a855f7'
-];
+import { BRAND_CHANNEL_COLORS, renderTrendBadge, formatSharePct } from './components/baoCaoConstants';
+import TabTongQuan from './components/TabTongQuan';
+import TabSanPham from './components/TabSanPham';
+import TabKhachHang from './components/TabKhachHang';
+import TabChatLuongDuLieu from './components/TabChatLuongDuLieu';
 
 export default function TrangBaoCaoBanHang() {
   const { showToast, confirm } = useToast();
@@ -101,164 +83,6 @@ export default function TrangBaoCaoBanHang() {
     } finally {
       setRebuilding(false);
     }
-  };
-
-  const renderTrendBadge = (metric) => {
-    if (!metric) return null;
-    const isUp = metric.trend === 'UP';
-    const isDown = metric.trend === 'DOWN';
-
-    const badgeClass = isUp
-      ? 'bg-success-subtle text-success border-success-subtle'
-      : isDown
-        ? 'bg-danger-subtle text-danger border-danger-subtle'
-        : 'bg-secondary-subtle text-secondary border-secondary-subtle';
-
-    return (
-      <span className={`badge border rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1 fw-medium ${badgeClass}`}>
-        {isUp && <TrendingUp size={14} />}
-        {isDown && <TrendingDown size={14} />}
-        {!isUp && !isDown && <Minus size={14} />}
-        <span style={{ fontSize: '0.8rem' }}>{metric.changeText}</span>
-      </span>
-    );
-  };
-
-  const renderMoneyTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-light-subtle rounded-3 shadow p-3" style={{ minWidth: 220, zIndex: 1000 }}>
-          <div className="fw-bold mb-2 pb-2 border-bottom text-muted small text-uppercase">{label}</div>
-          {payload.map((item, idx) => (
-            <div key={idx} className="d-flex justify-content-between align-items-center gap-4 my-1">
-              <span className="small fw-semibold" style={{ color: item.color || '#2563eb' }}>{item.name}:</span>
-              <span className="text-dark fw-bold">{dinhDangTien(item.value)}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderCountTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white border border-light-subtle rounded-3 shadow p-3" style={{ minWidth: 220, zIndex: 1000 }}>
-          <div className="fw-bold mb-2 pb-2 border-bottom text-muted small text-uppercase">{label}</div>
-          {payload.map((item, idx) => (
-            <div key={idx} className="d-flex justify-content-between align-items-center gap-4 my-1">
-              <span className="small fw-semibold" style={{ color: item.color || '#2563eb' }}>{item.name}:</span>
-              <span className="text-dark fw-bold">{item.value?.toLocaleString('vi-VN')}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Helper hiển thị nhãn ngoài lát cắt (cho các biểu đồ nhiều tác nhân, vừa vặn không bị cắt góc)
-  const renderPieOuterAgentLabel = ({ cx, cy, midAngle, outerRadius, name, percentage, percent }) => {
-    const pct = percentage !== undefined ? percentage : Math.round((percent || 0) * 100);
-    if (pct < 4) return null; // Ẩn lát cắt quá nhỏ tránh đè chữ
-    const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 14;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    const isRight = x > cx;
-    const displayName = (name && name.length > 12) ? name.substring(0, 10) + '…' : name;
-
-    return (
-      <text
-        x={x} y={y}
-        fill="#334155"
-        textAnchor={isRight ? 'start' : 'end'}
-        dominantBaseline="central"
-        fontSize={11}
-        fontWeight={600}
-      >
-        {`${displayName} (${pct}%)`}
-      </text>
-    );
-  };
-
-  // Helper hiển thị nhãn tác nhân trực tiếp bên trong lát cắt Donut (Hiển thị cả Tên tác nhân + %)
-  const renderPieInnerAgentLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, name, percentage, percent }) => {
-    const pct = percentage !== undefined ? percentage : Math.round((percent || 0) * 100);
-    if (pct < 5) return null;
-    const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    const displayName = (name && name.length > 12) ? name.substring(0, 10) + '…' : name;
-
-    if (pct >= 12) {
-      return (
-        <text
-          x={x} y={y}
-          fill="#ffffff"
-          textAnchor="middle"
-          dominantBaseline="central"
-          style={{ textShadow: '0px 1px 3px rgba(0,0,0,0.6)', pointerEvents: 'none' }}
-        >
-          <tspan x={x} dy="-0.6em" fontSize="11" fontWeight="600">{displayName}</tspan>
-          <tspan x={x} dy="1.3em" fontSize="12" fontWeight="700">{`${pct}%`}</tspan>
-        </text>
-      );
-    }
-
-    return (
-      <text
-        x={x} y={y}
-        fill="#ffffff"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize="11"
-        fontWeight="700"
-        style={{ textShadow: '0px 1px 3px rgba(0,0,0,0.6)', pointerEvents: 'none' }}
-      >
-        {`${pct}%`}
-      </text>
-    );
-  };
-
-  // Trợ lý màu sắc chuyên biệt cho từng loại dữ liệu
-  const getCustomerTypeColor = (name, index) => {
-    if (!name) return '#94a3b8';
-    const lower = name.toLowerCase();
-    if (lower.includes('lần đầu') || lower.includes('mới')) return '#2563eb'; // Xanh dương
-    if (lower.includes('cũ') || lower.includes('quen')) return '#10b981'; // Xanh lá
-    if (lower.includes('chưa rõ') || lower.includes('khác')) return '#94a3b8'; // Xám
-    return PIE_COLORS[index % PIE_COLORS.length];
-  };
-
-  const getStudentColor = (name, index) => {
-    if (!name) return '#94a3b8';
-    const lower = name.toLowerCase();
-    if (lower.includes('sinh viên') && !lower.includes('không')) return '#06b6d4'; // Cyan
-    if (lower.includes('đi làm') || lower.includes('khác') || lower.includes('không')) return '#3b82f6'; // Xanh dương
-    if (lower.includes('chưa')) return '#94a3b8'; // Xám
-    return PIE_COLORS[index % PIE_COLORS.length];
-  };
-
-  const getSourceColor = (name, index) => {
-    if (BRAND_CHANNEL_COLORS[name]) return BRAND_CHANNEL_COLORS[name].main;
-    return PIE_COLORS[index % PIE_COLORS.length];
-  };
-
-  const getCategoryColor = (name) => {
-    if (!name) return '#94a3b8';
-    if (name.includes('Phụ kiện')) return '#10b981';
-    if (name.includes('Sửa chữa') || name.includes('Dịch vụ')) return '#f59e0b';
-    return '#2563eb';
-  };
-
-  const formatSharePct = (val, total) => {
-    if (!val || !total || total <= 0) return '0%';
-    const p = (val / total) * 100;
-    if (p > 0 && p < 0.1) return `${p.toFixed(2)}%`;
-    return `${p.toFixed(1)}%`;
   };
 
   const kpis = data?.kpis;
@@ -515,7 +339,6 @@ export default function TrangBaoCaoBanHang() {
                     {dinhDangTien(kpis?.machineRevenue?.current || 0)}
                   </h3>
 
-                  {/* Progress bar tỷ trọng */}
                   <div className="progress mb-3 bg-light" style={{ height: 6 }}>
                     <div
                       className="progress-bar bg-primary rounded-pill"
@@ -561,7 +384,6 @@ export default function TrangBaoCaoBanHang() {
                     {dinhDangTien(kpis?.accessoryRevenue?.current || 0)}
                   </h3>
 
-                  {/* Progress bar tỷ trọng */}
                   <div className="progress mb-3 bg-light" style={{ height: 6 }}>
                     <div
                       className="progress-bar bg-success rounded-pill"
@@ -607,7 +429,6 @@ export default function TrangBaoCaoBanHang() {
                     {dinhDangTien(kpis?.repairRevenue?.current || 0)}
                   </h3>
 
-                  {/* Progress bar tỷ trọng */}
                   <div className="progress mb-3 bg-light" style={{ height: 6 }}>
                     <div
                       className="progress-bar bg-warning rounded-pill"
@@ -632,7 +453,6 @@ export default function TrangBaoCaoBanHang() {
               </div>
             </div>
 
-            {/* Thanh ghi chú kế toán mỏng, tinh tế */}
             <div className="d-flex align-items-center gap-2 px-3 py-2 mt-3 rounded-3 bg-white border border-light-subtle text-muted small shadow-xs">
               <Info size={16} className="text-primary flex-shrink-0" />
               <div className="flex-grow-1" style={{ fontSize: '0.825rem' }}>
@@ -720,576 +540,33 @@ export default function TrangBaoCaoBanHang() {
           </div>
 
           {/* ==================== TABS CONTENT ==================== */}
-
-          {/* TAB 1: XU HƯỚNG & KÊNH BÁN */}
           {activeTab === 'overview' && (
-            <div className="fade show active">
-              {/* Sơ đồ 1 */}
-              <div className="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-                <div className="card-header bg-transparent border-0 pt-4 pb-0 px-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
-                  <div>
-                    <h5 className="fw-bold d-flex align-items-center gap-2 mb-1 text-dark">
-                      <TrendingUp className="text-primary" size={22} />
-                      Diễn Biến Doanh Thu & Sản Lượng
-                    </h5>
-                    <small className="text-muted">Theo dõi chu kỳ bán hàng theo thời gian</small>
-                  </div>
-                  <div className="bg-light p-1 rounded-pill border d-inline-flex">
-                    <button
-                      className={`btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all border-0 ${trendMetric === 'revenue-bar' ? 'btn-white bg-white shadow-sm text-primary' : 'bg-transparent text-muted'}`}
-                      onClick={() => setTrendMetric('revenue-bar')}
-                    >
-                      <BarChart3 size={15} className="me-1 d-inline" /> Cột Doanh Thu
-                    </button>
-                    <button
-                      className={`btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all border-0 ${trendMetric === 'revenue-area' ? 'btn-white bg-white shadow-sm text-primary' : 'bg-transparent text-muted'}`}
-                      onClick={() => setTrendMetric('revenue-area')}
-                    >
-                      <LineChart size={15} className="me-1 d-inline" /> Vùng Doanh Thu
-                    </button>
-                    <button
-                      className={`btn btn-sm rounded-pill px-3 py-1 fw-bold transition-all border-0 ${trendMetric === 'orders' ? 'btn-white bg-white shadow-sm text-primary' : 'bg-transparent text-muted'}`}
-                      onClick={() => setTrendMetric('orders')}
-                    >
-                      <ShoppingCart size={15} className="me-1 d-inline" /> Số Máy Bán
-                    </button>
-                  </div>
-                </div>
-
-                <div className="card-body p-4" style={{ height: 400 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    {trendMetric === 'revenue-bar' ? (
-                      <BarChart data={data.dailyRevenue || []} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                        <XAxis dataKey="displayDate" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v)} dx={-10} />
-                        <Tooltip content={renderMoneyTooltip} cursor={{ fill: '#f1f5f9' }} />
-                        <Bar dataKey="revenue" name="Doanh thu" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={60}>
-                          <LabelList dataKey="revenue" position="top" formatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v > 0 ? dinhDangTien(v) : '')} fill="#475569" fontSize={11} fontWeight={600} />
-                        </Bar>
-                      </BarChart>
-                    ) : trendMetric === 'revenue-area' ? (
-                      <AreaChart data={data.dailyRevenue || []} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                        <XAxis dataKey="displayDate" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v)} dx={-10} />
-                        <Tooltip content={renderMoneyTooltip} />
-                        <Area type="monotone" dataKey="revenue" name="Doanh thu" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                      </AreaChart>
-                    ) : (
-                      <BarChart data={data.dailyRevenue || []} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                        <XAxis dataKey="displayDate" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} dx={-10} />
-                        <Tooltip content={renderCountTooltip} cursor={{ fill: '#f1f5f9' }} />
-                        <Bar dataKey="orderCount" name="Số máy đã bán" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={60}>
-                          <LabelList dataKey="orderCount" position="top" formatter={(v) => (v > 0 ? `${v}` : '')} fill="#475569" fontSize={12} fontWeight={700} />
-                        </Bar>
-                      </BarChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="row g-4 mb-4">
-                {/* Sơ đồ 2: Doanh Thu Nguồn */}
-                <div className="col-12 col-lg-7">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                    <div className="card-header bg-transparent border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
-                      <div>
-                        <h5 className="fw-bold d-flex align-items-center gap-2 mb-1 text-dark">
-                          <Filter className="text-info" size={22} />
-                          Xếp Hạng Nguồn Chốt Đơn
-                        </h5>
-                      </div>
-                    </div>
-                    <div className="card-body p-4 d-flex flex-column justify-content-center" style={{ minHeight: 380 }}>
-                      <ResponsiveContainer width="100%" height={340}>
-                        <BarChart layout="vertical" data={data.revenueBySource || []} margin={{ top: 10, right: 110, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" opacity={0.5} />
-                          <XAxis type="number" hide />
-                          <YAxis type="category" dataKey="source" tick={{ fontSize: 13, fill: '#334155', fontWeight: 600 }} axisLine={false} tickLine={false} width={130} />
-                          <Tooltip content={renderMoneyTooltip} cursor={{ fill: '#f8fafc' }} />
-                          <Bar dataKey="revenue" name="Doanh thu" radius={[0, 6, 6, 0]} barSize={32}>
-                            {(data.revenueBySource || []).map((entry, idx) => {
-                              const colorObj = BRAND_CHANNEL_COLORS[entry.source] || BRAND_CHANNEL_COLORS['Khác'];
-                              return <Cell key={`cell-${idx}`} fill={colorObj.main} />;
-                            })}
-                            <LabelList
-                              dataKey="revenue"
-                              position="right"
-                              formatter={(val) => {
-                                if (!val) return '';
-                                const pct = totalRevenue > 0 ? ((val / totalRevenue) * 100).toFixed(1) : 0;
-                                const moneyText = val >= 1e6 ? `${(val / 1e6).toFixed(1)} Tr` : dinhDangTien(val);
-                                return `${moneyText} (${pct}%)`;
-                              }}
-                              fill="#475569" fontSize={12} fontWeight={600}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sơ đồ 3: Hành vi chốt */}
-                <div className="col-12 col-lg-5">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                    <div className="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                      <h5 className="fw-bold d-flex align-items-center gap-2 mb-1 text-dark">
-                        <MessageSquare className="text-warning" size={22} />
-                        Hành Vi Chốt Đơn
-                      </h5>
-                    </div>
-                    <div className="card-body p-4 d-flex flex-column">
-                      <div style={{ height: 260, width: '100%' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={data.inboxVsDirect || []} dataKey="value" nameKey="name"
-                              cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} stroke="none"
-                              labelLine={false} label={renderPieInnerAgentLabel}
-                            >
-                              {(data.inboxVsDirect || []).map((_, i) => <Cell key={i} fill={i === 0 ? '#3b82f6' : '#f59e0b'} />)}
-                            </Pie>
-                            <Tooltip content={renderMoneyTooltip} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-
-                      <div className="row g-3 mt-auto">
-                        {(data.inboxVsDirect || []).map((item, idx) => (
-                          <div key={idx} className="col-6">
-                            <div className="p-3 bg-light rounded-4 border border-light-subtle h-100 text-center">
-                              <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-                                <span className="rounded-circle" style={{ width: 12, height: 12, backgroundColor: idx === 0 ? '#3b82f6' : '#f59e0b' }}></span>
-                                <span className="fw-bold text-dark">{item.name}</span>
-                              </div>
-                              <h4 className="fw-bold text-primary mb-1">{item.percentage}%</h4>
-                              <div className="small text-muted fw-semibold">{dinhDangTien(item.value)}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TabTongQuan
+              data={data}
+              trendMetric={trendMetric}
+              setTrendMetric={setTrendMetric}
+              totalRevenue={totalRevenue}
+            />
           )}
 
-          {/* TAB 2: SẢN PHẨM & HÃNG */}
           {activeTab === 'products' && (
-            <div className="fade show active">
-              <div className="row g-4 mb-4">
-
-                {/* Bảng Top Models */}
-                <div className="col-12 col-xl-7">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                    <div className="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                      <h5 className="fw-bold d-flex align-items-center gap-2 mb-1 text-dark">
-                        <Award className="text-warning" size={22} />
-                        Top 10 Dòng Máy Bán Chạy Nhất
-                      </h5>
-                    </div>
-                    <div className="card-body p-0 mt-4">
-                      <div className="table-responsive border-0">
-                        <table className="table table-hover align-middle mb-0 border-top-0">
-                          <thead className="table-light">
-                            <tr>
-                              <th className="px-4 py-3 text-muted small fw-bold text-uppercase border-bottom-0" style={{ width: 70 }}>Hạng</th>
-                              <th className="py-3 text-muted small fw-bold text-uppercase border-bottom-0">Sản Phẩm</th>
-                              <th className="py-3 text-muted small fw-bold text-uppercase border-bottom-0 text-center">Đã Bán</th>
-                              <th className="py-3 text-muted small fw-bold text-uppercase border-bottom-0 text-end">Doanh Thu</th>
-                              <th className="px-4 py-3 text-muted small fw-bold text-uppercase border-bottom-0" style={{ width: 140 }}>Tỷ Trọng</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(data.topModels || []).map((m, idx) => {
-                              const pct = totalRevenue > 0 ? (m.revenue / totalRevenue) * 100 : 0;
-                              return (
-                                <tr key={idx}>
-                                  <td className="px-4 py-3 border-light-subtle">
-                                    <span className={`badge rounded-circle d-flex align-items-center justify-content-center p-0 fw-bold shadow-sm ${idx === 0 ? 'bg-warning text-white' :
-                                      idx === 1 ? 'bg-secondary text-white' :
-                                        idx === 2 ? 'bg-danger text-white' :
-                                          'bg-light text-secondary border'
-                                      }`} style={{ width: 32, height: 32, fontSize: '0.9rem' }}>
-                                      {idx + 1}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 border-light-subtle">
-                                    <div className="fw-bold text-dark text-truncate" style={{ maxWidth: 280 }} title={m.modelName}>{m.modelName}</div>
-                                    <div className="text-muted small fw-medium mt-1">Đơn giá TB: {dinhDangTien(m.aov)}</div>
-                                  </td>
-                                  <td className="py-3 border-light-subtle text-center">
-                                    <span className="fw-bold text-dark fs-5">{m.orderCount}</span>
-                                  </td>
-                                  <td className="py-3 border-light-subtle text-end fw-bold text-primary">{dinhDangTien(m.revenue)}</td>
-                                  <td className="px-4 py-3 border-light-subtle">
-                                    <div className="d-flex align-items-center gap-2">
-                                      <div className="progress flex-grow-1 bg-light" style={{ height: 8 }}>
-                                        <div className="progress-bar bg-primary rounded-pill" style={{ width: `${Math.min(pct * 3, 100)}%` }}></div>
-                                      </div>
-                                      <span className="text-muted fw-bold small" style={{ minWidth: '40px' }}>{pct.toFixed(1)}%</span>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Biểu đồ Thị phần Hãng */}
-                <div className="col-12 col-xl-5">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <h5 className="fw-bold d-flex align-items-center gap-2 mb-0 text-dark">
-                        <Laptop className="text-primary" size={22} />
-                        Thị Phần Hãng Sản Xuất
-                      </h5>
-                      <span className="badge bg-light text-secondary border rounded-pill px-3 py-1 fw-medium">
-                        {(data.brandMix || []).length} Hãng
-                      </span>
-                    </div>
-
-                    <div style={{ minHeight: 250, width: '100%', flexGrow: 1 }}>
-                      <ResponsiveContainer width="100%" height={260}>
-                        <PieChart margin={{ top: 10, right: 25, left: 25, bottom: 10 }}>
-                          <Pie
-                            data={data.brandMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} stroke="none"
-                            label={renderPieOuterAgentLabel} labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                          >
-                            {(data.brandMix || []).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip content={renderMoneyTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                      {(data.brandMix || []).map((item, idx) => (
-                        <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}></span>
-                            <span className="fw-bold text-dark small">{item.name}</span>
-                          </div>
-                          <div className="text-end">
-                            <span className="fw-bold text-primary me-2">{item.percentage}%</span>
-                            <span className="small text-muted fw-semibold">({dinhDangTien(item.value)})</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Hàng 2: Cơ cấu Ngành hàng & Cơ cấu Phân khúc */}
-              <div className="row g-4 mb-4">
-                {/* 1. Cơ cấu Doanh thu Ngành hàng */}
-                <div className="col-12 col-lg-6">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <h5 className="fw-bold d-flex align-items-center gap-2 mb-0 text-dark">
-                        <Layers className="text-success" size={22} />
-                        Cơ Cấu Doanh Thu Theo Ngành Hàng
-                      </h5>
-                      <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1 fw-bold">
-                        Máy Móc • Phụ Kiện • Sửa Chữa
-                      </span>
-                    </div>
-
-                    <div style={{ height: 260, width: '100%' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={data.categoryMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none"
-                            labelLine={false} label={renderPieInnerAgentLabel}
-                          >
-                            {(data.categoryMix || []).map((item, i) => (
-                              <Cell key={i} fill={getCategoryColor(item.name)} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={renderMoneyTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle">
-                      {(data.categoryMix || []).map((item, idx) => {
-                        const color = getCategoryColor(item.name);
-                        return (
-                          <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: color }}></span>
-                              <span className="fw-bold text-dark small">{item.name}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="fw-bold text-dark me-2">{formatSharePct(item.value, totalRevenue)}</span>
-                              <span className="small text-muted fw-semibold">({dinhDangTien(item.value)})</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Cơ cấu Phân khúc máy */}
-                <div className="col-12 col-lg-6">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <h5 className="fw-bold d-flex align-items-center gap-2 mb-0" style={{ color: '#7c3aed' }}>
-                        <Layers size={22} />
-                        Cơ Cấu Phân Khúc Máy
-                      </h5>
-                      <span className="badge bg-light text-secondary border rounded-pill px-3 py-1 fw-medium">
-                        Phân khúc giá
-                      </span>
-                    </div>
-
-                    <div style={{ height: 260, width: '100%' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 10, right: 25, left: 25, bottom: 10 }}>
-                          <Pie
-                            data={data.segmentMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2} stroke="none"
-                            label={renderPieOuterAgentLabel} labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                          >
-                            {(data.segmentMix || []).map((_, i) => <Cell key={i} fill={PIE_COLORS[(i + 4) % PIE_COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip content={renderCountTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                      {(data.segmentMix || []).map((item, idx) => (
-                        <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: PIE_COLORS[(idx + 4) % PIE_COLORS.length] }}></span>
-                            <span className="fw-bold text-dark small">{item.name}</span>
-                          </div>
-                          <div className="text-end">
-                            <span className="fw-bold text-purple me-2" style={{ color: '#7c3aed' }}>{item.percentage}%</span>
-                            <span className="small text-muted fw-semibold">({item.value?.toLocaleString('vi-VN')} đơn)</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TabSanPham
+              data={data}
+              totalRevenue={totalRevenue}
+            />
           )}
 
-          {/* TAB 3: KHÁCH HÀNG (ĐÃ TỐI ƯU TOÀN DIỆN, KHÔNG TRÙNG LẶP, KHÔNG BỊ TRÀN CHỮ) */}
           {activeTab === 'customers' && (
-            <div className="fade show active">
-              <div className="row g-4 mb-4">
-
-                {/* Card 1: Khách Mới vs Khách Cũ */}
-                <div className="col-12 col-md-4">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
-                      <Users className="text-primary" size={22} />
-                      Khách Mới & Khách Cũ
-                    </h5>
-
-                    <div style={{ height: 230, width: '100%' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={data.customerTypeMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2} stroke="none"
-                            labelLine={false} label={renderPieInnerAgentLabel}
-                          >
-                            {(data.customerTypeMix || []).map((item, i) => (
-                              <Cell key={i} fill={getCustomerTypeColor(item.name, i)} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={renderCountTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle">
-                      {(data.customerTypeMix || []).map((item, idx) => {
-                        const color = getCustomerTypeColor(item.name, idx);
-                        return (
-                          <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: color }}></span>
-                              <span className="fw-bold text-dark small">{item.name}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="fw-bold text-primary me-2">{item.percentage}%</span>
-                              <span className="small text-muted fw-semibold">({item.value?.toLocaleString('vi-VN')} đơn)</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Học Sinh / Sinh Viên */}
-                <div className="col-12 col-md-4">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
-                      <Sparkles className="text-info" size={22} />
-                      Tỷ Lệ Học Sinh / Sinh Viên
-                    </h5>
-
-                    <div style={{ height: 230, width: '100%' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={data.studentMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={2} stroke="none"
-                            labelLine={false} label={renderPieInnerAgentLabel}
-                          >
-                            {(data.studentMix || []).map((item, i) => (
-                              <Cell key={i} fill={getStudentColor(item.name, i)} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={renderCountTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle">
-                      {(data.studentMix || []).map((item, idx) => {
-                        const color = getStudentColor(item.name, idx);
-                        return (
-                          <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: color }}></span>
-                              <span className="fw-bold text-dark small">{item.name}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="fw-bold text-info me-2">{item.percentage}%</span>
-                              <span className="small text-muted fw-semibold">({item.value?.toLocaleString('vi-VN')} đơn)</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 3: Nguồn Tiếp Cận Lần Đầu (Đã thu gọn radius để chữ không bị cắt ở mép) */}
-                <div className="col-12 col-md-4">
-                  <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
-                    <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
-                      <Smartphone className="text-purple" size={22} style={{ color: '#7c3aed' }} />
-                      Nguồn Tiếp Cận Lần Đầu
-                    </h5>
-
-                    <div style={{ height: 230, width: '100%' }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 10, right: 25, left: 25, bottom: 10 }}>
-                          <Pie
-                            data={data.firstSourceMix || []} dataKey="value" nameKey="name"
-                            cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} stroke="none"
-                            label={renderPieOuterAgentLabel} labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                          >
-                            {(data.firstSourceMix || []).map((item, i) => (
-                              <Cell key={i} fill={getSourceColor(item.name, i)} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={renderCountTooltip} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 220, overflowY: 'auto' }}>
-                      {(data.firstSourceMix || []).map((item, idx) => {
-                        const color = getSourceColor(item.name, idx);
-                        return (
-                          <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="rounded-circle shadow-sm flex-shrink-0" style={{ width: 12, height: 12, backgroundColor: color }}></span>
-                              <span className="fw-bold text-dark small text-truncate" style={{ maxWidth: 140 }}>{item.name}</span>
-                            </div>
-                            <div className="text-end">
-                              <span className="fw-bold text-dark me-2">{item.percentage}%</span>
-                              <span className="small text-muted fw-semibold">({item.value?.toLocaleString('vi-VN')} đơn)</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
+            <TabKhachHang
+              data={data}
+            />
           )}
 
-          {/* TAB 4: SỨC KHỎE DỮ LIỆU */}
           {activeTab === 'dataQuality' && (
-            <div className="fade show active">
-              <div className="card border-0 shadow-sm rounded-4 mb-4 bg-white p-4 p-xl-5">
-                <div className="text-center mb-5">
-                  <div className="d-inline-flex align-items-center justify-content-center p-3 bg-warning-subtle text-warning-emphasis rounded-circle mb-3">
-                    <ShieldAlert size={40} />
-                  </div>
-                  <h4 className="fw-bold text-dark">Kiểm Soát Chất Lượng Dữ Liệu</h4>
-                  <p className="text-muted">Hệ thống tự động rà soát tính đầy đủ của thông tin đơn hàng để đảm bảo báo cáo luôn chính xác nhất.</p>
-                </div>
-
-                <div className="row g-4 justify-content-center">
-                  <div className="col-12 col-md-4">
-                    <div className="p-4 bg-light rounded-4 border border-light-subtle text-center h-100 shadow-sm hover-lift-card">
-                      <div className="text-muted fw-bold mb-3 text-uppercase small" style={{ letterSpacing: '1px' }}>Tổng Đơn Hàng Xét Duyệt</div>
-                      <h1 className="fw-bold text-dark display-5 mb-3">
-                        {data.dataQuality?.totalOrdersInPeriod?.toLocaleString('vi-VN') || 0}
-                      </h1>
-                      <span className="badge bg-success text-white rounded-pill px-3 py-2 fw-semibold fs-6 shadow-sm">
-                        <CheckCircle2 size={16} className="me-1 inline" /> Hợp lệ
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="col-12 col-md-4">
-                    <div className="p-4 rounded-4 border text-center h-100 shadow-sm hover-lift-card" style={{ backgroundColor: '#fff1f2', borderColor: '#ffe4e6' }}>
-                      <div className="text-danger fw-bold mb-3 text-uppercase small" style={{ letterSpacing: '1px' }}>Đơn Lỗi / Thiếu Thông Tin</div>
-                      <h1 className="fw-bold text-danger display-5 mb-3">
-                        {data.dataQuality?.issuesCount?.toLocaleString('vi-VN') || 0}
-                      </h1>
-                      <p className="text-danger small fw-semibold mb-0">Thiếu mã khách hàng hoặc<br />thuộc tính bắt buộc</p>
-                    </div>
-                  </div>
-
-                  <div className="col-12 col-md-4">
-                    <div className="p-4 rounded-4 border text-center h-100 shadow-sm hover-lift-card" style={{ backgroundColor: '#fffbeb', borderColor: '#fef3c7' }}>
-                      <div className="text-warning-emphasis fw-bold mb-3 text-uppercase small" style={{ letterSpacing: '1px' }}>Đơn Chưa Rõ Nguồn</div>
-                      <h1 className="fw-bold text-warning display-5 mb-3">
-                        {data.dataQuality?.unknownSourceCount?.toLocaleString('vi-VN') || 0}
-                      </h1>
-                      <p className="text-warning-emphasis small fw-semibold mb-0">Nguồn chốt đơn đang bị<br />để trống hoặc "Chưa rõ"</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TabChatLuongDuLieu
+              data={data}
+            />
           )}
-
         </>
       ) : null}
 

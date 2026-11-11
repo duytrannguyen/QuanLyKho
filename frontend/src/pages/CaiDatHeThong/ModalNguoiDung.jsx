@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Check, Shield, User as UserIcon, Lock, Mail, CheckSquare, 
-  Square, RefreshCw, Info, AlertTriangle, Layers, Search, Eye, Zap, Layout
+  Square, RefreshCw, Info, AlertTriangle, Layers, Search, Eye, Zap, Layout, AlertCircle
 } from 'lucide-react';
 import { systemApi } from '../../api';
-import { ROUTE_PERMISSION_MAP } from '../../contexts/NguCanhXacThuc';
+import { 
+  ROUTE_PERMISSION_MAP, 
+  PERMISSION_LABELS, 
+  PERMISSION_DEPENDENCIES, 
+  CRITICAL_PERMISSIONS 
+} from '../../contexts/NguCanhXacThuc';
 
 // Định nghĩa preset quyền mặc định cho từng vai trò hệ thống
 const ROLE_PRESETS = {
@@ -35,9 +40,26 @@ const ROLE_PRESETS = {
 // Mẫu phân quyền nhanh theo vị trí công việc thực tế tại cửa hàng
 const JOB_TEMPLATES = [
   {
+    id: 'STORE_MANAGER',
+    label: 'Cửa hàng trưởng / Quản lý',
+    desc: 'Điều hành toàn bộ hoạt động kho bãi, bán hàng, sửa chữa, CRM & đối soát (trừ bảo trì máy chủ & xóa vĩnh viễn serial)',
+    badgeColor: 'bg-primary',
+    permissions: [
+      'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
+      'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN', 'PRICING_VIEW', 'PRICING_MANAGE',
+      'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'INSPECTION',
+      'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY',
+      'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
+      'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW',
+      'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
+      'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA'
+    ]
+  },
+  {
     id: 'POS_SALES',
     label: 'Bán hàng & Thu ngân (POS)',
-    desc: 'Bán máy, bán phụ kiện, quản lý đơn ship, xem bảng giá, tra cứu tồn kho & bảo hành',
+    desc: 'Bán máy, bán phụ kiện, theo dõi đơn ship, xem bảng giá, tra cứu tồn kho, bảo hành & CSKH',
+    badgeColor: 'bg-success',
     permissions: [
       'DASHBOARD_VIEW', 'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE',
       'PRICING_VIEW', 'SEARCH_INVENTORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY',
@@ -46,8 +68,9 @@ const JOB_TEMPLATES = [
   },
   {
     id: 'WAREHOUSE_KEEPER',
-    label: 'Thủ kho & Nhập liệu',
-    desc: 'Nhập kho máy/phụ kiện/linh kiện, sửa giá & bảo hành máy, xuất khác, quản lý mã máy',
+    label: 'Thủ kho & Nhập hàng',
+    desc: 'Nhập kho máy/phụ kiện/linh kiện, sửa giá bán & bảo hành tồn kho, xuất khác, quản lý mã máy',
+    badgeColor: 'bg-warning text-dark',
     permissions: [
       'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER',
       'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE',
@@ -56,8 +79,9 @@ const JOB_TEMPLATES = [
   },
   {
     id: 'TECHNICIAN',
-    label: 'Kỹ thuật & Sửa chữa',
-    desc: 'Kiểm định máy, tiếp nhận & xử lý phiếu sửa chữa, tra cứu tồn kho máy & linh kiện',
+    label: 'Kỹ thuật viên & Sửa chữa',
+    desc: 'Kiểm định chất lượng máy, tiếp nhận & xử lý phiếu sửa chữa, tra cứu tồn kho máy & linh kiện thay thế',
+    badgeColor: 'bg-info text-dark',
     permissions: [
       'SEARCH_INVENTORY', 'INSPECTION', 'INVENTORY_PART',
       'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW'
@@ -65,8 +89,9 @@ const JOB_TEMPLATES = [
   },
   {
     id: 'CSKH_WARRANTY',
-    label: 'CSKH & Bảo hành',
-    desc: 'Tra cứu bảo hành, theo dõi sửa chữa, chăm sóc khách hàng & máy hết hạn bảo hành',
+    label: 'CSKH & Tiếp nhận bảo hành',
+    desc: 'Tra cứu lịch sử bảo hành, theo dõi tiến độ sửa chữa, chăm sóc khách hàng & khai thác máy hết hạn bảo hành',
+    badgeColor: 'bg-secondary',
     permissions: [
       'WARRANTY_CHECK', 'SERVICE_VIEW', 'SHIP_MANAGE',
       'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE'
@@ -74,8 +99,9 @@ const JOB_TEMPLATES = [
   },
   {
     id: 'ACCOUNTANT_SYNC',
-    label: 'Kế toán & Đối soát',
-    desc: 'Xem báo cáo doanh số, thống kê, sửa/hoàn đơn, đối soát Google Sheets & xuất Excel',
+    label: 'Kế toán & Đối soát số liệu',
+    desc: 'Xem báo cáo doanh số, thống kê, sửa/hoàn đơn, đối soát Google Sheets & xuất Excel dữ liệu',
+    badgeColor: 'bg-dark',
     permissions: [
       'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
       'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN',
@@ -86,7 +112,8 @@ const JOB_TEMPLATES = [
   {
     id: 'READ_ONLY',
     label: 'Chỉ xem & Tra cứu (Không thao tác)',
-    desc: 'Chỉ được xem các màn hình tra cứu, báo cáo, tồn kho; không được thêm/sửa/xóa',
+    desc: 'Chỉ được xem các màn hình tra cứu, báo cáo, tồn kho; không được thêm/sửa/xóa hay xuất bán',
+    badgeColor: 'bg-light text-dark border',
     permissions: [
       'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
       'PRICING_VIEW', 'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES',
@@ -128,8 +155,10 @@ export default function ModalNguoiDung({
   const groupedPermissions = useMemo(() => {
     const q = (permSearchTerm || '').trim().toLowerCase();
     const filtered = (availablePermissions || []).filter(p => {
+      const isCritical = Boolean(p.critical || CRITICAL_PERMISSIONS.has(p.code));
       if (permTypeFilter === 'VIEW' && p.type !== 'VIEW') return false;
       if (permTypeFilter === 'ACTION' && p.type !== 'ACTION') return false;
+      if (permTypeFilter === 'CRITICAL' && !isCritical) return false;
       if (permTypeFilter === 'SELECTED' && !selectedPermissions.has(p.code)) return false;
       if (permTypeFilter === 'UNSELECTED' && selectedPermissions.has(p.code)) return false;
 
@@ -217,7 +246,7 @@ export default function ModalNguoiDung({
     }
   };
 
-  // Toggle một quyền đơn lẻ
+  // Toggle một quyền đơn lẻ với cơ chế phụ thuộc thông minh
   const togglePermission = (code) => {
     if (isAdminRoot) {
       showToast('Tài khoản admin gốc mặc định luôn giữ toàn bộ quyền hạn hệ thống.', 'warning');
@@ -226,45 +255,103 @@ export default function ModalNguoiDung({
     setSelectedPermissions(prev => {
       const next = new Set(prev);
       if (next.has(code)) {
+        // HỦY QUYỀN
         next.delete(code);
+
+        // Nếu hủy một quyền VIEW mà có các quyền ACTION phụ thuộc, tự động hủy luôn các ACTION con
+        const affectedActions = [];
+        Object.entries(PERMISSION_DEPENDENCIES).forEach(([actionCode, deps]) => {
+          if (deps.includes(code) && next.has(actionCode)) {
+            next.delete(actionCode);
+            affectedActions.push(PERMISSION_LABELS[actionCode] || actionCode);
+          }
+        });
+        if (affectedActions.length > 0) {
+          showToast(`Đã tự động tắt các thao tác phụ thuộc: ${affectedActions.join(', ')} do bạn vừa bỏ quyền xem màn hình.`, 'info');
+        }
+
         if (formData.role === 'ADMIN') {
           setFormData(f => ({ ...f, role: 'MANAGER' }));
           showToast('Đã tự động chuyển vai trò từ ADMIN sang MANAGER để lưu bộ quyền tùy chỉnh riêng.', 'info');
         }
       } else {
+        // CẤP QUYỀN
         next.add(code);
+
+        // Nếu cấp quyền ACTION mà thiếu quyền VIEW phụ thuộc, tự động bổ sung quyền VIEW
+        const deps = PERMISSION_DEPENDENCIES[code] || [];
+        const addedDeps = [];
+        deps.forEach(depCode => {
+          if (!next.has(depCode)) {
+            next.add(depCode);
+            addedDeps.push(PERMISSION_LABELS[depCode] || depCode);
+          }
+        });
+        if (addedDeps.length > 0) {
+          showToast(`Đã tự động bổ sung quyền xem: [${addedDeps.join(', ')}] để tài khoản có thể truy cập màn hình thao tác.`, 'info');
+        }
+
+        // Cảnh báo nếu cấp quyền rủi ro cao
+        if (CRITICAL_PERMISSIONS.has(code)) {
+          showToast(`Lưu ý: "${PERMISSION_LABELS[code] || code}" là quyền rủi ro cao / nhạy cảm, hãy cân nhắc kỹ đối tượng cấp.`, 'warning');
+        }
       }
       return next;
     });
   };
 
-  // Toggle toàn bộ quyền trong một nhóm
-  const toggleGroup = (groupName) => {
+  // Bật toàn bộ quyền trong một nhóm
+  const selectAllInGroup = (groupName) => {
     if (isAdminRoot) {
       showToast('Tài khoản admin gốc mặc định luôn giữ toàn bộ quyền hạn hệ thống.', 'warning');
       return;
     }
     const permsInGroup = groupedPermissions[groupName] || [];
-    const allSelected = permsInGroup.every(p => selectedPermissions.has(p.code));
+    setSelectedPermissions(prev => {
+      const next = new Set(prev);
+      permsInGroup.forEach(p => next.add(p.code));
+      return next;
+    });
+    showToast(`Đã chọn toàn bộ quyền nhóm "${groupName}"`, 'info');
+  };
 
+  // Chỉ bật các quyền VIEW (Xem) trong nhóm
+  const selectOnlyViewInGroup = (groupName) => {
+    if (isAdminRoot) return;
+    const permsInGroup = groupedPermissions[groupName] || [];
     setSelectedPermissions(prev => {
       const next = new Set(prev);
       permsInGroup.forEach(p => {
-        if (allSelected) {
-          next.delete(p.code);
-        } else {
+        if (p.type === 'VIEW') {
           next.add(p.code);
+        } else {
+          next.delete(p.code);
         }
       });
-      if (allSelected && formData.role === 'ADMIN') {
+      return next;
+    });
+    showToast(`Đã chuyển nhóm "${groupName}" sang chế độ CHỈ XEM (Read-only)`, 'info');
+  };
+
+  // Tắt tất cả quyền trong nhóm
+  const deselectAllInGroup = (groupName) => {
+    if (isAdminRoot) {
+      showToast('Tài khoản admin gốc mặc định luôn giữ toàn bộ quyền hạn hệ thống.', 'warning');
+      return;
+    }
+    const permsInGroup = groupedPermissions[groupName] || [];
+    setSelectedPermissions(prev => {
+      const next = new Set(prev);
+      permsInGroup.forEach(p => next.delete(p.code));
+      if (formData.role === 'ADMIN') {
         setFormData(f => ({ ...f, role: 'MANAGER' }));
-        showToast('Đã tự động chuyển vai trò từ ADMIN sang MANAGER để lưu bộ quyền tùy chỉnh riêng.', 'info');
       }
       return next;
     });
+    showToast(`Đã bỏ chọn toàn bộ quyền nhóm "${groupName}"`, 'info');
   };
 
-  // Thao tác nhanh
+  // Thao tác nhanh toàn cục
   const selectAllPermissions = () => {
     const all = (availablePermissions || []).map(p => p.code);
     setSelectedPermissions(new Set(all));
@@ -721,6 +808,14 @@ export default function ModalNguoiDung({
                       </button>
                       <button
                         type="button"
+                        className={`btn ${permTypeFilter === 'CRITICAL' ? 'btn-danger' : 'btn-outline-secondary'}`}
+                        onClick={() => setPermTypeFilter('CRITICAL')}
+                        title="Các quyền nhạy cảm ảnh hưởng trực tiếp tới dữ liệu gốc"
+                      >
+                        ⚠️ Rủi ro cao ({(availablePermissions || []).filter(p => p.critical || CRITICAL_PERMISSIONS.has(p.code)).length})
+                      </button>
+                      <button
+                        type="button"
                         className={`btn ${permTypeFilter === 'SELECTED' ? 'btn-success' : 'btn-outline-secondary'}`}
                         onClick={() => setPermTypeFilter('SELECTED')}
                       >
@@ -751,27 +846,50 @@ export default function ModalNguoiDung({
                 {/* DANH SÁCH CÁC NHÓM QUYỀN */}
                 <div className="row g-4">
                   {Object.entries(groupedPermissions).map(([groupName, perms]) => {
-                    const allInGroupSelected = perms.every(p => selectedPermissions.has(p.code));
+                    const grantedInGroup = perms.filter(p => selectedPermissions.has(p.code)).length;
+                    const allInGroupSelected = perms.length > 0 && grantedInGroup === perms.length;
 
                     return (
                       <div className="col-lg-6" key={groupName}>
                         <div className="border rounded-3 h-100 bg-white shadow-sm overflow-hidden">
-                          {/* TIÊU ĐỀ NHÓM */}
-                          <div className="d-flex justify-content-between align-items-center bg-light px-3 py-2 border-bottom">
+                          {/* TIÊU ĐỀ NHÓM & CÁC NÚT THAO TÁC NHANH NHÓM */}
+                          <div className="d-flex flex-wrap justify-content-between align-items-center bg-light px-3 py-2 border-bottom gap-2">
                             <div className="d-flex align-items-center gap-2">
                               <Layers size={16} className="text-primary" />
                               <span className="fw-bold text-dark text-uppercase small">{groupName}</span>
                               <span className="badge bg-secondary-subtle text-secondary rounded-pill small">
-                                {perms.filter(p => selectedPermissions.has(p.code)).length}/{perms.length}
+                                {grantedInGroup}/{perms.length}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              className="btn btn-link btn-sm text-decoration-none p-0 small fw-semibold"
-                              onClick={() => toggleGroup(groupName)}
-                            >
-                              {allInGroupSelected ? 'Bỏ chọn nhóm' : 'Chọn cả nhóm'}
-                            </button>
+                            <div className="d-flex align-items-center gap-1.5">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm px-2 py-0.5 fw-medium"
+                                style={{ fontSize: '0.7rem' }}
+                                title="Bật toàn bộ quyền trong nhóm này"
+                                onClick={() => selectAllInGroup(groupName)}
+                              >
+                                Chọn hết
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline-info btn-sm px-2 py-0.5 fw-medium text-dark"
+                                style={{ fontSize: '0.7rem' }}
+                                title="Chỉ bật các quyền xem màn hình, không bật thao tác thêm/sửa/xóa"
+                                onClick={() => selectOnlyViewInGroup(groupName)}
+                              >
+                                Chỉ xem
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm px-2 py-0.5 fw-medium"
+                                style={{ fontSize: '0.7rem' }}
+                                title="Tắt toàn bộ quyền trong nhóm này"
+                                onClick={() => deselectAllInGroup(groupName)}
+                              >
+                                Bỏ nhóm
+                              </button>
+                            </div>
                           </div>
 
                           {/* DANH SÁCH QUYỀN TRONG NHÓM */}
@@ -779,14 +897,23 @@ export default function ModalNguoiDung({
                             {perms.map(p => {
                               const isChecked = selectedPermissions.has(p.code);
                               const isAction = p.type === 'ACTION';
+                              const isCritical = Boolean(p.critical || CRITICAL_PERMISSIONS.has(p.code));
+                              const deps = PERMISSION_DEPENDENCIES[p.code];
+
                               return (
                                 <div 
                                   key={p.code} 
-                                  className={`p-2 rounded-2 mb-1 transition-all d-flex align-items-start gap-3 border ${isChecked ? 'bg-primary-subtle border-primary-subtle' : 'hover-bg-light border-transparent'}`}
+                                  className={`p-2 rounded-2 mb-1.5 transition-all d-flex align-items-start gap-2.5 border ${
+                                    isChecked 
+                                      ? isCritical
+                                        ? 'bg-danger bg-opacity-10 border-danger border-opacity-25'
+                                        : 'bg-primary-subtle border-primary-subtle'
+                                      : 'hover-bg-light border-transparent'
+                                  }`}
                                   style={{ cursor: 'pointer' }}
                                   onClick={() => togglePermission(p.code)}
                                 >
-                                  <div className="pt-1">
+                                  <div className="pt-0.5">
                                     <input 
                                       type="checkbox" 
                                       className="form-check-input" 
@@ -798,7 +925,11 @@ export default function ModalNguoiDung({
                                   <div className="flex-grow-1">
                                     <div className="d-flex align-items-center justify-content-between flex-wrap gap-1 mb-0.5">
                                       <div className="d-flex align-items-center gap-1.5 flex-wrap">
-                                        <span className={`fw-semibold small ${isChecked ? 'text-primary' : 'text-dark'}`}>
+                                        <span className={`fw-semibold small ${
+                                          isChecked 
+                                            ? isCritical ? 'text-danger fw-bold' : 'text-primary' 
+                                            : 'text-dark'
+                                        }`}>
                                           {p.name}
                                         </span>
                                         <span
@@ -807,10 +938,19 @@ export default function ModalNguoiDung({
                                               ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'
                                               : 'bg-info-subtle text-info-emphasis border border-info-subtle'
                                           }`}
-                                          style={{ fontSize: '0.65rem' }}
+                                          style={{ fontSize: '0.63rem' }}
                                         >
                                           {isAction ? 'Thao tác' : 'Chức năng (Xem)'}
                                         </span>
+                                        {isCritical && (
+                                          <span
+                                            className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle"
+                                            style={{ fontSize: '0.63rem' }}
+                                            title="Quyền nhạy cảm / rủi ro cao"
+                                          >
+                                            ⚠️ Rủi ro cao
+                                          </span>
+                                        )}
                                       </div>
                                       <code className="text-secondary" style={{ fontSize: '0.68rem' }}>
                                         {p.code}
@@ -819,13 +959,18 @@ export default function ModalNguoiDung({
                                     <div className="small text-muted" style={{ fontSize: '0.77rem' }}>
                                       {p.description}
                                     </div>
-                                    {p.module && (
-                                      <div className="mt-1">
+                                    <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                      {p.module && (
                                         <span className="badge bg-light text-secondary border fw-normal" style={{ fontSize: '0.68rem' }}>
                                           📍 Vị trí: {p.module}
                                         </span>
-                                      </div>
-                                    )}
+                                      )}
+                                      {deps && deps.length > 0 && (
+                                        <span className="badge bg-light text-primary border border-primary-subtle fw-normal" style={{ fontSize: '0.68rem' }}>
+                                          🔗 Cần có: {deps.map(d => PERMISSION_LABELS[d] || d).join(', ')}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               );

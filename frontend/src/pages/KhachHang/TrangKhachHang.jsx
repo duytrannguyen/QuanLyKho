@@ -14,6 +14,8 @@ import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import { getCustomerTier } from './HoaDonKhachHang';
 import DonChuaXacDinh from './DonChuaXacDinh';
 import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 const SORT_OPTIONS = [
   { value: 'lastOrderAt:desc', label: 'Mua gần đây nhất' },
@@ -723,46 +725,23 @@ export default function TrangKhachHang() {
 
                 {/* Loading State */}
                 {loading && (
-                  <tr>
-                    <td colSpan={9} className="text-center py-5">
-                      <div className="spinner-border text-primary spinner-border-sm" role="status">
-                        <span className="visually-hidden">Đang tải...</span>
-                      </div>
-                      <p className="text-muted small mt-2 mb-0">Đang đồng bộ dữ liệu khách hàng...</p>
-                    </td>
-                  </tr>
+                  <BangLoading colSpan={9} message="Đang đồng bộ dữ liệu khách hàng..." />
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Pagination Footer */}
-          <div className="bg-light p-3 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 px-4">
-            <span className="text-secondary small fw-medium">
-              Hiển thị <strong className="text-dark">{customers.length}</strong> / Tổng <strong className="text-dark">{totalElements}</strong> khách hàng
-            </span>
-
-            {totalPages > 1 && (
-              <nav aria-label="Page navigation">
-                <ul className="pagination pagination-sm mb-0 shadow-xs">
-                  <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
-                    <button className="page-link px-3" onClick={() => setPage(p => p - 1)}>
-                      Trước
-                    </button>
-                  </li>
-                  <li className="page-item disabled">
-                    <span className="page-link bg-white text-dark fw-medium px-4">
-                      Trang {page + 1} / {totalPages}
-                    </span>
-                  </li>
-                  <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
-                    <button className="page-link px-3" onClick={() => setPage(p => p + 1)}>
-                      Sau
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            )}
+          <div className="bg-light p-3 border-top px-4">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              onPageChange={setPage}
+              itemName="khách hàng"
+              showPageNumbers={false}
+            />
           </div>
 
         </div>

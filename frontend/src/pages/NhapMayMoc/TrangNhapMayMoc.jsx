@@ -2,15 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiMayMoc, apiTonKho, apiNhapKho, apiCatalog } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { INTAKE_TYPE_MAP, CYCLE_STATE_MAP } from '../../constants/trangThai';
-import { formatCurrency, parseCurrency, tinhNgayHetHanBaoHanh, formatDate } from '../../utils/dinh_dang';
-
-const getTodayDateString = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { formatCurrency, parseCurrency, tinhNgayHetHanBaoHanh, formatDate, getTodayDateString } from '../../utils/dinh_dang';
 
 export default function TrangNhapMayMoc() {
   const { showToast, confirm } = useToast();

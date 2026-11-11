@@ -8,6 +8,8 @@ import { apiPhuKien } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatCurrency, parseCurrency } from '../../utils/dinh_dang';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 export default function TrangTonKhoPhuKien() {
   const navigate = useNavigate();
@@ -391,14 +393,7 @@ export default function TrangTonKhoPhuKien() {
               </thead>
               <tbody className="border-top-0">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan="8" className="text-center py-5">
-                      <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                      </div>
-                      <div className="text-muted mt-2 small">Đang tải kho phụ kiện...</div>
-                    </td>
-                  </tr>
+                  <BangLoading colSpan={8} message="Đang tải kho phụ kiện..." />
                 ) : currentAccessories.length > 0 ? (
                   currentAccessories.map((acc, index) => (
                     <tr key={acc.id || acc.sku}>
@@ -486,60 +481,19 @@ export default function TrangTonKhoPhuKien() {
 
         {/* Footer Phân trang */}
         {filteredAndSortedAccessories.length > 0 && (
-          <div className="card-footer bg-white border-top p-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-            <div className="d-flex align-items-center gap-3 flex-wrap">
-              <span className="small text-muted">
-                Hiển thị <strong>{((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredAndSortedAccessories.length)}</strong> / <strong>{filteredAndSortedAccessories.length}</strong> sản phẩm
-              </span>
-
-              <div className="d-flex align-items-center gap-2">
-                <span className="small text-muted">Dòng/trang:</span>
-                <select
-                  className="form-select form-select-sm w-auto rounded-3 shadow-none border-secondary-subtle fw-medium"
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
-
-            {totalPages > 1 && (
-              <ul className="pagination pagination-sm mb-0 gap-1">
-                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                  <button className="page-link px-3 rounded-3 border-0 text-dark fw-medium" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>
-                    Trước
-                  </button>
-                </li>
-                {[...Array(totalPages)].map((_, i) => {
-                  if (totalPages > 5 && (i < currentPage - 2 || i > currentPage) && i !== 0 && i !== totalPages - 1) {
-                    if (i === 1 || i === totalPages - 2) return <li key={i} className="page-item disabled"><span className="page-link border-0 text-muted bg-transparent">...</span></li>;
-                    return null;
-                  }
-                  return (
-                    <li key={i} className="page-item">
-                      <button
-                        className={`page-link rounded-3 border-0 fw-bold ${currentPage === i + 1 ? 'bg-primary text-white shadow-sm' : 'text-dark'}`}
-                        onClick={() => setCurrentPage(i + 1)}
-                      >
-                        {i + 1}
-                      </button>
-                    </li>
-                  );
-                })}
-                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                  <button className="page-link px-3 rounded-3 border-0 text-dark fw-medium" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>
-                    Sau
-                  </button>
-                </li>
-              </ul>
-            )}
+          <div className="card-footer bg-white border-top p-3">
+            <PhanTrang
+              page={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredAndSortedAccessories.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setItemsPerPage(newSize);
+                setCurrentPage(1);
+              }}
+              itemName="sản phẩm"
+            />
           </div>
         )}
       </div>

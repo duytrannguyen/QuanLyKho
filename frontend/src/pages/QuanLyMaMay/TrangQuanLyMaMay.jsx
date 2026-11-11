@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Download, Laptop, X, PackageOpen, Lock } from 'lucide-react';
 import { apiMayMoc, apiTonKho } from '../../api';
 import { formatCurrency } from '../../utils/dinh_dang';
+import PhanTrang from '../../components/common/PhanTrang';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 
@@ -318,34 +319,22 @@ export default function TrangQuanLyMaMay() {
 
         {/* Phân trang (Pagination) */}
         {results.length > 0 && (
-          <div className="card-footer bg-white border-top p-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-            <div className="d-flex align-items-center gap-3">
-              <span className="small text-muted">
-                Hiển thị <strong>{page * pageSize + 1} - {Math.min((page + 1) * pageSize, pageInfo.totalElements)}</strong> / <strong>{pageInfo.totalElements}</strong> mã máy
-              </span>
-              <div className="d-flex align-items-center gap-2">
-                <select className="form-select form-select-sm w-auto rounded-3" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
-                  <option value="15">15 dòng</option>
-                  <option value="30">30 dòng</option>
-                  <option value="50">50 dòng</option>
-                  <option value="100">100 dòng</option>
-                </select>
-              </div>
-            </div>
-
-            {pageInfo.totalPages > 1 && (
-              <ul className="pagination pagination-sm mb-0">
-                <li className={`page-item ${page === 0 ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => setPage(page - 1)}>Trước</button>
-                </li>
-                <li className="page-item disabled">
-                  <span className="page-link bg-light text-dark">Trang {page + 1} / {pageInfo.totalPages}</span>
-                </li>
-                <li className={`page-item ${page >= pageInfo.totalPages - 1 ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => setPage(page + 1)}>Sau</button>
-                </li>
-              </ul>
-            )}
+          <div className="card-footer bg-white border-top p-3">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={pageInfo.totalPages}
+              totalElements={pageInfo.totalElements}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setPage(0);
+              }}
+              pageSizeOptions={[15, 30, 50, 100]}
+              itemName="mã máy"
+              showPageNumbers={false}
+            />
           </div>
         )}
 

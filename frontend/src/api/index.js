@@ -164,6 +164,7 @@ export const apiSuaChua = {
   getOrders: (params) => axiosClient.get('/repair', { params, silent: true }),
   getOrderById: (id) => axiosClient.get(`/repair/${id}`, { silent: true }),
   getOrdersBySerial: (serial) => axiosClient.get('/repair/by-serial', { params: { serial }, silent: true }),
+  checkWarrantyEligibility: (serial, phone) => axiosClient.get('/repair/check-warranty-eligibility', { params: { serial, phone }, silent: true }),
   createOrder: (payload) => axiosClient.post('/repair', payload),
   updateOrder: (id, payload) => axiosClient.put(`/repair/${id}`, payload),
   updateOrderStatus: (id, status) => axiosClient.put(`/repair/${id}/status`, { status }),

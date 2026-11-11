@@ -9,6 +9,8 @@ import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { apiLinhKien } from '../../api';
 import { formatCurrency, parseCurrency, formatDate } from '../../utils/dinh_dang';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 export default function TrangTonKhoLinhKien() {
   const navigate = useNavigate();
@@ -371,20 +373,15 @@ export default function TrangTonKhoLinhKien() {
             </thead>
             <tbody className="border-top-0">
               {isLoading ? (
-                <tr>
-                  <td colSpan="8" className="text-center py-5">
-                    <div className="spinner-border text-primary spinner-border-sm me-2" role="status"></div>
-                    <span className="text-muted">Đang tải dữ liệu kho...</span>
-                  </td>
-                </tr>
+                <BangLoading colSpan={8} message="Đang tải dữ liệu kho linh kiện..." />
               ) : currentParts.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="text-center py-5">
-                    <div className="bg-light rounded-circle d-inline-flex p-3 mb-3">
+                    <div className="bg-light rounded-circle d-inline-flex p-3 mb-2">
                       <Search size={32} className="text-secondary opacity-50" />
                     </div>
-                    <h6 className="text-dark fw-bold">Không tìm thấy linh kiện</h6>
-                    <p className="text-muted small">Hãy thử thay đổi từ khóa hoặc bộ lọc của bạn.</p>
+                    <h6 className="text-dark fw-bold mb-1">Không tìm thấy linh kiện</h6>
+                    <p className="text-muted small mb-0">Hãy thử thay đổi từ khóa hoặc bộ lọc của bạn.</p>
                   </td>
                 </tr>
               ) : (
@@ -463,56 +460,19 @@ export default function TrangTonKhoLinhKien() {
 
         {/* Phân Trang (Pagination) */}
         {!isLoading && filteredAndSortedParts.length > 0 && (
-          <div className="card-footer bg-white border-top p-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-            
-            {/* Rows per page selector */}
-            <div className="d-flex align-items-center gap-2 small text-muted">
-              <span>Hiển thị</span>
-              <select 
-                className="form-select form-select-sm w-auto fw-medium shadow-none cursor-pointer"
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1); // Reset về trang 1 khi đổi số lượng hiển thị
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span>trên tổng {filteredAndSortedParts.length} mục</span>
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <nav aria-label="Page navigation">
-                <ul className="pagination pagination-sm m-0 gap-1">
-                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button className="page-link border-0 rounded-3 text-dark fw-medium" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}>
-                      Trước
-                    </button>
-                  </li>
-                  
-                  {[...Array(totalPages)].map((_, i) => (
-                    <li key={i + 1} className="page-item">
-                      <button
-                        className={`page-link border-0 rounded-3 fw-bold ${currentPage === i + 1 ? 'bg-primary text-white shadow-sm' : 'text-dark hover-bg-light'}`}
-                        onClick={() => setCurrentPage(i + 1)}
-                      >
-                        {i + 1}
-                      </button>
-                    </li>
-                  ))}
-
-                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button className="page-link border-0 rounded-3 text-dark fw-medium" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}>
-                      Sau
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            )}
+          <div className="card-footer bg-white border-top p-3">
+            <PhanTrang
+              page={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredAndSortedParts.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setItemsPerPage(newSize);
+                setCurrentPage(1);
+              }}
+              itemName="mục"
+            />
           </div>
         )}
       </div>

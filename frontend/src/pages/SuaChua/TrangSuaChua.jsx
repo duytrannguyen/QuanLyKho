@@ -2,30 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Wrench, Plus, Search, CheckCircle, RotateCcw, User, Phone, 
-  Laptop, Trash2, Printer, ShieldCheck, Edit3, X, AlertCircle, Eye, Cpu, List, FileText
+  Laptop, Trash2, Printer, ShieldCheck, Edit3, X, AlertCircle, Eye, Cpu, List, FileText, XCircle
 } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { apiSuaChua, apiLinhKien } from '../../api';
-import { formatCurrency, parseCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, formatDate, getTodayDateString, getItemExpiryStatus } from '../../utils/dinh_dang';
 
 // ======================================================================
 // CÁC HÀM TIỆN ÍCH & COMPONENT DÙNG CHUNG (TÁCH RA ĐỂ RÚT GỌN MAIN FILE)
 // ======================================================================
-
-const getItemExpiryStatus = (expiryDate, periodText = '') => {
-  const lower = (periodText || '').toLowerCase();
-  if (lower.includes('từ chối') || lower.includes('tu choi')) return { text: 'Từ chối bảo hành', badge: 'bg-danger-subtle text-danger border border-danger-subtle', icon: AlertCircle };
-  if (lower.includes('theo bh') || lower.includes('theo bảo hành')) return { text: 'Theo BH máy (Còn hạn)', badge: 'bg-primary-subtle text-primary border border-primary-subtle', icon: ShieldCheck };
-  if (!expiryDate) return { text: periodText || 'Không bảo hành', badge: 'bg-secondary-subtle text-secondary', icon: AlertCircle };
-  
-  const now = new Date();
-  const end = new Date(expiryDate);
-  end.setHours(23, 59, 59, 999);
-  const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) return { text: `Hết hạn (${Math.abs(diffDays)} ngày trước)`, badge: 'bg-danger-subtle text-danger', icon: AlertCircle };
-  return { text: `Còn hạn (${diffDays} ngày)`, badge: 'bg-success-subtle text-success', icon: ShieldCheck };
-};
 
 const StatusBadge = ({ status }) => {
   switch (status) {
@@ -299,6 +284,9 @@ export default function TrangSuaChua() {
 
   const [services, setServices] = useState([{ serviceName: '', sku: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
 
+  const [warrantyEligibility, setWarrantyEligibility] = useState(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+
   const [availableParts, setAvailableParts] = useState([]);
   const [showPartPickerModal, setShowPartPickerModal] = useState(false);
 
@@ -315,6 +303,32 @@ export default function TrangSuaChua() {
     if (params.get('prefillPhone') || params.get('phone')) setCustomerPhone(params.get('prefillPhone') || params.get('phone'));
     if (params.get('prefillModel') || params.get('device')) setDeviceModel(params.get('prefillModel') || params.get('device'));
   }, [location.state, location.search]);
+
+  useEffect(() => {
+    if (!deviceSerial || !deviceSerial.trim()) {
+      setWarrantyEligibility(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      checkSerialEligibility(deviceSerial.trim(), customerPhone);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [deviceSerial]);
+
+  const checkSerialEligibility = async (serial, phone) => {
+    if (!serial) return;
+    setIsCheckingEligibility(true);
+    try {
+      const res = await apiSuaChua.checkWarrantyEligibility(serial, phone);
+      const data = res.data?.data || res.data || null;
+      setWarrantyEligibility(data);
+    } catch (e) {
+      console.warn('Lỗi kiểm tra tính hợp lệ bảo hành:', e);
+      setWarrantyEligibility(null);
+    } finally {
+      setIsCheckingEligibility(false);
+    }
+  };
 
   const fetchAvailableParts = async () => {
     try { const res = await apiLinhKien.getAvailable(); setAvailableParts(res.data?.data || res.data || []); } 
@@ -355,7 +369,7 @@ export default function TrangSuaChua() {
     setEditingOrderId(null); setEditingOrderCode(''); setCustomerName(''); setCustomerPhone('');
     setDeviceModel(''); setDeviceSerial(''); setIntakeCondition(''); setAccessoriesReceived('');
     setPromisedDate(''); setOrderStatus('RECEIVED'); setTechnicianName(''); setCreatedDate(getTodayDateString());
-    setNote(''); setServices([{ serviceName: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
+    setNote(''); setWarrantyEligibility(null); setServices([{ serviceName: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
   };
 
   const handleEditOrder = (order) => {
@@ -390,6 +404,19 @@ export default function TrangSuaChua() {
       if (!sName) return showToast(`Dòng ${i + 1}: Vui lòng nhập Tên dịch vụ`, 'danger');
       if (!wPeriod) return showToast(`Dòng ${i + 1}: Bắt buộc nhập Bảo hành`, 'danger');
       if ((wPeriod.toLowerCase().includes('từ chối') || wPeriod.toLowerCase().includes('tu choi')) && !sNote) return showToast(`Dòng ${i + 1}: Từ chối bảo hành bắt buộc nhập ghi chú`, 'danger');
+    }
+
+    // Nếu máy đã thu lại về kho: Tuyệt đối từ chối tiếp nhận bảo hành miễn phí (0đ hoặc theo BH máy)
+    if (warrantyEligibility?.isReturned) {
+      for (let i = 0; i < validServices.length; i++) {
+        const s = validServices[i];
+        const sPrice = parseFloat(s.price) || 0;
+        const wPeriod = (s.warrantyPeriod || '').toLowerCase();
+        const sName = (s.serviceName || '').toLowerCase();
+        if (sPrice <= 0 || wPeriod.includes('theo bh') || wPeriod.includes('bảo hành') || sName.includes('bảo hành') || sName.includes('rma')) {
+          return showToast(`Dòng ${i + 1}: Máy này đã được thu lại về kho, gói bảo hành cũ đã BỊ HỦY. Chỉ nhận sửa chữa dịch vụ tính phí (nhập đơn giá > 0đ)!`, 'danger');
+        }
+      }
     }
 
     if (!await confirm(`Xác nhận ${editingOrderId ? 'cập nhật' : 'lưu mới'} đơn dịch vụ cho ${customerName}?`)) return;
@@ -481,7 +508,13 @@ export default function TrangSuaChua() {
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Tên khách hàng *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><User size={16}/></span><input className="form-control border-start-0 ps-0" value={customerName} onChange={e => setCustomerName(e.target.value)} /></div></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Số điện thoại *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><Phone size={16}/></span><input className="form-control border-start-0 ps-0" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} /></div></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Tên máy *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><Laptop size={16}/></span><input className="form-control border-start-0 ps-0" value={deviceModel} onChange={e => setDeviceModel(e.target.value)} /></div></div>
-                  <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Số Serial máy</label><input className="form-control font-monospace" value={deviceSerial} onChange={e => setDeviceSerial(e.target.value)} /></div>
+                  <div className="col-md-6 col-lg-3">
+                    <label className="form-label text-muted fw-semibold small d-flex justify-content-between align-items-center">
+                      <span>Số Serial máy</span>
+                      {isCheckingEligibility && <span className="spinner-border spinner-border-sm text-primary" style={{ width: '12px', height: '12px' }}></span>}
+                    </label>
+                    <input className="form-control font-monospace" placeholder="Nhập serial máy..." value={deviceSerial} onChange={e => setDeviceSerial(e.target.value)} />
+                  </div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Tình trạng lúc nhận</label><input className="form-control" value={intakeCondition} onChange={e => setIntakeCondition(e.target.value)} /></div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Phụ kiện kèm theo</label><input className="form-control" value={accessoriesReceived} onChange={e => setAccessoriesReceived(e.target.value)} /></div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Ghi chú chung</label><input className="form-control" value={note} onChange={e => setNote(e.target.value)} /></div>
@@ -494,6 +527,32 @@ export default function TrangSuaChua() {
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Kỹ thuật viên</label><input className="form-control" value={technicianName} onChange={e => setTechnicianName(e.target.value)} /></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Ngày tạo đơn</label><input type="date" className="form-control" value={createdDate} onChange={e => setCreatedDate(e.target.value)} /></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Ngày hẹn giao máy</label><input type="date" className="form-control" value={promisedDate} onChange={e => setPromisedDate(e.target.value)} /></div>
+
+                  {/* Banner Cảnh Báo Nếu Máy Đã Thu Lại (Hủy Bảo Hành Khách Cũ) */}
+                  {warrantyEligibility?.isReturned && (
+                    <div className="col-12">
+                      <div className="alert alert-danger border border-danger border-opacity-50 d-flex align-items-start gap-3 p-3 rounded-3 shadow-sm mb-0">
+                        <XCircle className="text-danger flex-shrink-0 mt-1" size={24} />
+                        <div className="flex-grow-1">
+                          <div className="fw-bold text-danger fs-6 d-flex align-items-center gap-2 flex-wrap">
+                            <span>TỪ CHỐI TIẾP NHẬN BẢO HÀNH MIỄN PHÍ</span>
+                            <span className="badge bg-danger text-white">MÁY ĐÃ ĐƯỢC THU LẠI VỀ KHO</span>
+                          </div>
+                          <div className="small text-danger-emphasis mt-1">
+                            {warrantyEligibility.reason || 'Máy này đã được shop thu lại về kho. Toàn bộ chính sách và quyền lợi bảo hành cho khách hàng trước đó đã BỊ HỦY HOÀN TOÀN.'}
+                          </div>
+                          {warrantyEligibility.previousCustomerName && (
+                            <div className="small text-muted mt-1">
+                              Khách hàng từng mua máy: <strong>{warrantyEligibility.previousCustomerName}</strong> ({warrantyEligibility.previousCustomerPhone || 'Không rõ SĐT'})
+                            </div>
+                          )}
+                          <div className="small fw-semibold text-danger mt-1">
+                            👉 Cửa hàng CHỈ TIẾP NHẬN sửa chữa dịch vụ tính phí. Không áp dụng bảo hành miễn phí (giá 0đ hoặc Theo BH máy) cho serial này!
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="d-flex justify-content-between align-items-center mt-4 mb-3 border-bottom pb-2">

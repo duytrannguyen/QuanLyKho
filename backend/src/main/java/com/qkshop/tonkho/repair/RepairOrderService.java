@@ -26,6 +26,8 @@ public class RepairOrderService {
     private final com.qkshop.tonkho.part.PartRepository partRepository;
     private final com.qkshop.tonkho.part.PartHistoryRepository partHistoryRepository;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
+    private final com.qkshop.tonkho.inventory.ClosedCycleRepository closedCycleRepository;
+    private final com.qkshop.tonkho.inventory.ActiveInventoryRepository activeInventoryRepository;
 
     public List<RepairOrder> getAllOrders(String keyword) {
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -81,6 +83,27 @@ public class RepairOrderService {
                 : "RECEIVED";
 
         String deviceSerial = payload.get("deviceSerial") != null ? payload.get("deviceSerial").toString().trim() : null;
+
+        // Kiểm tra tính hợp lệ bảo hành: Nếu máy đã thu lại thì từ chối tiếp nhận bảo hành miễn phí (0đ hoặc theo BH)
+        if (deviceSerial != null && !deviceSerial.isEmpty()) {
+            Map<String, Object> eligibility = checkWarrantyEligibility(deviceSerial, customerPhone);
+            if (Boolean.TRUE.equals(eligibility.get("isReturned"))) {
+                for (Map<String, Object> itemReq : itemsReq) {
+                    BigDecimal price = parseBigDecimal(itemReq.get("price"), BigDecimal.ZERO);
+                    String wPeriod = itemReq.get("warrantyPeriod") != null ? itemReq.get("warrantyPeriod").toString().toLowerCase() : "";
+                    String sName = itemReq.get("serviceName") != null ? itemReq.get("serviceName").toString().toLowerCase() : "";
+                    if (price.compareTo(BigDecimal.ZERO) <= 0
+                            || wPeriod.contains("theo bh")
+                            || wPeriod.contains("bảo hành máy")
+                            || sName.contains("bảo hành")
+                            || sName.contains("rma")) {
+                        throw new IllegalArgumentException("Từ chối tiếp nhận bảo hành: Máy có số Serial " + deviceSerial
+                                + " đã được shop thu lại về kho. Toàn bộ gói bảo hành của khách hàng trước đó đã BỊ HỦY. Cửa hàng chỉ tiếp nhận sửa chữa dịch vụ tính phí (vui lòng nhập giá dịch vụ > 0đ).");
+                    }
+                }
+            }
+        }
+
         String intakeCondition = payload.get("intakeCondition") != null ? payload.get("intakeCondition").toString().trim() : null;
         String accessoriesReceived = payload.get("accessoriesReceived") != null ? payload.get("accessoriesReceived").toString().trim() : null;
         LocalDate promisedDate = null;
@@ -232,6 +255,26 @@ public class RepairOrderService {
 
         List<Map<String, Object>> itemsReq = (List<Map<String, Object>>) payload.get("services");
         if (itemsReq != null) {
+            String checkSerial = order.getDeviceSerial();
+            if (checkSerial != null && !checkSerial.trim().isEmpty()) {
+                Map<String, Object> eligibility = checkWarrantyEligibility(checkSerial.trim(), order.getCustomerPhone());
+                if (Boolean.TRUE.equals(eligibility.get("isReturned"))) {
+                    for (Map<String, Object> itemReq : itemsReq) {
+                        BigDecimal price = parseBigDecimal(itemReq.get("price"), BigDecimal.ZERO);
+                        String wPeriod = itemReq.get("warrantyPeriod") != null ? itemReq.get("warrantyPeriod").toString().toLowerCase() : "";
+                        String sName = itemReq.get("serviceName") != null ? itemReq.get("serviceName").toString().toLowerCase() : "";
+                        if (price.compareTo(BigDecimal.ZERO) <= 0
+                                || wPeriod.contains("theo bh")
+                                || wPeriod.contains("bảo hành máy")
+                                || sName.contains("bảo hành")
+                                || sName.contains("rma")) {
+                            throw new IllegalArgumentException("Từ chối tiếp nhận bảo hành: Máy có số Serial " + checkSerial
+                                    + " đã được shop thu lại về kho. Toàn bộ gói bảo hành của khách hàng trước đó đã BỊ HỦY. Cửa hàng chỉ tiếp nhận sửa chữa dịch vụ tính phí (vui lòng nhập giá dịch vụ > 0đ).");
+                        }
+                    }
+                }
+            }
+
             // 1. Hoàn kho các linh kiện / phụ kiện của danh sách cũ trước khi xóa (nếu đơn chưa bị hủy)
             if (!wasCancelled && order.getItems() != null) {
                 for (RepairOrderItem oldItem : order.getItems()) {
@@ -516,6 +559,106 @@ public class RepairOrderService {
         } catch (Exception e) {
             log.warn("Không thể đồng bộ SalesOrder từ RepairOrder {}: {}", order.getOrderCode(), e.getMessage());
         }
+    }
+
+    public Map<String, Object> checkWarrantyEligibility(String serial, String phone) {
+        Map<String, Object> res = new java.util.HashMap<>();
+        if (serial == null || serial.trim().isEmpty()) {
+            res.put("eligible", true);
+            res.put("isReturned", false);
+            return res;
+        }
+
+        String cleanSerial = serial.trim();
+        res.put("serial", cleanSerial);
+
+        // 1. Kiểm tra xem máy hiện tại có đang trong kho (ActiveInventory) không
+        var activeOpt = activeInventoryRepository.findBySerialKey(cleanSerial);
+        // 2. Lấy chu kỳ bán / đóng gần nhất
+        var lastClosedOpt = closedCycleRepository.findTopBySerialKeyOrderByClosedAtDesc(cleanSerial);
+
+        boolean isReturned = false;
+        String reason = null;
+
+        if (activeOpt.isPresent()) {
+            var ai = activeOpt.get();
+            if (ai.getIntakeType() == com.qkshop.tonkho.intake.IntakeType.CUSTOMER_RETURN
+                    || ai.getIntakeType() == com.qkshop.tonkho.intake.IntakeType.CUSTOMER_BUYBACK) {
+                isReturned = true;
+            } else if (lastClosedOpt.isPresent()) {
+                // Đã từng có chu kỳ đóng và hiện đang tồn kho chu kỳ mới => Máy đã thu hồi về kho
+                isReturned = true;
+            }
+        }
+
+        if (!isReturned && lastClosedOpt.isPresent()) {
+            var cc = lastClosedOpt.get();
+            if (cc.getCloseType() == com.qkshop.tonkho.core.enums.CloseType.CUSTOMER_RETURN
+                    || (cc.getWarrantyPeriod() != null && cc.getWarrantyPeriod().contains("Đã hủy"))) {
+                isReturned = true;
+            }
+        }
+
+        if (isReturned) {
+            res.put("eligible", false);
+            res.put("isReturned", true);
+            res.put("warrantyCancelled", true);
+            res.put("status", "VOIDED");
+            reason = "Máy này (Serial: " + cleanSerial + ") đã được shop thu lại về kho từ khách hàng trước đó. Gói bảo hành cũ đã BỊ HỦY HOÀN TOÀN. Cửa hàng từ chối tiếp nhận bảo hành miễn phí theo đơn cũ. Chỉ tiếp nhận sửa chữa dịch vụ tính phí.";
+            res.put("reason", reason);
+
+            if (lastClosedOpt.isPresent()) {
+                var cc = lastClosedOpt.get();
+                res.put("previousCustomerName", cc.getCustomerName());
+                res.put("previousCustomerPhone", cc.getCustomerPhone());
+                res.put("previousCycleId", cc.getCycleId());
+                res.put("previousSaleDate", cc.getSaleDate());
+            }
+            if (activeOpt.isPresent()) {
+                var ai = activeOpt.get();
+                res.put("currentCycleId", ai.getCycleId());
+                res.put("isInStock", true);
+            }
+            return res;
+        }
+
+        // Máy không bị thu lại: Kiểm tra hạn bảo hành của ClosedCycle gần nhất nếu có
+        if (lastClosedOpt.isPresent()) {
+            var cc = lastClosedOpt.get();
+            res.put("isReturned", false);
+            res.put("customerName", cc.getCustomerName());
+            res.put("customerPhone", cc.getCustomerPhone());
+            res.put("warrantyPeriod", cc.getWarrantyPeriod());
+            res.put("warrantyExpiry", cc.getWarrantyExpiry());
+
+            LocalDate now = LocalDate.now();
+            if (cc.getWarrantyExpiry() != null) {
+                if (now.isAfter(cc.getWarrantyExpiry())) {
+                    res.put("eligible", false);
+                    res.put("isUnderWarranty", false);
+                    res.put("isExpired", true);
+                    res.put("status", "EXPIRED");
+                    res.put("reason", "Máy đã hết hạn bảo hành vào ngày " + cc.getWarrantyExpiry());
+                } else {
+                    res.put("eligible", true);
+                    res.put("isUnderWarranty", true);
+                    res.put("status", "VALID");
+                    res.put("reason", "Máy còn trong thời hạn bảo hành đến ngày " + cc.getWarrantyExpiry());
+                }
+            } else {
+                res.put("eligible", true);
+                res.put("status", "UNKNOWN");
+                res.put("reason", "Không có ngày hết hạn cố định (Bảo hành theo thỏa thuận hoặc kiểm tra đơn)");
+            }
+            return res;
+        }
+
+        // Máy ngoài (chưa từng mua tại shop)
+        res.put("eligible", true);
+        res.put("isReturned", false);
+        res.put("status", "EXTERNAL_MACHINE");
+        res.put("reason", "Máy nhận sửa chữa ngoài (chưa có thông tin xuất bán trong hệ thống)");
+        return res;
     }
 
     public static LocalDate calculateExpiryFromPeriod(LocalDate baseDate, String period) {

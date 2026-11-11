@@ -185,12 +185,12 @@ export default function TrangTongQuan() {
               </div>
               <button
                 type="button"
-                onClick={handleGuardedNavigate('/tra-cuu', 'INVENTORY_VIEW', 'Tra cứu tồn kho')}
+                onClick={handleGuardedNavigate('/tra-cuu', 'SEARCH_INVENTORY', 'Tra cứu tồn kho')}
                 className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
-                title={!hasPermission('INVENTORY_VIEW') ? 'Cần quyền Tra cứu tồn kho (INVENTORY_VIEW)' : ''}
+                title={!hasPermission('SEARCH_INVENTORY') ? 'Cần quyền Tra cứu tồn kho (SEARCH_INVENTORY)' : ''}
               >
                 <span>Xử lý</span>
-                {!hasPermission('INVENTORY_VIEW') && <Lock size={12} className="text-muted" />}
+                {!hasPermission('SEARCH_INVENTORY') && <Lock size={12} className="text-muted" />}
               </button>
             </div>
           </div>
@@ -218,15 +218,15 @@ export default function TrangTongQuan() {
               <div className="col-6">
                 <button
                   type="button"
-                  onClick={handleGuardedNavigate('/tra-cuu', 'INVENTORY_VIEW', 'Tra cứu tồn kho')}
+                  onClick={handleGuardedNavigate('/tra-cuu', 'SEARCH_INVENTORY', 'Tra cứu tồn kho')}
                   className={`btn w-100 py-3 border shadow-sm h-100 d-flex flex-column align-items-center justify-content-center gap-2 position-relative ${
-                    hasPermission('INVENTORY_VIEW') ? 'btn-light' : 'btn-light opacity-75'
+                    hasPermission('SEARCH_INVENTORY') ? 'btn-light' : 'btn-light opacity-75'
                   }`}
                 >
-                  <Search size={28} className={hasPermission('INVENTORY_VIEW') ? 'text-primary' : 'text-secondary'} />
+                  <Search size={28} className={hasPermission('SEARCH_INVENTORY') ? 'text-primary' : 'text-secondary'} />
                   <span className="fw-medium text-dark d-flex align-items-center gap-1">
                     Tra serial
-                    {!hasPermission('INVENTORY_VIEW') && <Lock size={13} className="text-muted" />}
+                    {!hasPermission('SEARCH_INVENTORY') && <Lock size={13} className="text-muted" />}
                   </span>
                 </button>
               </div>

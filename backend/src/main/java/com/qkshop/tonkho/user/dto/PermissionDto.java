@@ -16,4 +16,5 @@ public class PermissionDto {
     private String description;
     private String type; // "VIEW" (Chức năng / Xem màn hình) hoặc "ACTION" (Thao tác nghiệp vụ cụ thể)
     private String module; // Màn hình hoặc khu vực chức năng tương ứng trên giao diện
+    private boolean critical; // Đánh dấu quyền nhạy cảm / rủi ro cao cần cân nhắc khi cấp
 }

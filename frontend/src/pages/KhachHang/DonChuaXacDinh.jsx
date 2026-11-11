@@ -10,6 +10,8 @@ import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 /**
  * Danh sách đơn chưa xác định khách (thiếu hoặc sai SĐT) kèm form gán thủ công.
@@ -383,14 +385,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
               {/* Trạng thái Loading */}
               {loading && (
-                <tr>
-                  <td colSpan={canManage ? 8 : 7} className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Đang tải...</span>
-                    </div>
-                    <p className="text-muted mt-2 mb-0 small">Đang quét danh sách hóa đơn chưa xác định khách...</p>
-                  </td>
-                </tr>
+                <BangLoading colSpan={canManage ? 8 : 7} message="Đang quét danh sách hóa đơn chưa xác định khách..." />
               )}
             </tbody>
           </table>
@@ -398,29 +393,16 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
         {/* Phân trang Footer */}
         {totalPages > 1 && (
-          <div className="bg-light p-3 border-top d-flex justify-content-between align-items-center px-4 flex-wrap gap-2">
-            <span className="text-secondary small fw-medium">
-              Hiển thị {displayedOrders.length} / Tổng {totalElements} đơn chưa gán
-            </span>
-            <nav aria-label="Page navigation">
-              <ul className="pagination pagination-sm mb-0 shadow-sm">
-                <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => load(page - 1)}>
-                    Trước
-                  </button>
-                </li>
-                <li className="page-item disabled">
-                  <span className="page-link bg-white text-dark fw-medium px-4">
-                    Trang {page + 1} / {totalPages}
-                  </span>
-                </li>
-                <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => load(page + 1)}>
-                    Sau
-                  </button>
-                </li>
-              </ul>
-            </nav>
+          <div className="bg-light p-3 border-top px-4">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              onPageChange={load}
+              itemName="đơn chưa gán"
+              showPageNumbers={false}
+            />
           </div>
         )}
       </div>
