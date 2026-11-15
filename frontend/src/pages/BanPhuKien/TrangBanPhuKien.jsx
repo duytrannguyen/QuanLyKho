@@ -244,15 +244,15 @@ export default function TrangBanPhuKien() {
 
           {/* BẢNG SẢN PHẨM */}
           {selectedAccessories.length > 0 ? (
-            <div className="border rounded-3 shadow-sm bg-white overflow-hidden">
+            <div className="table-responsive border rounded-3 shadow-sm bg-white">
               <table className="table table-hover align-middle mb-0">
                 <thead className="table-light text-secondary small text-uppercase fw-semibold">
                   <tr>
-                    <th className="ps-4 py-3" style={{ width: '38%' }}>Sản phẩm</th>
-                    <th className="py-3 text-center" style={{ width: '12%' }}>Số lượng</th>
+                    <th className="ps-3 py-3" style={{ width: '32%' }}>Sản phẩm</th>
+                    <th className="py-3 text-center" style={{ width: '16%' }}>Số lượng</th>
                     <th className="py-3 text-end" style={{ width: '16%' }}>Đơn giá (đ)</th>
-                    <th className="py-3 text-center" style={{ width: '18%' }}>Bảo hành</th>
-                    <th className="py-3 text-end pe-4" style={{ width: '13%' }}>Thành tiền</th>
+                    <th className="py-3 text-center" style={{ width: '19%' }}>Bảo hành</th>
+                    <th className="py-3 text-end pe-3" style={{ width: '14%' }}>Thành tiền</th>
                     <th className="py-3 text-center" style={{ width: '3%' }}></th>
                   </tr>
                 </thead>
@@ -265,9 +265,9 @@ export default function TrangBanPhuKien() {
                       </td>
                       
                       <td className="text-center">
-                        <div className="input-group input-group-sm mx-auto shadow-sm" style={{ maxWidth: '90px' }}>
+                        <div className="input-group input-group-sm mx-auto shadow-sm" style={{ maxWidth: '105px', minWidth: '96px' }}>
                           <button className="btn btn-light border px-2 text-secondary hover-primary" onClick={() => sa.quantity > 1 ? updateItemField(sa.sku, 'quantity', sa.quantity - 1) : setSelectedAccessories(selectedAccessories.filter(item => item.sku !== sa.sku))}><Minus size={14}/></button>
-                          <input type="text" className="form-control text-center fw-bold px-0 bg-white" value={sa.quantity} readOnly />
+                          <input type="text" className="form-control text-center fw-bold px-1 bg-white" value={sa.quantity} readOnly />
                           <button className="btn btn-light border px-2 text-secondary hover-primary" onClick={() => updateItemField(sa.sku, 'quantity', sa.quantity + 1)}><Plus size={14}/></button>
                         </div>
                       </td>
@@ -363,7 +363,7 @@ export default function TrangBanPhuKien() {
       <div className="row g-4 mb-4">
         
         {/* BÊN TRÁI: THÔNG TIN KHÁCH HÀNG & GIAO DỊCH */}
-        <div className="col-xl-7">
+        <div className="col-12 col-lg-7 col-xl-7">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
               <h5 className="card-title fw-bold m-0 d-flex align-items-center text-dark">
@@ -424,7 +424,7 @@ export default function TrangBanPhuKien() {
         </div>
 
         {/* BÊN PHẢI: THANH TOÁN & CHỐT ĐƠN */}
-        <div className="col-xl-5">
+        <div className="col-12 col-lg-5 col-xl-5">
           <div className="card shadow-sm border-0 h-100 bg-primary bg-opacity-10 border border-primary border-opacity-25">
             <div className="card-header bg-transparent border-bottom border-primary border-opacity-25 py-3">
               <h5 className="card-title fw-bold m-0 d-flex align-items-center text-primary">
@@ -460,9 +460,9 @@ export default function TrangBanPhuKien() {
               
               <hr className="border-primary border-opacity-50 my-0 mb-4" />
               
-              <div className="d-flex justify-content-between align-items-center mb-4">
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
                 <span className="text-primary fw-bold fs-5">KHÁCH CẦN TRẢ:</span>
-                <span className="fw-bolder text-danger" style={{ fontSize: '2rem' }}>{formatCurrency(finalValue)} đ</span>
+                <span className="fw-bolder text-danger text-nowrap" style={{ fontSize: 'clamp(1.35rem, 2vw, 2rem)' }}>{formatCurrency(finalValue)} đ</span>
               </div>
 
               {/* Nút Action */}

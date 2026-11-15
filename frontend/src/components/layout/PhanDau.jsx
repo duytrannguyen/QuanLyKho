@@ -327,29 +327,41 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
   const hasReadNotifications = notifications.some(n => n.isRead);
 
   return (
-    <header className="position-fixed top-0 end-0 bg-white border-bottom d-flex align-items-center justify-content-between px-3 px-md-4 z-2"
-      style={{ left: isMobile ? '0px' : `calc(${sidebarWidth} + ${marginGap})`, height: '64px', transition: 'left 0.3s ease' }}
+    <header className="position-fixed top-0 end-0 bg-white border-bottom d-flex align-items-center justify-content-between px-2 px-sm-3 px-md-4"
+      style={{ left: isMobile ? '0px' : `calc(${sidebarWidth} + ${marginGap})`, height: '64px', transition: 'left 0.3s ease', zIndex: 1030 }}
     >
-      <div className="d-flex align-items-center flex-grow-1 gap-2 gap-md-3">
+      <div className="d-flex align-items-center flex-grow-1 min-w-0 gap-2">
         {isMobile && (
-          <button className="btn btn-light d-md-none p-1 border-0" onClick={onOpenMenu}>
-            <Menu size={24} />
+          <button 
+            type="button" 
+            className="btn btn-light d-lg-none p-1.5 border rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" 
+            onClick={onOpenMenu}
+            aria-label="Mở menu điều hướng"
+            style={{ width: '38px', height: '38px' }}
+          >
+            <Menu size={22} />
           </button>
+        )}
+        {isMobile && (
+          <div className="d-lg-none fw-bold fs-6 text-dark text-truncate d-flex align-items-center gap-1.5">
+            <span className="badge bg-primary text-white py-1 px-1.5 rounded-2" style={{ fontSize: '0.72rem' }}>QK</span>
+            <span className="d-none d-sm-inline small">Tồn Kho V2</span>
+          </div>
         )}
       </div>
 
-      <div className="d-flex align-items-center gap-3 position-relative">
+      <div className="d-flex align-items-center gap-2 gap-sm-3 position-relative flex-shrink-0">
         {/* Status Badge */}
-        <div className="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill d-flex align-items-center gap-2 py-1 px-3">
+        <div className="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill d-none d-md-flex align-items-center gap-2 py-1 px-3">
           <span className="bg-primary rounded-circle" style={{ width: '6px', height: '6px' }}></span>
           DỮ LIỆU CHÍNH THỨC
         </div>
 
         {/* Timestamp */}
-        <span className="text-secondary small">{time}</span>
+        <span className="text-secondary small d-none d-sm-inline">{time}</span>
 
         {/* Refresh Button */}
-        <button className="btn btn-light btn-sm d-flex align-items-center gap-1 border d-none d-sm-flex" onClick={() => {
+        <button className="btn btn-light btn-sm d-none d-sm-flex align-items-center gap-1 border text-nowrap" onClick={() => {
           fetchSyncStatus();
           fetchNotifications();
           showToast('Đang làm mới dữ liệu hệ thống...', 'info');
@@ -380,9 +392,10 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
           {showNotiDropdown && (
             <div className="card shadow-lg border-0 position-absolute end-0 mt-2 rounded-3 text-start"
               style={{
-                width: 'min(410px, 94vw)',
+                width: 'min(410px, calc(100vw - 20px))',
                 zIndex: 1060,
                 top: '100%',
+                right: 0,
                 boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
                 overflow: 'hidden'
               }}
@@ -647,7 +660,7 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
             title="Nhấp để mở menu cá nhân"
           >
             <div className="text-end d-none d-sm-block" style={{ lineHeight: '1.2' }}>
-              <div className="fw-bold small text-dark text-truncate" style={{ maxWidth: '140px' }}>
+              <div className="fw-bold small text-dark text-truncate" style={{ maxWidth: '200px' }}>
                 {user?.fullName || user?.username || 'User'}
               </div>
               <div className="text-secondary" style={{ fontSize: '0.7rem' }}>
@@ -680,7 +693,7 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
           {showUserDropdown && (
             <div 
               className="card shadow-lg border-0 position-absolute end-0 mt-2 rounded-3 text-start overflow-hidden animate__animated animate__fadeIn"
-              style={{ width: '270px', zIndex: 1060, top: '100%', boxShadow: '0 12px 35px rgba(0,0,0,0.18)' }}
+              style={{ width: 'min(280px, calc(100vw - 20px))', zIndex: 1060, top: '100%', right: 0, boxShadow: '0 12px 35px rgba(0,0,0,0.18)' }}
             >
               <div className="bg-light p-3 border-bottom d-flex align-items-center gap-2.5">
                 <div 

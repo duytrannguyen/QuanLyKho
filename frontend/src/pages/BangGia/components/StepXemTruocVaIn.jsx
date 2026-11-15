@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  ChevronLeft, FileText, ZoomIn, ZoomOut
+  ChevronLeft, FileText, ZoomIn, ZoomOut, Printer
 } from 'lucide-react';
 import { priceListApi } from '../../../api';
 import { useToast } from '../../../contexts/notification/NguCanhThongBao';
@@ -150,6 +150,9 @@ export default function StepXemTruocVaIn({ items, pageSize, setPageSize, onBack 
             <span className="btn btn-outline-secondary disabled" style={{ minWidth: 54 }}>{Math.round(zoom * 100)}%</span>
             <button type="button" className="btn btn-outline-secondary" disabled={zoom >= 1.2} onClick={() => setZoom(z => Math.min(1.2, +(z + 0.1).toFixed(1)))} title="Phóng to"><ZoomIn size={14} /></button>
           </div>
+          <button type="button" className="btn btn-outline-dark d-flex align-items-center gap-1" onClick={() => window.print()} title="In trực tiếp từ trình duyệt">
+            <Printer size={16} /> In Trực Tiếp
+          </button>
           <button type="button" className="btn btn-primary d-flex align-items-center gap-1" onClick={handleExportPdf} disabled={loadingPdf} title="Xuất file PDF chuẩn để in">
             {loadingPdf ? <span className="spinner-border spinner-border-sm" /> : <FileText size={16} />}
             {loadingPdf ? 'Đang tạo PDF...' : 'Xuất PDF'}
@@ -157,12 +160,33 @@ export default function StepXemTruocVaIn({ items, pageSize, setPageSize, onBack 
         </div>
       </div>
 
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .price-print-area, .price-print-area * { visibility: visible; }
+          .price-print-area { position: absolute; left: 0; top: 0; width: 100%; transform: none !important; }
+          .no-print { display: none !important; }
+          .page-card-container { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
+        }
+      `}</style>
+
       {/* Vùng xem trước */}
       <div className="card-body bg-body-tertiary py-4" style={{ overflowX: 'auto' }}>
-        <div style={{ zoom, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
+        <div 
+          className="price-print-area"
+          style={{ 
+            transform: `scale(${zoom})`, 
+            transformOrigin: 'top center',
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: 24,
+            width: '100%'
+          }}
+        >
           {pages.map((pageItems, pageIdx) => (
-            <div key={pageIdx}>
-              <div className="text-secondary small mb-1 fw-semibold">Trang {pageIdx + 1}/{pages.length}</div>
+            <div key={pageIdx} className="page-card-container">
+              <div className="text-secondary small mb-1 fw-semibold no-print">Trang {pageIdx + 1}/{pages.length}</div>
               <div style={{
                 background: '#fff',
                 boxShadow: '0 2px 16px rgba(0,0,0,.15)',

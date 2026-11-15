@@ -175,7 +175,7 @@ export default function KhuVucPhuKienQuaTang({
                 <th className="ps-2.5 py-1.5">Phụ kiện mua thêm</th>
                 <th className="text-center py-1.5">Loại</th>
                 <th className="text-end py-1.5">Đơn giá</th>
-                <th className="text-center py-1.5" style={{ width: '95px' }}>
+                <th className="text-center py-1.5" style={{ width: '108px', minWidth: '104px' }}>
                   SL
                 </th>
                 <th className="text-end py-1.5">Thành tiền</th>

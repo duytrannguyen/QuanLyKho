@@ -63,20 +63,16 @@ public class AccessoryService {
     public String generateNextSku(String category) {
         String cleanCat = normalizeCategoryCode(category);
         String prefix = "PK-" + cleanCat + "-";
-        int maxSuffix = accessoryRepository.findAll().stream()
-                .map(Accessory::getSku)
-                .filter(s -> s != null && s.startsWith(prefix))
-                .mapToInt(s -> {
-                    try {
-                        String numPart = s.substring(prefix.length()).trim();
-                        if (numPart.matches("\\d{1,6}")) {
-                            return Integer.parseInt(numPart);
-                        }
-                    } catch (Exception ignored) {}
-                    return 0;
-                })
-                .max()
-                .orElse(0);
+        String maxSku = accessoryRepository.findMaxSkuByPrefix(prefix).orElse(null);
+        int maxSuffix = 0;
+        if (maxSku != null && maxSku.startsWith(prefix)) {
+            try {
+                String numPart = maxSku.substring(prefix.length()).trim().replaceAll("[^0-9]", "");
+                if (!numPart.isEmpty()) {
+                    maxSuffix = Integer.parseInt(numPart);
+                }
+            } catch (Exception ignored) {}
+        }
         return String.format("%s%04d", prefix, maxSuffix + 1);
     }
 

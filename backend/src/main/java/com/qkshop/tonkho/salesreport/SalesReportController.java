@@ -29,6 +29,7 @@ public class SalesReportController {
      * Lấy dữ liệu tổng hợp Dashboard Báo Cáo Bán Hàng theo bộ lọc thời gian.
      */
     @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('REPORT_VIEW', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<SalesDashboardResponse>> getDashboard(
             @RequestParam(defaultValue = "THIS_MONTH") String preset,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -36,6 +37,24 @@ public class SalesReportController {
 
         SalesDashboardResponse response = salesReportService.getDashboardData(preset, from, to);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
+     * Xuất danh sách đơn hàng và dữ liệu doanh số ra file Excel.
+     */
+    @GetMapping("/export-excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('REPORT_VIEW', 'DASHBOARD_VIEW', 'EXPORT_DATA')")
+    public ResponseEntity<org.springframework.core.io.Resource> exportSalesReportExcel(
+            @RequestParam(defaultValue = "THIS_MONTH") String preset,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        log.info("[SALES_REPORT] Yêu cầu xuất Excel báo cáo bán hàng: preset={}, from={}, to={}", preset, from, to);
+        org.springframework.core.io.ByteArrayResource resource = salesReportService.generateSalesReportExcel(preset, from, to);
+        String filename = "Bao_Cao_Doanh_So_QKShop_" + (preset != null ? preset : "ky") + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
     }
 
     /**

@@ -207,14 +207,14 @@ export default function TrangDoiSoat() {
 
   return (
     <div className="container-fluid py-4 min-vh-100 bg-light">
-      <div className="d-flex justify-content-between align-items-start mb-4">
+      <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
         <div>
           <h2 className="fw-bold text-dark m-0 mb-1">Đối soát DataSale & Đồng bộ</h2>
           <p className="text-secondary m-0">Đồng bộ đơn "Hoàn tất" từ Google Sheet DATABASE_BÁN HÀNG để trừ kho và theo dõi sai lệch dữ liệu</p>
         </div>
-        <div>
+        <div className="flex-shrink-0">
           <button
-            className="btn btn-primary d-flex align-items-center gap-2"
+            className="btn btn-primary d-flex align-items-center gap-2 text-nowrap"
             onClick={handleSyncNow}
             disabled={loading}
             title={canManageSync ? 'Chạy đồng bộ Google Sheet ngay' : 'Yêu cầu quyền: Quản lý đồng bộ'}
@@ -321,13 +321,13 @@ export default function TrangDoiSoat() {
                   <table className="table table-hover align-middle">
                     <thead className="table-light">
                       <tr>
-                        <th className="text-center" style={{ width: '60px' }}>STT</th>
-                        <th>ID</th>
-                        <th>Loại lỗi</th>
-                        <th>Đối tượng</th>
-                        <th>Thời gian phát hiện</th>
-                        <th style={{ minWidth: '300px' }}>Tin nhắn</th>
-                        <th>Thao tác</th>
+                        <th className="text-center" style={{ width: '5%' }}>STT</th>
+                        <th style={{ width: '6%' }}>ID</th>
+                        <th style={{ width: '16%' }}>Loại lỗi</th>
+                        <th style={{ width: '14%' }}>Đối tượng</th>
+                        <th style={{ width: '13%' }}>Thời gian phát hiện</th>
+                        <th style={{ width: '24%' }}>Tin nhắn</th>
+                        <th style={{ width: '22%' }}>Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>

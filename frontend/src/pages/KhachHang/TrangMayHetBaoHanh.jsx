@@ -415,13 +415,13 @@ export default function TrangMayHetBaoHanh() {
           <table className="table table-hover table-borderless align-middle mb-0">
             <thead className="table-light border-bottom">
               <tr>
-                <th className="py-2.5 text-center text-secondary fw-semibold" style={{ width: '45px' }}>STT</th>
-                <th className="py-2.5 text-secondary fw-semibold" style={{ width: '135px' }}>Mã đơn & Ngày mua</th>
-                <th className="py-2.5 text-secondary fw-semibold" style={{ width: '220px' }}>Khách hàng & SĐT</th>
-                <th className="py-2.5 text-secondary fw-semibold">Thiết bị & Cấu hình</th>
-                <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '185px' }}>Hạn bảo hành & Quá hạn</th>
-                <th className="py-2.5 text-secondary fw-semibold text-end" style={{ width: '120px' }}>Giá trị đơn</th>
-                <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '130px' }}>Thao tác</th>
+                <th className="py-2.5 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+                <th className="py-2.5 text-secondary fw-semibold" style={{ width: '13%' }}>Mã đơn & Ngày mua</th>
+                <th className="py-2.5 text-secondary fw-semibold" style={{ width: '20%' }}>Khách hàng & SĐT</th>
+                <th className="py-2.5 text-secondary fw-semibold" style={{ width: '26%' }}>Thiết bị & Cấu hình</th>
+                <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '15%' }}>Hạn bảo hành & Quá hạn</th>
+                <th className="py-2.5 text-secondary fw-semibold text-end" style={{ width: '10%' }}>Giá trị đơn</th>
+                <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '11%' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody className="border-top-0">

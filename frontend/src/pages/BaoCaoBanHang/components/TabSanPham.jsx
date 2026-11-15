@@ -107,7 +107,7 @@ export default function TabSanPham({ data, totalRevenue }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 200, overflowY: 'auto' }}>
+            <div className="mt-auto pt-3 border-top border-light-subtle">
               {(data.brandMix || []).map((item, idx) => (
                 <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
                   <div className="d-flex align-items-center gap-2">
@@ -202,7 +202,7 @@ export default function TabSanPham({ data, totalRevenue }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 200, overflowY: 'auto' }}>
+            <div className="mt-auto pt-3 border-top border-light-subtle">
               {(data.segmentMix || []).map((item, idx) => (
                 <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
                   <div className="d-flex align-items-center gap-2">

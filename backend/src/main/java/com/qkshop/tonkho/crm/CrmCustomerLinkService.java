@@ -93,11 +93,16 @@ public class CrmCustomerLinkService {
                     .ifPresent(customer::setFullName);
         }
 
-        orderRepo.findFirstByCrmCustomerIdAndCustomerTypeIsNotNullAndCustomerTypeNotOrderBySaleDateDescIdDesc(customerId, "")
-                .map(SalesOrder::getCustomerType)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .ifPresent(customer::setCustomerType);
+        int totalOrdersCount = customer.getTotalOrders() != null ? customer.getTotalOrders() : 0;
+        if (totalOrdersCount > 1) {
+            customer.setCustomerType("Khách cũ");
+        } else {
+            orderRepo.findFirstByCrmCustomerIdAndCustomerTypeIsNotNullAndCustomerTypeNotOrderBySaleDateDescIdDesc(customerId, "")
+                    .map(SalesOrder::getCustomerType)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .ifPresentOrElse(customer::setCustomerType, () -> customer.setCustomerType("Khách mua lần đầu"));
+        }
 
         customerRepo.save(customer);
     }

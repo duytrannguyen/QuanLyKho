@@ -11,7 +11,7 @@ import ModalChiTietDonHang from '../KiemTraBaoHanh/ModalChiTietDonHang';
 import ModalSuaDonMay from '../KiemTraBaoHanh/ModalSuaDonMay';
 import ModalXacNhanGiaoHang from '../KiemTraBaoHanh/ModalXacNhanGiaoHang';
 import PhanTrang from '../../components/common/PhanTrang';
-import { formatCurrency, formatDate, getCleanWarrantyType, getTodayDateString } from '../../utils/dinh_dang';
+import { formatCurrency, formatDate, getCleanWarrantyType, getTodayDateString, parseCurrency } from '../../utils/dinh_dang';
 
 export default function TrangDonShip() {
   const { showToast } = useToast();
@@ -54,6 +54,7 @@ export default function TrangDonShip() {
   const [returnState, setReturnState] = useState('READY');
   const [restoreAccessories, setRestoreAccessories] = useState(true);
   const [restoreUpgradeParts, setRestoreUpgradeParts] = useState(true);
+  const [returnSalePrice, setReturnSalePrice] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   // Tải danh sách đơn ship
@@ -130,6 +131,12 @@ export default function TrangDonShip() {
     setReturnState('READY');
     setRestoreAccessories(true);
     setRestoreUpgradeParts(true);
+
+    // Tự động xác định giá gốc niêm yết của máy (bóc tách riêng, không lấy tổng hóa đơn thanh toán cũ)
+    const origPrice = Number(order.defaultSalePrice) > 0 
+      ? Number(order.defaultSalePrice) 
+      : (Number(order.grossRevenue) > 0 ? Number(order.grossRevenue) : Number(order.salePrice));
+    setReturnSalePrice(origPrice > 0 ? String(origPrice) : '');
   };
 
   const handleReturnSubmit = async (e) => {
@@ -138,13 +145,15 @@ export default function TrangDonShip() {
 
     setIsSubmittingReturn(true);
     try {
+      const parsedPrice = parseCurrency(returnSalePrice);
       await apiBaoHanh.returnShippingOrder(returningOrder.cycleId, {
         reason: returnReason,
         returnState,
         restoreAccessories,
-        restoreUpgradeParts
+        restoreUpgradeParts,
+        salePrice: parsedPrice > 0 ? parsedPrice : null
       });
-      showToast(`Đã hoàn đơn hàng ${returningOrder.cycleId}! Máy đã được nhập lại kho.`, 'success');
+      showToast(`Đã hoàn đơn hàng ${returningOrder.cycleId}! Máy đã được nhập lại kho với giá gốc niêm yết.`, 'success');
       setReturningOrder(null);
       if (selectedOrder && selectedOrder.cycleId === returningOrder.cycleId) {
         setSelectedOrder(null);
@@ -206,7 +215,7 @@ export default function TrangDonShip() {
   };
 
   return (
-    <div className="container-fluid py-4 min-vh-100 position-relative bg-light" style={{ paddingBottom: '100px' }}>
+    <div className="container-fluid py-3 position-relative bg-light">
 
       {/* 1. Header Trang */}
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 bg-white p-4 rounded-4 shadow-sm border">
@@ -331,7 +340,7 @@ export default function TrangDonShip() {
             </ul>
 
             {/* Thanh Tìm Kiếm */}
-            <div className="d-flex align-items-center gap-2" style={{ minWidth: '320px' }}>
+            <div className="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0" style={{ minWidth: '240px', maxWidth: '360px' }}>
               <div className="input-group shadow-sm rounded-pill overflow-hidden border">
                 <span className="input-group-text bg-white border-0 ps-3">
                   <Search size={16} className="text-muted" />
@@ -384,16 +393,16 @@ export default function TrangDonShip() {
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light text-secondary small text-uppercase fw-bold">
                     <tr>
-                      <th className="ps-4 py-3 text-center" style={{ width: '6%' }}>STT</th>
-                      <th className="py-3" style={{ width: '22%' }}>Máy & Cấu hình</th>
-                      <th className="py-3" style={{ width: '13%' }}>Số Serial</th>
-                      <th className="py-3" style={{ width: '15%' }}>Khách hàng & SĐT</th>
-                      <th className="py-3" style={{ width: '11%' }}>Ngày gửi đơn</th>
-                      <th className="py-3" style={{ width: '11%' }}>Gói bảo hành</th>
-                      <th className="py-3 text-center" style={{ width: '13%' }}>
+                      <th className="ps-3 py-3 text-center" style={{ width: '4%' }}>STT</th>
+                      <th className="py-3" style={{ width: '21%' }}>Máy & Cấu hình</th>
+                      <th className="py-3" style={{ width: '11%' }}>Số Serial</th>
+                      <th className="py-3" style={{ width: '16%' }}>Khách hàng & SĐT</th>
+                      <th className="py-3" style={{ width: '10%' }}>Ngày gửi đơn</th>
+                      <th className="py-3" style={{ width: '10%' }}>Gói bảo hành</th>
+                      <th className="py-3 text-center" style={{ width: '12%' }}>
                         {activeTab === 'PENDING' ? 'Trạng thái giao' : 'Ngày nhận & Hạn BH'}
                       </th>
-                      <th className="py-3 text-end px-4" style={{ width: '9%' }}>Thao tác</th>
+                      <th className="py-3 text-end pe-3" style={{ width: '16%' }}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -409,7 +418,7 @@ export default function TrangDonShip() {
                           title="Bấm để xem chi tiết đơn hàng"
                         >
                           {/* STT */}
-                          <td className="ps-4 py-3 text-center text-muted fw-semibold font-monospace">
+                          <td className="ps-3 py-3 text-center text-muted fw-semibold font-monospace">
                             {absoluteIndex}
                           </td>
 
@@ -417,7 +426,7 @@ export default function TrangDonShip() {
                           <td className="py-3">
                             <div className="fw-bold text-dark">{order.sourceModelText || 'Không rõ dòng máy'}</div>
                             {order.configInfo && (
-                              <div className="small text-muted text-truncate mt-1" style={{ maxWidth: '240px' }}>
+                              <div className="small text-muted line-clamp-2 mt-1" title={order.configInfo}>
                                 {order.configInfo}
                               </div>
                             )}
@@ -499,13 +508,13 @@ export default function TrangDonShip() {
                           </td>
 
                           {/* Nút Thao tác */}
-                          <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
-                            <div className="d-inline-flex align-items-center gap-1 justify-content-end">
+                          <td className="py-3 text-end pe-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="d-inline-flex align-items-center gap-1 justify-content-end flex-nowrap">
                               {activeTab === 'PENDING' && (
                                 <>
                                   <button
                                     type="button"
-                                    className="btn btn-sm btn-success py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm rounded-pill"
+                                    className="btn btn-sm btn-success py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm rounded-pill text-nowrap"
                                     onClick={() => handleOpenConfirm(order)}
                                     title="Xác nhận khách đã nhận hàng & Kích hoạt bảo hành"
                                   >
@@ -514,7 +523,7 @@ export default function TrangDonShip() {
                                   </button>
                                   <button
                                     type="button"
-                                    className={`btn btn-sm py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill ${canReturnOrder ? 'btn-outline-danger' : 'btn-light text-muted border'}`}
+                                    className={`btn btn-sm py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 rounded-pill text-nowrap ${canReturnOrder ? 'btn-outline-danger' : 'btn-light text-muted border'}`}
                                     onClick={() => handleOpenReturn(order)}
                                     title={canReturnOrder ? 'Khách từ chối nhận hàng / Hủy giao / Hoàn hàng về kho' : 'Cần quyền: Đổi trả & Hoàn đơn hàng về kho (ORDER_RETURN)'}
                                   >
@@ -526,7 +535,7 @@ export default function TrangDonShip() {
 
                               <button
                                 type="button"
-                                className={`btn btn-sm py-1 px-2.5 fw-medium d-inline-flex align-items-center gap-1 rounded-pill ${canEditOrder ? 'btn-outline-primary' : 'btn-light text-muted border'}`}
+                                className={`btn btn-sm py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 rounded-pill text-nowrap ${canEditOrder ? 'btn-outline-primary' : 'btn-light text-muted border'}`}
                                 onClick={() => {
                                   if (!requirePermission('ORDER_EDIT', showToast, 'Sửa hóa đơn & đơn hàng đã xuất')) return;
                                   setEditingOrder(order);
@@ -632,6 +641,31 @@ export default function TrangDonShip() {
                     <div className="p-2.5 bg-light rounded-3 border">
                       <div className="fw-bold text-dark">{returningOrder.sourceModelText || 'Không rõ dòng máy'}</div>
                       <div className="font-monospace small text-primary fw-bold mt-0.5">Serial: {returningOrder.serialKey}</div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <label className="form-label small fw-bold text-secondary text-uppercase mb-0">
+                        Giá máy gốc trả về kho (VNĐ) <span className="text-danger">*</span>
+                      </label>
+                      <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace" style={{ fontSize: '0.7rem' }}>
+                        Tự động tách giá gốc
+                      </span>
+                    </div>
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control rounded-start-3 font-monospace fw-bold text-primary"
+                        value={formatCurrency(returnSalePrice)}
+                        onChange={(e) => setReturnSalePrice(parseCurrency(e.target.value))}
+                        placeholder="Nhập giá máy gốc..."
+                        required
+                      />
+                      <span className="input-group-text bg-light rounded-end-3 text-secondary fw-semibold">đ</span>
+                    </div>
+                    <div className="form-text text-muted" style={{ fontSize: '0.72rem' }}>
+                      Giá bán niêm yết khi máy quay lại kho. Đã bóc tách riêng linh kiện nâng cấp, phụ kiện và chiết khấu của đơn cũ.
                     </div>
                   </div>
 

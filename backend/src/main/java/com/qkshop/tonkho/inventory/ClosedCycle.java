@@ -143,6 +143,9 @@ public class ClosedCycle {
     @Column(name = "sale_date")
     private LocalDateTime saleDate;
 
+    @Column(name = "closed_by", length = 100)
+    private String closedBy;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

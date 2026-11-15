@@ -145,7 +145,7 @@ export default function TrangNhatKyHoatDong() {
         {/* Right - Detail Panel */}
         <div className="col-lg-4 d-flex flex-column h-100">
           {activeLog && (
-            <div className="card shadow-sm border-0 p-4 h-100 sticky-lg-top overflow-auto" style={{ top: '80px', maxHeight: 'calc(100vh - 100px)' }}>
+            <div className="card shadow-sm border-0 p-4 h-100 sticky-lg-top" style={{ top: '80px' }}>
               <div className="d-flex justify-content-between align-items-start mb-4">
                 <div>
                   <h5 className="fw-bold text-dark m-0 mb-1">Chi tiết sự kiện</h5>
@@ -156,15 +156,15 @@ export default function TrangNhatKyHoatDong() {
 
               <div className="mb-4">
                 <div className="small text-secondary fw-bold text-uppercase mb-1">Event ID</div>
-                <div className="fs-6 text-dark fw-medium">{activeLog.eventId}</div>
-                <div className="small text-secondary mt-1">Idempotency: {activeLog.idempotencyKey}</div>
+                <div className="fs-6 text-dark fw-medium text-break">{activeLog.eventId}</div>
+                <div className="small text-secondary mt-1 text-break">Idempotency: {activeLog.idempotencyKey}</div>
                 <div className="small text-secondary mt-1">{new Date(activeLog.eventAt).toLocaleString('vi-VN')}</div>
               </div>
 
               <div className="mb-4">
                 <div className="small text-secondary fw-bold text-uppercase mb-1">Serial / Cycle ID</div>
-                <div className="fs-3 fw-bold text-dark">{activeLog.serialKey || '-'}</div>
-                <div className="small text-secondary mt-1">
+                <div className="fs-4 fw-bold text-dark text-break">{activeLog.serialKey || '-'}</div>
+                <div className="small text-secondary mt-1 text-break">
                   Cycle: {activeLog.cycleId || '-'}
                 </div>
               </div>
@@ -173,7 +173,7 @@ export default function TrangNhatKyHoatDong() {
                 <div className="card bg-light border-0">
                   <div className="card-body p-3">
                     <div className="small text-secondary mb-2">Dữ liệu sự kiện (JSON)</div>
-                    <pre className="small text-secondary bg-white p-2 border rounded overflow-auto m-0" style={{ fontSize: '11px', maxHeight: '200px' }}>
+                    <pre className="small text-secondary bg-white p-2 border rounded m-0" style={{ fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {activeLog.eventData || '{}'}
                     </pre>
                   </div>

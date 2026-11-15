@@ -56,7 +56,7 @@ public class CrmQueryService {
         LocalDateTime fourteenDaysAgo = LocalDateTime.now().minusDays(14);
 
         Page<CrmCustomer> result = customerRepo.searchWithFilter(
-                kw, ft, expiringBefore, sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, fourteenDaysAgo, pageable);
+                kw, ft, expiringBefore, sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, pageable);
 
         List<Long> customerIds = result.getContent().stream().map(CrmCustomer::getId).toList();
         Map<Long, List<SalesOrder>> orderMap = Collections.emptyMap();
@@ -342,8 +342,8 @@ public class CrmQueryService {
                 }
             } else {
                 if (!"HOAN_TAT_1_LAN".equalsIgnoreCase(o.getCareStatus()) && o.getSaleDate() != null) {
-                    if (!o.getSaleDate().isAfter(sevenDaysAgo) && !o.getSaleDate().isBefore(fourteenDaysAgo)) {
-                        return new CareStatusEvaluation("CARE_DUE", "Cần thăm hỏi sau mua (7-14 ngày)", null);
+                    if (!o.getSaleDate().isAfter(sevenDaysAgo)) {
+                        return new CareStatusEvaluation("CARE_DUE", "Cần thăm hỏi sau mua (> 7 ngày)", null);
                     }
                 }
             }
@@ -533,9 +533,9 @@ public class CrmQueryService {
         long unlinked = orderRepo.countByCrmCustomerIdIsNull();
         long expiring = customerRepo.countWarrantyExpiring(expiringBefore);
         long expired = customerRepo.countWarrantyExpired();
-        long careDue = customerRepo.countCareDue(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, fourteenDaysAgo);
+        long careDue = customerRepo.countCareDue(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo);
         long appointments = customerRepo.countAppointments();
-        long completed = customerRepo.countCareCompleted(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo, fourteenDaysAgo);
+        long completed = customerRepo.countCareCompleted(sixMonthsAgo, twelveMonthsAgo, sevenDaysAgo);
 
         CrmSummary res = new CrmSummary(total, unlinked, expiring, expired, careDue, careDue, appointments, completed);
         summaryCache = new CachedData<>(res, System.currentTimeMillis() + 15_000);

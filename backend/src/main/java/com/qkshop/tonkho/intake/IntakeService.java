@@ -187,6 +187,13 @@ public class IntakeService {
                 fixedCompanyExpiry = com.qkshop.tonkho.salesreport.SourceNormalizer.extractSpecificDate(wp);
             }
 
+            BigDecimal initialSalePrice = payload.getPrice();
+            if ((initialSalePrice == null || initialSalePrice.compareTo(BigDecimal.ZERO) <= 0)
+                    && config != null && config.getDefaultSalePrice() != null
+                    && config.getDefaultSalePrice().compareTo(BigDecimal.ZERO) > 0) {
+                initialSalePrice = config.getDefaultSalePrice();
+            }
+
             ActiveInventory inventory = ActiveInventory.builder()
                     .cycleId(cycleId)
                     .serialKey(serialKey)
@@ -197,7 +204,7 @@ public class IntakeService {
                     .state(initialState)
                     .readyAt(readyAt)
                     .lastPausedAt(initialState == CycleState.NEEDS_INSPECTION ? LocalDateTime.now() : null)
-                    .salePrice(payload.getPrice())
+                    .salePrice(initialSalePrice)
                     .note(payload.getNotes())
                     .warrantyPeriod(wp)
                     .warrantyExpiry(fixedCompanyExpiry)

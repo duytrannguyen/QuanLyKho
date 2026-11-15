@@ -137,13 +137,13 @@ export default function TrangLichSuBanPhuKien() {
               <thead className="table-light text-secondary small text-uppercase fw-semibold">
                 <tr>
                   <th className="text-center py-3" style={{ width: '5%' }}>STT</th>
-                  <th className="py-3" style={{ width: '12%' }}>Thời gian</th>
-                  <th className="py-3" style={{ width: '20%' }}>Tên phụ kiện</th>
-                  {filterAction === 'SELL' && <th className="py-3" style={{ width: '15%' }}>Khách hàng</th>}
+                  <th className="py-3" style={{ width: '13%' }}>Thời gian</th>
+                  <th className="py-3" style={{ width: filterAction === 'SELL' ? '22%' : '30%' }}>Tên phụ kiện</th>
+                  {filterAction === 'SELL' && <th className="py-3" style={{ width: '16%' }}>Khách hàng</th>}
                   <th className="text-center py-3" style={{ width: '8%' }}>SL</th>
-                  <th className="text-end py-3" style={{ width: '10%' }}>Đơn giá</th>
-                  <th className="text-end py-3" style={{ width: '10%' }}>Thành tiền</th>
-                  <th className="py-3" style={{ width: '10%' }}>Ghi chú</th>
+                  <th className="text-end py-3" style={{ width: '12%' }}>Đơn giá</th>
+                  <th className="text-end py-3" style={{ width: '12%' }}>Thành tiền</th>
+                  <th className="py-3" style={{ width: filterAction === 'SELL' ? '12%' : '20%' }}>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>

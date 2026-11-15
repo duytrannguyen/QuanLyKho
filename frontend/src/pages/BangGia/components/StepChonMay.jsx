@@ -51,7 +51,7 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
 
   useEffect(() => {
     apiCatalog.getBrands()
-      .then(res => setBrands(res.data || []))
+      .then(res => setBrands(Array.isArray(res) ? res : (res?.data || [])))
       .catch(err => setError(err.userMessage || 'Không tải được danh sách hãng'))
       .finally(() => setLoadingBrands(false));
   }, []);
@@ -65,7 +65,7 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
     setCfgSearch('');
     setError('');
     apiCatalog.getModelLines(brand.brandId)
-      .then(res => setModelLines(res.data || []))
+      .then(res => setModelLines(Array.isArray(res) ? res : (res?.data || [])))
       .catch(err => setError(err.userMessage || 'Không tải được danh sách dòng máy'))
       .finally(() => setLoadingML(false));
   };
@@ -77,7 +77,7 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
     setError('');
     priceListApi.getPlatformsByModelLine(ml.modelLineId)
       .then(res => {
-        const platformsData = res.data || [];
+        const platformsData = Array.isArray(res) ? res : (res?.data || []);
         const flatConfigs = [];
         const seenKeys = new Set();
 
@@ -154,7 +154,15 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
     });
   };
 
-  const LIST_HEIGHT = 440;
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const listHeight = isMobile ? 260 : 440;
 
   return (
     <div className="card shadow-sm border-0 mb-4">
@@ -175,11 +183,11 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
 
         <div className="row g-3">
           {/* HÃNG */}
-          <div className="col-6 col-lg-2">
+          <div className="col-6 col-xl-2">
             <div className="card border h-100">
               <div className="card-header bg-light fw-bold text-uppercase small text-secondary">1. Hãng</div>
               <SearchBox value={brandSearch} onChange={setBrandSearch} placeholder="Tìm hãng..." />
-              <div className="list-group list-group-flush" style={{ height: LIST_HEIGHT, overflowY: 'auto' }}>
+              <div className="list-group list-group-flush" style={{ height: listHeight, overflowY: 'auto' }}>
                 {loadingBrands && <ColumnEmpty><span className="spinner-border spinner-border-sm me-2" />Đang tải...</ColumnEmpty>}
                 {!loadingBrands && filteredBrands.length === 0 && <ColumnEmpty>Không có hãng phù hợp</ColumnEmpty>}
                 {filteredBrands.map(b => {
@@ -201,11 +209,11 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
           </div>
 
           {/* DÒNG MÁY */}
-          <div className="col-6 col-lg-3">
+          <div className="col-6 col-xl-3">
             <div className="card border h-100">
               <div className="card-header bg-light fw-bold text-uppercase small text-secondary">2. Dòng máy</div>
               <SearchBox value={mlSearch} onChange={setMlSearch} placeholder="Tìm dòng máy..." />
-              <div className="list-group list-group-flush" style={{ height: LIST_HEIGHT, overflowY: 'auto' }}>
+              <div className="list-group list-group-flush" style={{ height: listHeight, overflowY: 'auto' }}>
                 {loadingML && <ColumnEmpty><span className="spinner-border spinner-border-sm me-2" />Đang tải...</ColumnEmpty>}
                 {!selectedBrand && !loadingML && <ColumnEmpty>← Chọn hãng trước</ColumnEmpty>}
                 {selectedBrand && !loadingML && filteredML.length === 0 && <ColumnEmpty>Không có dòng máy</ColumnEmpty>}
@@ -228,18 +236,18 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
           </div>
 
           {/* CẤU HÌNH */}
-          <div className="col-12 col-lg-4">
+          <div className="col-12 col-md-7 col-xl-4">
             <div className="card border h-100">
-              <div className="card-header bg-light fw-bold text-uppercase small text-secondary d-flex justify-content-between align-items-center">
-                <span>3. Model & cấu hình {availableConfigs.length > 0 && <span className="fw-normal">({filteredConfigs.length})</span>}</span>
+              <div className="card-header bg-light fw-bold text-uppercase small text-secondary d-flex justify-content-between align-items-center gap-2">
+                <span className="text-truncate">3. Model & cấu hình {availableConfigs.length > 0 && <span className="fw-normal">({filteredConfigs.length})</span>}</span>
                 {filteredConfigs.length > 0 && (
-                  <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 text-none" onClick={toggleSelectAll}>
+                  <button type="button" className="btn btn-sm btn-link text-decoration-none p-0 text-none text-nowrap flex-shrink-0" onClick={toggleSelectAll}>
                     {allFilteredSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
                   </button>
                 )}
               </div>
               <SearchBox value={cfgSearch} onChange={setCfgSearch} placeholder="Tìm model, CPU, RAM, SSD..." />
-              <div className="list-group list-group-flush" style={{ height: LIST_HEIGHT, overflowY: 'auto' }}>
+              <div className="list-group list-group-flush" style={{ height: listHeight, overflowY: 'auto' }}>
                 {loadingConfigs && <ColumnEmpty><span className="spinner-border spinner-border-sm me-2" />Đang tải...</ColumnEmpty>}
                 {!selectedModelLine && !loadingConfigs && <ColumnEmpty>← Chọn dòng máy trước</ColumnEmpty>}
                 {selectedModelLine && !loadingConfigs && filteredConfigs.length === 0 && <ColumnEmpty>Không có cấu hình nào</ColumnEmpty>}
@@ -280,17 +288,17 @@ export default function StepChonMay({ selectedConfigs, setSelectedConfigs, onNex
           </div>
 
           {/* ĐÃ CHỌN */}
-          <div className="col-12 col-lg-3">
+          <div className="col-12 col-md-5 col-xl-3">
             <div className="card border border-primary h-100">
-              <div className="card-header bg-primary text-white fw-bold text-uppercase small d-flex justify-content-between align-items-center">
+              <div className="card-header bg-primary text-white fw-bold text-uppercase small d-flex justify-content-between align-items-center gap-2">
                 <span>Đã chọn ({selectedConfigs.size})</span>
                 {selectedConfigs.size > 0 && (
-                  <button type="button" className="btn btn-sm btn-link text-white p-0 text-decoration-none" onClick={() => setSelectedConfigs(new Map())}>
+                  <button type="button" className="btn btn-sm btn-link text-white p-0 text-decoration-none text-nowrap flex-shrink-0" onClick={() => setSelectedConfigs(new Map())}>
                     Xóa hết
                   </button>
                 )}
               </div>
-              <div className="list-group list-group-flush" style={{ height: LIST_HEIGHT + 49, overflowY: 'auto' }}>
+              <div className="list-group list-group-flush" style={{ height: listHeight + 49, overflowY: 'auto' }}>
                 {selectedConfigs.size === 0 && <ColumnEmpty>Chưa chọn cấu hình nào.<br />Tick vào cấu hình ở cột bên trái.</ColumnEmpty>}
                 {Array.from(selectedConfigs.values()).map((cfg, idx) => (
                   <div key={cfg.uniqueKey} className="list-group-item d-flex justify-content-between align-items-start py-2 px-3">

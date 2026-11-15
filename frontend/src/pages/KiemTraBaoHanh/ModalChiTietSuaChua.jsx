@@ -1,6 +1,7 @@
 import React from 'react';
-import { Wrench, Edit3, Lock } from 'lucide-react';
+import { Wrench, Edit3, Lock, Printer } from 'lucide-react';
 import { formatCurrency, formatDate, getItemExpiryStatus } from '../../utils/dinh_dang';
+import { printIntakeTicket, printPaymentInvoice } from '../../utils/inPhieuSuaChua';
 
 /**
  * Modal Chi Tiết Phiếu Dịch Vụ Sửa Chữa
@@ -110,7 +111,27 @@ export default function ModalChiTietSuaChua({ order, canEditOrder, onEdit, onClo
             </div>
           </div>
 
-          <div className="modal-footer bg-light d-flex justify-content-end">
+          <div className="modal-footer bg-light d-flex justify-content-between">
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-primary d-flex align-items-center gap-1 shadow-sm"
+                onClick={() => printIntakeTicket(order)}
+                title="In phiếu biên nhận máy khi tiếp nhận sửa chữa"
+              >
+                <Printer size={16} />
+                <span>In Phiếu Nhận Máy</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-success d-flex align-items-center gap-1 shadow-sm"
+                onClick={() => printPaymentInvoice(order)}
+                title="In phiếu thanh toán & bảo hành dịch vụ"
+              >
+                <Printer size={16} />
+                <span>In Phiếu Thanh Toán</span>
+              </button>
+            </div>
             <button type="button" className="btn btn-secondary px-4" onClick={onClose}>
               Đóng
             </button>

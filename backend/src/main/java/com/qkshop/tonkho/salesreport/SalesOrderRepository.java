@@ -46,9 +46,9 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     }
 
     /**
-     * Thống kê KPI tổng quan trong một khoảng thời gian cho các đơn hợp lệ
-     * (order_status = 'Hoàn tất', payment_status = 'Đã thanh toán', net_revenue > 0).
+     * Thống kê KPI tổng quan trong một khoảng thời gian cho các đơn hoàn tất hợp lệ.
      * Loại trừ đơn phụ kiện bán kèm máy (PK-KEM-%) khỏi tổng số đơn để không bị đếm trùng.
+     * Đếm đầy đủ sản lượng xuất kho (kể cả đơn đổi máy RMA / 0đ).
      */
     @Query("""
         SELECT
@@ -64,7 +64,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
     """)
     Object[] getSummaryKpis(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
@@ -80,7 +79,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY FUNCTION('DATE_FORMAT', s.saleDate, '%Y-%m-%d')
         ORDER BY saleDateStr ASC
     """)
@@ -100,7 +98,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
           AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.modelName
         ORDER BY totalRevenue DESC
@@ -121,7 +118,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY s.normalizedSource
         ORDER BY totalRevenue DESC
     """)
@@ -141,7 +137,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
           AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.brand
         ORDER BY totalRevenue DESC
@@ -162,7 +157,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
           AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.series
         ORDER BY orderCount DESC
@@ -183,7 +177,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
           AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
         GROUP BY s.segment
         ORDER BY totalRevenue DESC
@@ -204,7 +197,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY COALESCE(NULLIF(TRIM(s.firstSource), ''), 'Chưa rõ')
         ORDER BY orderCount DESC
     """)
@@ -224,7 +216,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY COALESCE(NULLIF(TRIM(s.inboxType), ''), 'Đơn mua thẳng')
         ORDER BY orderCount DESC
     """)
@@ -248,7 +239,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY 
             CASE 
                 WHEN TRIM(LOWER(s.customerType)) LIKE '%lần đầu%' OR TRIM(LOWER(s.customerType)) LIKE '%mới%' THEN 'Khách mua lần đầu'
@@ -277,7 +267,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY 
             CASE 
                 WHEN s.isStudent = true THEN 'Học sinh / Sinh viên'
@@ -307,7 +296,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         WHERE s.saleDate >= :start AND s.saleDate <= :end
           AND s.orderStatus = 'Hoàn tất'
           AND (s.paymentStatus = 'Đã thanh toán' OR s.paymentStatus IS NULL)
-          AND s.netRevenue > 0
         GROUP BY 
             CASE 
                 WHEN s.orderCategory = 'ACCESSORY' THEN 'Phụ kiện'
@@ -317,6 +305,17 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
         ORDER BY totalRevenue DESC
     """)
     List<GroupAggregate> getCategoryMix(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * Lấy danh sách các đơn hàng hoàn tất trong kỳ để kết xuất file Excel báo cáo doanh số.
+     */
+    @Query("""
+        SELECT s FROM SalesOrder s
+        WHERE s.saleDate >= :start AND s.saleDate <= :end
+          AND s.orderStatus = 'Hoàn tất'
+        ORDER BY s.saleDate DESC, s.id DESC
+    """)
+    List<SalesOrder> findCompletedOrdersInPeriod(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /**
      * Đếm số đơn cần kiểm tra chất lượng dữ liệu (thiếu nguồn, thiếu hãng...).

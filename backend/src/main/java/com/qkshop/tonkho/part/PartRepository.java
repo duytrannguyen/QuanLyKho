@@ -13,6 +13,9 @@ public interface PartRepository extends JpaRepository<Part, Long> {
 
     Optional<Part> findBySku(String sku);
 
+    @Query("SELECT MAX(p.sku) FROM Part p WHERE p.sku LIKE CONCAT(:prefix, '%')")
+    Optional<String> findMaxSkuByPrefix(@Param("prefix") String prefix);
+
     List<Part> findByQuantityGreaterThan(Integer quantity);
 
     List<Part> findByCategoryOrderByCreatedAtDesc(String category);

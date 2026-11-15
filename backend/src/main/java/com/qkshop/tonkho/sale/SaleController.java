@@ -39,6 +39,7 @@ public class SaleController {
     private final com.qkshop.tonkho.part.PartRepository partRepository;
     private final com.qkshop.tonkho.part.PartHistoryRepository partHistoryRepository;
     private final com.qkshop.tonkho.crm.CrmQueryService crmQueryService;
+    private final com.qkshop.tonkho.repair.RepairOrderService repairOrderService;
 
     @PostMapping("/lookup")
     public ResponseEntity<ApiResponse<Map<String, Object>>> lookupSaleCandidate(@RequestBody Map<String, String> payload) {
@@ -572,6 +573,10 @@ public class SaleController {
         ClosedCycle cc = closedCycleRepository.findByCycleId(cycleId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn máy với mã chu kỳ: " + cycleId));
 
+        if (cc.getCloseType() == com.qkshop.tonkho.core.enums.CloseType.CUSTOMER_RETURN) {
+            throw new IllegalStateException("Đơn máy với mã chu kỳ " + cycleId + " đã được hoàn trả về kho trước đó. Không thể thực hiện lại thao tác hoàn hàng.");
+        }
+
         String reason = payload != null && payload.get("reason") != null ? payload.get("reason").toString().trim() : "Khách từ chối nhận hàng / Hoàn hàng về kho";
         String returnStateStr = payload != null && payload.get("returnState") != null ? payload.get("returnState").toString().trim() : "READY";
         boolean restoreAccessories = payload == null || !Boolean.FALSE.equals(payload.get("restoreAccessories"));
@@ -595,6 +600,9 @@ public class SaleController {
         String invWp = isCompanyWarranty ? cc.getWarrantyPeriod() : null;
         java.time.LocalDate invExp = isCompanyWarranty ? cc.getWarrantyExpiry() : null;
 
+        // Xác định giá gốc niêm yết của máy (tránh lấy nhầm tổng hóa đơn thanh toán cũ)
+        BigDecimal returnSalePrice = resolveOriginalMachinePrice(cc, payload, restoreUpgradeParts);
+
         com.qkshop.tonkho.inventory.ActiveInventory ai = com.qkshop.tonkho.inventory.ActiveInventory.builder()
                 .cycleId(newCycleId)
                 .serialKey(cc.getSerialKey())
@@ -604,7 +612,7 @@ public class SaleController {
                 .intakeAt(LocalDateTime.now())
                 .state(nextState)
                 .readyAt(nextState == com.qkshop.tonkho.inventory.CycleState.READY ? LocalDateTime.now() : null)
-                .salePrice(cc.getSalePriceSnapshot() != null ? cc.getSalePriceSnapshot() : cc.getGrossRevenue())
+                .salePrice(returnSalePrice)
                 .note("Nhập lại từ đơn hoàn " + cc.getCycleId() + ": " + reason)
                 .warrantyPeriod(invWp)
                 .warrantyExpiry(invExp)
@@ -622,27 +630,29 @@ public class SaleController {
         if (restoreAccessories) {
             String pkKemCode = "PK-KEM-" + cycleId.replace("CYC-", "");
             accessoryOrderRepository.findByOrderCode(pkKemCode).ifPresent(accOrder -> {
-                accOrder.setStatus("CANCELLED");
-                if (accOrder.getItems() != null) {
-                    for (var item : accOrder.getItems()) {
-                        accessoryRepository.findBySku(item.getSku()).ifPresent(acc -> {
-                            acc.setQuantity((acc.getQuantity() != null ? acc.getQuantity() : 0) + item.getQuantity());
-                            accessoryRepository.save(acc);
+                if (!"CANCELLED".equalsIgnoreCase(accOrder.getStatus())) {
+                    accOrder.setStatus("CANCELLED");
+                    if (accOrder.getItems() != null) {
+                        for (var item : accOrder.getItems()) {
+                            accessoryRepository.findBySku(item.getSku()).ifPresent(acc -> {
+                                acc.setQuantity((acc.getQuantity() != null ? acc.getQuantity() : 0) + item.getQuantity());
+                                accessoryRepository.save(acc);
 
-                            com.qkshop.tonkho.accessory.AccessoryHistory hist = new com.qkshop.tonkho.accessory.AccessoryHistory();
-                            hist.setSku(acc.getSku());
-                            hist.setName(acc.getName());
-                            hist.setQuantity(item.getQuantity());
-                            hist.setPrice(item.getPrice());
-                            hist.setAction("RETURN");
-                            hist.setNote("Hoàn kho phụ kiện do hủy/trả đơn máy " + cycleId);
-                            hist.setCustomerName(cc.getCustomerName());
-                            hist.setCustomerPhone(cc.getCustomerPhone());
-                            accessoryHistoryRepository.save(hist);
-                        });
+                                com.qkshop.tonkho.accessory.AccessoryHistory hist = new com.qkshop.tonkho.accessory.AccessoryHistory();
+                                hist.setSku(acc.getSku());
+                                hist.setName(acc.getName());
+                                hist.setQuantity(item.getQuantity());
+                                hist.setPrice(item.getPrice());
+                                hist.setAction("RETURN");
+                                hist.setNote("Hoàn kho phụ kiện do hủy/trả đơn máy " + cycleId);
+                                hist.setCustomerName(cc.getCustomerName());
+                                hist.setCustomerPhone(cc.getCustomerPhone());
+                                accessoryHistoryRepository.save(hist);
+                            });
+                        }
                     }
+                    accessoryOrderRepository.save(accOrder);
                 }
-                accessoryOrderRepository.save(accOrder);
             });
             salesOrderRepository.findByTransactionId(pkKemCode).ifPresent(accSo -> {
                 accSo.setOrderStatus("Trả hàng");
@@ -653,28 +663,32 @@ public class SaleController {
 
         // 4. Hoàn linh kiện nâng cấp
         if (restoreUpgradeParts) {
-            var upgradeHistories = partHistoryRepository.findByOrderCodeOrderByCreatedAtDesc(cycleId).stream()
-                    .filter(h -> "UPGRADE_USE".equals(h.getAction()))
-                    .toList();
-            for (var ph : upgradeHistories) {
-                partRepository.findBySku(ph.getSku()).ifPresent(p -> {
-                    p.setQuantity((p.getQuantity() != null ? p.getQuantity() : 0) + Math.abs(ph.getQuantity()));
-                    partRepository.save(p);
+            boolean alreadyReturned = partHistoryRepository.findByOrderCodeOrderByCreatedAtDesc(cycleId).stream()
+                    .anyMatch(h -> "RETURN".equals(h.getAction()));
+            if (!alreadyReturned) {
+                var upgradeHistories = partHistoryRepository.findByOrderCodeOrderByCreatedAtDesc(cycleId).stream()
+                        .filter(h -> "UPGRADE_USE".equals(h.getAction()))
+                        .toList();
+                for (var ph : upgradeHistories) {
+                    partRepository.findBySku(ph.getSku()).ifPresent(p -> {
+                        p.setQuantity((p.getQuantity() != null ? p.getQuantity() : 0) + Math.abs(ph.getQuantity()));
+                        partRepository.save(p);
 
-                    com.qkshop.tonkho.part.PartHistory rh = com.qkshop.tonkho.part.PartHistory.builder()
-                            .sku(p.getSku())
-                            .name(p.getName())
-                            .quantity(Math.abs(ph.getQuantity()))
-                            .price(ph.getPrice())
-                            .action("RETURN")
-                            .orderCode(cycleId)
-                            .customerName(cc.getCustomerName())
-                            .customerPhone(cc.getCustomerPhone())
-                            .note("Hoàn kho linh kiện nâng cấp do hủy/trả đơn máy " + cycleId)
-                            .createdBy("SYSTEM")
-                            .build();
-                    partHistoryRepository.save(rh);
-                });
+                        com.qkshop.tonkho.part.PartHistory rh = com.qkshop.tonkho.part.PartHistory.builder()
+                                .sku(p.getSku())
+                                .name(p.getName())
+                                .quantity(Math.abs(ph.getQuantity()))
+                                .price(ph.getPrice())
+                                .action("RETURN")
+                                .orderCode(cycleId)
+                                .customerName(cc.getCustomerName())
+                                .customerPhone(cc.getCustomerPhone())
+                                .note("Hoàn kho linh kiện nâng cấp do hủy/trả đơn máy " + cycleId)
+                                .createdBy("SYSTEM")
+                                .build();
+                        partHistoryRepository.save(rh);
+                    });
+                }
             }
         }
 
@@ -697,8 +711,69 @@ public class SaleController {
                 "cycleId", cycleId,
                 "newCycleId", newCycleId,
                 "serialKey", cc.getSerialKey(),
-                "state", nextState.name()
+                "state", nextState.name(),
+                "salePrice", returnSalePrice != null ? returnSalePrice : BigDecimal.ZERO
         )));
+    }
+
+    /**
+     * Xác định giá máy gốc niêm yết để trả về kho khi hủy / hoàn đơn bán máy.
+     * Tránh việc lấy nhầm tổng tiền thanh toán của hóa đơn (vốn đã bao gồm phụ kiện, phí nâng cấp và chiết khấu).
+     */
+    private BigDecimal resolveOriginalMachinePrice(ClosedCycle cc, Map<String, Object> payload, boolean restoreUpgradeParts) {
+        // 1. Người dùng chỉ định giá cụ thể từ giao diện
+        if (payload != null) {
+            Object pObj = payload.get("salePrice");
+            if (pObj == null) pObj = payload.get("price");
+            if (pObj != null && !pObj.toString().trim().isEmpty()) {
+                try {
+                    String clean = pObj.toString().replaceAll("[^0-9]", "");
+                    if (!clean.isEmpty()) {
+                        BigDecimal p = new BigDecimal(clean);
+                        if (p.compareTo(BigDecimal.ZERO) > 0) {
+                            return p;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 2. Giá niêm yết chuẩn theo cấu hình máy trong bảng giá hệ thống (SalesConfig.defaultSalePrice)
+        if (cc.getConfig() != null && cc.getConfig().getDefaultSalePrice() != null
+                && cc.getConfig().getDefaultSalePrice().compareTo(BigDecimal.ZERO) > 0) {
+            return cc.getConfig().getDefaultSalePrice();
+        }
+
+        // 3. Doanh thu gộp của thân máy lúc bán (grossRevenue - giá máy trước chiết khấu và chưa cộng nâng cấp/phụ kiện)
+        if (cc.getGrossRevenue() != null && cc.getGrossRevenue().compareTo(BigDecimal.ZERO) > 0) {
+            return cc.getGrossRevenue();
+        }
+
+        // 4. Khôi phục từ salePriceSnapshot: Giá gốc = salePriceSnapshot + discount - upgradeTotal (nếu đã hoàn linh kiện nâng cấp)
+        BigDecimal basePrice = cc.getSalePriceSnapshot() != null ? cc.getSalePriceSnapshot() : BigDecimal.ZERO;
+        BigDecimal discount = cc.getDiscount() != null ? cc.getDiscount() : BigDecimal.ZERO;
+        BigDecimal upgradeTotal = BigDecimal.ZERO;
+
+        if (restoreUpgradeParts && cc.getUpgradeNote() != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("[(\\[]\\+([0-9.,]+)[^)\\]]*[)\\]]").matcher(cc.getUpgradeNote());
+            while (m.find()) {
+                try {
+                    String numStr = m.group(1).replaceAll("[^0-9]", "");
+                    if (!numStr.isEmpty()) {
+                        upgradeTotal = upgradeTotal.add(new BigDecimal(numStr));
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        BigDecimal calculatedOriginal = basePrice.add(discount).subtract(upgradeTotal);
+        if (calculatedOriginal.compareTo(BigDecimal.ZERO) > 0) {
+            return calculatedOriginal;
+        } else if (basePrice.compareTo(BigDecimal.ZERO) > 0) {
+            return basePrice;
+        }
+
+        return BigDecimal.ZERO;
     }
 
     @PutMapping("/accessory-order/{orderId}")
@@ -783,7 +858,7 @@ public class SaleController {
     }
 
     @PutMapping("/repair-order/{orderId}")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ORDER_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('ORDER_EDIT', 'SERVICE_REPAIR')")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateRepairOrderWarranty(
             @PathVariable Long orderId,
@@ -807,6 +882,14 @@ public class SaleController {
             order.setNote((String) payload.get("note"));
         }
 
+        // Kiểm tra tính hợp lệ bảo hành: Nếu máy đã thu lại thì từ chối cập nhật thành gói bảo hành theo máy
+        String deviceSerial = order.getDeviceSerial();
+        boolean isReturned = false;
+        if (deviceSerial != null && !deviceSerial.trim().isEmpty()) {
+            Map<String, Object> eligibility = repairOrderService.checkWarrantyEligibility(deviceSerial.trim(), order.getCustomerPhone());
+            isReturned = Boolean.TRUE.equals(eligibility.get("isReturned"));
+        }
+
         // Cập nhật bảo hành cho từng item dịch vụ nếu có gửi lên
         if (payload.containsKey("items")) {
             List<Map<String, Object>> itemsReq = (List<Map<String, Object>>) payload.get("items");
@@ -820,6 +903,13 @@ public class SaleController {
                             String newPeriod = null;
                             if (itReq.containsKey("warrantyPeriod")) {
                                 newPeriod = (String) itReq.get("warrantyPeriod");
+                                if (isReturned && newPeriod != null) {
+                                    String lp = newPeriod.toLowerCase();
+                                    if (lp.contains("theo bh") || lp.contains("bảo hành máy") || lp.contains("rma")) {
+                                        throw new IllegalArgumentException("Từ chối tiếp nhận bảo hành: Máy có số Serial " + deviceSerial
+                                                + " đã được shop thu lại về kho. Toàn bộ gói bảo hành của khách hàng trước đó đã BỊ HỦY. Cửa hàng chỉ tiếp nhận sửa chữa dịch vụ tính phí!");
+                                    }
+                                }
                                 item.setWarrantyPeriod(newPeriod);
                             }
                             if (itReq.containsKey("warrantyMonths")) {
@@ -1084,6 +1174,11 @@ public class SaleController {
         map.put("isShipping", Boolean.TRUE.equals(cc.getIsShipping()));
         map.put("isDelivered", Boolean.TRUE.equals(cc.getIsDelivered()));
         map.put("deliveryDate", cc.getDeliveryDate());
+        map.put("shippingCarrier", cc.getShippingCarrier());
+        map.put("trackingCode", cc.getTrackingCode());
+        map.put("shippingAddress", cc.getShippingAddress());
+        map.put("depositAmount", cc.getDepositAmount());
+        map.put("codAmount", cc.getCodAmount());
 
         if (isVoided) {
             map.put("warrantyCancelled", true);

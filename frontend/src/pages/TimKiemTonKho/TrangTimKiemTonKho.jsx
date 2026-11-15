@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Check, Lock, Trash2 } from 'lucide-react';
+import { Search, Check, Lock, Trash2, History } from 'lucide-react';
 import { apiTonKho, apiMayMoc } from '../../api';
 import { formatCurrency, parseCurrency, formatDate } from '../../utils/dinh_dang';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatCycleState } from '../../constants/trangThai';
+import ModalSoXuatKhac from './ModalSoXuatKhac';
 
 export default function TrangTimKiemTonKho() {
   const { showToast, confirm } = useToast();
@@ -24,8 +25,9 @@ export default function TrangTimKiemTonKho() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [innerPage, setInnerPage] = useState(0);
   const [activeModal, setActiveModal] = useState({ type: null, payload: null });
-  const [modalForm, setModalForm] = useState({ price: '', reason: '' });
+  const [modalForm, setModalForm] = useState({ price: '', reason: '', reference: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showExportHistory, setShowExportHistory] = useState(false);
   
   const [filterOptions, setFilterOptions] = useState({
     brands: [],
@@ -164,7 +166,7 @@ export default function TrangTimKiemTonKho() {
 
   const handleExportOther = (machine) => {
     if (!requirePermission('MACHINE_EXPORT_OTHER', showToast, 'Xuất máy khác (ngoài bán hàng)')) return;
-    setModalForm({ price: '', reason: '' });
+    setModalForm({ price: '', reason: '', reference: '' });
     setActiveModal({ type: 'EXPORT_OTHER', payload: { machine } });
   };
 
@@ -223,8 +225,13 @@ export default function TrangTimKiemTonKho() {
         showToast('Đã đưa máy về trạng thái kiểm tra', 'success');
       } else if (type === 'EXPORT_OTHER') {
         if (!modalForm.reason.trim()) throw new Error("Vui lòng nhập lý do xuất");
-        await apiMayMoc.update(payload.machine.serial, { status: 'CLOSED', notes: modalForm.reason });
-        showToast('Đã xuất máy thành công', 'success');
+        await apiMayMoc.update(payload.machine.serial, {
+          status: 'CLOSED',
+          closeType: 'OTHER',
+          notes: modalForm.reason.trim(),
+          reference: modalForm.reference ? modalForm.reference.trim() : null
+        });
+        showToast('Đã xuất máy thành công! Bạn có thể xem lại tại Sổ xuất khác.', 'success');
       }
       
       setActiveModal({ type: null, payload: null });
@@ -240,31 +247,40 @@ export default function TrangTimKiemTonKho() {
 
   return (
     <div className="container-fluid p-0">
-      <div className="d-flex flex-wrap gap-3 mb-4 align-items-center">
-        <div className="flex-grow-1 position-relative" style={{ maxWidth: '400px' }}>
+      <div className="d-flex flex-wrap gap-2 gap-md-3 mb-4 align-items-center">
+        <div className="flex-grow-1 position-relative" style={{ minWidth: '220px', maxWidth: '400px' }}>
           <Search size={16} className="position-absolute text-secondary" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input className="form-control ps-5" style={{ height: '40px' }}
             placeholder="Tìm theo dòng máy, model, cấu hình, biến thể hoặc serial"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
-        <select className="form-select" style={{ width: '160px', height: '40px' }} value={segment} onChange={e => setSegment(e.target.value)}>
+        <select className="form-select flex-grow-1 flex-sm-grow-0" style={{ width: 'auto', minWidth: '150px', height: '40px' }} value={segment} onChange={e => setSegment(e.target.value)}>
           <option value="Tất cả">Phân khúc: Tất cả</option>
           {filterOptions.segments.map(seg => (
             <option key={seg} value={seg}>{seg}</option>
           ))}
         </select>
-        <select className="form-select" style={{ width: '140px', height: '40px' }} value={brand} onChange={e => setBrand(e.target.value)}>
+        <select className="form-select flex-grow-1 flex-sm-grow-0" style={{ width: 'auto', minWidth: '130px', height: '40px' }} value={brand} onChange={e => setBrand(e.target.value)}>
           <option value="Tất cả">Hãng: Tất cả</option>
           {filterOptions.brands.map(b => (
             <option key={b} value={b}>{b}</option>
           ))}
         </select>
-        <select className="form-select" style={{ width: '150px', height: '40px' }} value={status} onChange={e => setStatus(e.target.value)}>
+        <select className="form-select flex-grow-1 flex-sm-grow-0" style={{ width: 'auto', minWidth: '140px', height: '40px' }} value={status} onChange={e => setStatus(e.target.value)}>
           <option value="Tất cả">Trạng thái: Tất cả</option>
           <option value="READY">Sẵn sàng bán</option>
           <option value="NEEDS_INSPECTION">Cần kiểm tra</option>
         </select>
         <button className="btn btn-outline-secondary" style={{ height: '40px' }} onClick={clearFilters}>Xóa bộ lọc</button>
+        <button 
+          className="btn btn-warning d-flex align-items-center gap-2 text-dark fw-medium ms-auto shadow-sm" 
+          style={{ height: '40px' }}
+          onClick={() => setShowExportHistory(true)}
+          title="Xem danh sách toàn bộ các máy đã xuất khác ngoài bán hàng"
+        >
+          <History size={16} />
+          <span>Sổ xuất khác</span>
+        </button>
       </div>
 
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -286,7 +302,7 @@ export default function TrangTimKiemTonKho() {
       {results.length > 0 ? (
         <div className="row g-4 align-items-start">
         {/* Left Column - Variants */}
-        <div className="col-xl-4 col-lg-5 col-md-12 d-flex flex-column gap-3 mb-4 mb-lg-0">
+        <div className="col-xl-4 col-lg-4 col-md-12 d-flex flex-column gap-3 mb-4 mb-lg-0">
           {results.map(item => {
             const variantSubtitle = item?.config?.displayName || item?.variant?.variantName || '';
             
@@ -328,10 +344,10 @@ export default function TrangTimKiemTonKho() {
 
         {/* Right Column - Detail */}
         {activeVariant && activeVariant.variant && (
-          <div className="col-xl-8 col-lg-7 col-md-12">
-            <div className="card shadow-sm border-0 p-4 sticky-top" style={{ top: '1rem', zIndex: 1 }}>
-              <div className="d-flex justify-content-between align-items-start mb-4">
-                <div>
+          <div className="col-xl-8 col-lg-8 col-md-12">
+            <div className="card shadow-sm border-0 p-3 p-md-4 sticky-top" style={{ top: '1rem', zIndex: 1 }}>
+              <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+                <div className="min-w-0 flex-grow-1">
                   <h4 className="fw-bold text-dark mb-1">Chi tiết cấu hình</h4>
                   <h5 className="fw-bold text-dark mb-1">{activeVariant?.variant?.platform?.platformCode || getDisplayName(activeVariant?.variant)}</h5>
                   <p className="small text-secondary mb-0">
@@ -339,7 +355,7 @@ export default function TrangTimKiemTonKho() {
                   </p>
                 </div>
                 <button
-                  className={`btn btn-sm fw-medium d-flex align-items-center gap-1 ${canUpdateMachine ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75'}`}
+                  className={`btn btn-sm fw-medium d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap ${canUpdateMachine ? 'btn-outline-primary' : 'btn-outline-secondary opacity-75'}`}
                   onClick={handleUpdatePriceAll}
                   title={canUpdateMachine ? 'Sửa giá toàn bộ máy trong cấu hình này' : 'Cần quyền: Sửa giá bán & Bảo hành máy tồn kho (MACHINE_UPDATE)'}
                 >
@@ -435,18 +451,18 @@ export default function TrangTimKiemTonKho() {
                                   )
                                 )}
                               </td>
-                              <td>{machine.price ? formatCurrency(machine.price) + ' đ' : '—'}</td>
-                              <td className="pe-3">
-                                <button className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(machine.serial)}>
+                              <td className="text-nowrap">{machine.price ? formatCurrency(machine.price) + ' đ' : '—'}</td>
+                              <td className="pe-3 text-nowrap">
+                                <button className="btn btn-sm btn-outline-secondary text-nowrap" onClick={() => toggleExpand(machine.serial)}>
                                   {isExpanded ? 'Thu gọn' : 'Chi tiết'}
                                 </button>
                               </td>
                             </tr>
                             {isExpanded && (
                               <tr className="border-start border-primary border-3 bg-light">
-                                <td colSpan="7" className="p-4 border-bottom">
+                                <td colSpan="7" className="p-3 p-md-4 border-bottom">
                                   <div className="d-flex flex-column align-items-center">
-                                    <div className="d-flex align-items-start justify-content-between mb-4 position-relative w-75">
+                                    <div className="d-flex align-items-start justify-content-between mb-4 position-relative w-100" style={{ maxWidth: '520px' }}>
                                       <div className="position-absolute bg-success" style={{height: '2px', top: '12px', left: '10%', right: '10%', zIndex: 1}}></div>
                                       
                                       <div className="d-flex flex-column align-items-center position-relative z-2" style={{width: '100px'}}>
@@ -762,32 +778,64 @@ export default function TrangTimKiemTonKho() {
               {activeModal.type === 'EXPORT_OTHER' && (
                 <>
                   <div className="modal-header border-bottom p-4">
-                    <h5 className="modal-title fw-bold">Xuất máy khác (Không doanh thu)</h5>
+                    <h5 className="modal-title fw-bold d-flex align-items-center gap-2 text-danger">
+                      <span>Xuất máy khác (Ngoài bán hàng)</span>
+                    </h5>
                   </div>
                   <div className="modal-body p-4 d-flex flex-column gap-3">
-                    <div className="d-flex justify-content-between">
-                      <span className="text-secondary small">Serial</span>
-                      <span className="fw-bold text-dark">{activeModal.payload.machine.serial}</span>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-secondary small">Serial máy</span>
+                      <span className="fw-bold text-dark font-monospace bg-light px-2 py-1 rounded border">{activeModal.payload.machine.serial}</span>
                     </div>
-                    <div className="d-flex justify-content-between">
-                      <span className="text-secondary small">Trạng thái mới</span>
-                      <span className="fw-bold text-dark">ĐÃ ĐÓNG (XUẤT KHÁC)</span>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-secondary small">Trạng thái sau khi xuất</span>
+                      <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">ĐÃ ĐÓNG (XUẤT KHÁC)</span>
                     </div>
-                    <div className="mt-2">
-                      <label className="form-label fw-semibold text-dark">Lý do xuất / Mã tham chiếu <span className="text-danger">*</span></label>
+
+                    <div className="mt-1">
+                      <label className="form-label fw-semibold text-dark small mb-1">
+                        Mã tham chiếu / Số phiếu xuất <span className="text-muted fw-normal">(Không bắt buộc)</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={modalForm.reference || ''} 
+                        onChange={e => setModalForm({...modalForm, reference: e.target.value})}
+                        placeholder="VD: XK-ASUS-BH01, PHIEU-CHUYEN-KHO-02... (Để trống tự sinh mã XK)"
+                      />
+                    </div>
+
+                    <div className="mt-1">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <label className="form-label fw-semibold text-dark small mb-0">Lý do xuất kho <span className="text-danger">*</span></label>
+                        <span className="text-muted" style={{ fontSize: '11px' }}>Chọn nhanh:</span>
+                      </div>
+                      <div className="d-flex flex-wrap gap-1 mb-2">
+                        {['Gửi bảo hành hãng', 'Chuyển kho chi nhánh', 'Cho mượn nội bộ', 'Máy hỏng rã xác', 'Thanh lý hao hụt'].map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className="btn btn-sm btn-light border text-secondary px-2 py-0"
+                            style={{ fontSize: '11px' }}
+                            onClick={() => setModalForm(prev => ({ ...prev, reason: tag }))}
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                      </div>
                       <textarea className="form-control" rows="3"
                         value={modalForm.reason}
                         onChange={e => setModalForm({...modalForm, reason: e.target.value})}
-                        placeholder="Nhập lý do xuất (vd: Chuyển kho ngoài, Đền bù, Hao hụt)..."
+                        placeholder="Nhập lý do chi tiết..."
                       />
                     </div>
-                    <div className="alert alert-warning border-warning text-warning-emphasis small mb-0 mt-2 p-3">
-                      Lưu ý: Luồng xuất khác sẽ <b>không</b> ghi nhận vào doanh thu và không thể hoàn tác trực tiếp.
+                    <div className="alert alert-info border-info small mb-0 p-3">
+                      Lưu ý: Luồng xuất khác sẽ <b>không</b> tính vào doanh thu bán hàng. Bạn có thể xem lại hoặc <b>nhập lại kho</b> bất cứ lúc nào trong <b>Sổ xuất khác</b>.
                     </div>
                   </div>
                   <div className="modal-footer border-top p-3 d-flex gap-2">
                     <button className="btn btn-outline-secondary" onClick={() => setActiveModal({type: null, payload: null})} disabled={isSubmitting}>Quay lại</button>
-                    <button className="btn btn-danger" onClick={submitModal} disabled={isSubmitting}>Xác nhận xuất</button>
+                    <button className="btn btn-danger" onClick={submitModal} disabled={isSubmitting}>Xác nhận xuất máy</button>
                   </div>
                 </>
               )}
@@ -796,6 +844,13 @@ export default function TrangTimKiemTonKho() {
           </div>
         </div>
       )}
+
+      {/* Sổ theo dõi & Lịch sử xuất khác */}
+      <ModalSoXuatKhac
+        isOpen={showExportHistory}
+        onClose={() => setShowExportHistory(false)}
+        onMachineRestored={fetchInventory}
+      />
 
     </div>
   );

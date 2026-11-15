@@ -69,8 +69,8 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           )}
         </div>
 
-        {/* Hàng 2: Nguồn, Kênh chốt, Phân loại, HS/SV (4 cột đều trên desktop) */}
-        <div className="col-6 col-md-3">
+        {/* Hàng 2: Nguồn, Kênh chốt, Phân loại, HS/SV (2x2 trên laptop, 4 cột trên màn lớn) */}
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Nơi biết Shop
           </label>
@@ -89,7 +89,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Kênh chốt đơn <span className="text-danger">*</span>
           </label>
@@ -108,7 +108,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Phân loại khách
           </label>
@@ -123,7 +123,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             HS / Sinh viên?
           </label>

@@ -75,6 +75,9 @@ export function useLogicBanHang() {
   const [swapRamSku, setSwapRamSku] = useState('');
   const [swapSsdSku, setSwapSsdSku] = useState('');
 
+  // State: Đơn hàng vừa bán thành công (dùng để in phiếu xuất kho kiêm bảo hành ngay tại quầy)
+  const [saleSuccessOrder, setSaleSuccessOrder] = useState(null);
+
   // State: Khách hàng nhận diện từ CRM
   const [matchedCrmCustomer, setMatchedCrmCustomer] = useState(null);
 
@@ -464,6 +467,23 @@ export function useLogicBanHang() {
       return;
     }
 
+    const cleanPhone = (formData.customerPhone || '').trim().replace(/[\s.-]/g, '');
+    const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
+    if (formData.warrantyOption === 'Bảo hành hãng' && (!formData.warrantyExpiry || !formData.warrantyExpiry.trim())) {
+      showToast('Vui lòng chọn ngày hết hạn cho gói Bảo hành hãng', 'danger');
+      return;
+    }
+
+    if (formData.warrantyOption === 'Khác' && (!formData.customWarranty || !formData.customWarranty.trim())) {
+      showToast('Vui lòng nhập chi tiết gói bảo hành khác', 'danger');
+      return;
+    }
+
     const confirmMsg =
       `Xác nhận bán máy ${scannedMachine.serialKey}?\n` +
       `=> Tổng thanh toán: ${formatCurrency(grandTotal)}đ`;
@@ -616,11 +636,11 @@ export function useLogicBanHang() {
               ? formData.deliveryDate || getTodayDateString()
               : null
             : formData.saleDate?.slice(0, 10) || null,
-          shippingCarrier: formData.shippingCarrier || null,
-          trackingCode: formData.trackingCode || null,
-          shippingAddress: formData.shippingAddress || null,
-          depositAmount: parseCurrency(formData.depositAmount) || 0,
-          codAmount: parseCurrency(formData.codAmount) || (formData.isShipping && !formData.isDelivered ? Math.max(0, grandTotal - (parseCurrency(formData.depositAmount) || 0)) : 0),
+          shippingCarrier: formData.isShipping ? (formData.shippingCarrier || null) : null,
+          trackingCode: formData.isShipping ? (formData.trackingCode || null) : null,
+          shippingAddress: formData.isShipping ? (formData.shippingAddress || null) : null,
+          depositAmount: 0,
+          codAmount: 0,
           warrantyPeriod: effectiveWarrantyPeriod,
           warrantyExpiry: calculatedWarrantyExpiry,
           saleNote: formData.saleNote,
@@ -641,6 +661,36 @@ export function useLogicBanHang() {
       );
 
       const invoiceCode = res?.data?.sourceReference || res?.data?.orderCode || '';
+      const orderSummaryForPrint = {
+        orderCode: invoiceCode,
+        cycleId: res?.data?.cycleId || scannedMachine.cycleId,
+        serialKey: scannedMachine.serialKey,
+        productFullName: prodFullName,
+        productSummary: prodSummary,
+        customerName: formData.customer,
+        customerPhone: formData.customerPhone,
+        salesperson: formData.salesperson,
+        saleDate: formData.saleDate,
+        finalPrice: grandTotal,
+        discount: (Number(discountNum) || 0) + (Number(defaultGiftDeduction) || 0),
+        grossRevenue: negotiatedGross,
+        warrantyPeriod: effectiveWarrantyPeriod,
+        warrantyExpiry: calculatedWarrantyExpiry,
+        isShipping: formData.isShipping,
+        isDelivered: formData.isShipping ? formData.isDelivered : true,
+        deliveryDate: formData.isShipping ? formData.deliveryDate : null,
+        shippingCarrier: formData.isShipping ? formData.shippingCarrier : null,
+        trackingCode: formData.isShipping ? formData.trackingCode : null,
+        shippingAddress: formData.isShipping ? formData.shippingAddress : null,
+        depositAmount: 0,
+        codAmount: 0,
+        upgradeNote: generatedUpgradeNote,
+        accessories: finalAccessories,
+        brandName: scannedMachine.brandName || scannedMachine.brand || '',
+        defaultSalePrice: scannedMachine.salePrice || 0
+      };
+      setSaleSuccessOrder(orderSummaryForPrint);
+
       const successMsg =
         formData.isShipping && !formData.isDelivered
           ? invoiceCode
@@ -698,6 +748,8 @@ export function useLogicBanHang() {
     swapSsdSku,
     setSwapSsdSku,
     matchedCrmCustomer,
+    saleSuccessOrder,
+    setSaleSuccessOrder,
     fetchData,
 
     // Computed

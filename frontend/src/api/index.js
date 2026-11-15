@@ -39,6 +39,7 @@ export const apiMayMoc = {
   bulkUpdatePrice: (serials, price) => axiosClient.put('/machines/bulk-price', { serials, price }),
   delete: (serial) => axiosClient.delete(`/machines/${serial}`),
   searchHistory: (params) => axiosClient.get('/machines/searchHistory', { params, silent: true }),
+  reopenExported: (serial, data) => axiosClient.post(`/machines/${serial}/reopen-exported`, data),
   downloadExcelTemplate: (data) => axiosClient.post('/machines/bulk/excel-template', data, { responseType: 'blob' }),
 };
 
@@ -192,6 +193,7 @@ export const apiDonShip = {
 export const salesReportApi = {
   getDashboard: (params) => axiosClient.get('/sales-report/dashboard', { params, silent: true }),
   rebuild: () => axiosClient.post('/sales-report/rebuild'),
+  exportExcel: (params) => axiosClient.get('/sales-report/export-excel', { params, responseType: 'blob' }),
 };
 
 export const crmApi = {

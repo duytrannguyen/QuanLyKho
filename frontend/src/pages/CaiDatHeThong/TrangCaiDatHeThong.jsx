@@ -168,25 +168,25 @@ export default function TrangCaiDatHeThong() {
 
       <div className="row g-4">
         {/* ThanhBen Menu */}
-        <div className="col-lg-3">
+        <div className="col-12 col-xl-3 col-xxl-2">
           <div className="card shadow-sm border-0">
-            <div className="list-group list-group-flush rounded">
+            <div className="list-group list-group-flush rounded d-flex flex-row flex-xl-column">
               {canManageSystem && (
                 <button 
-                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'general' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
+                  className={`list-group-item list-group-item-action d-flex align-items-center gap-2 gap-xl-3 py-3 border-0 ${activeTab === 'general' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
                   onClick={() => setActiveTab('general')}
                 >
-                  <Settings size={20} />
-                  Cấu hình chung
+                  <Settings size={20} className="flex-shrink-0" />
+                  <span>Cấu hình chung</span>
                 </button>
               )}
               {canManageUsers && (
                 <button 
-                  className={`list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 border-0 ${activeTab === 'users' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
+                  className={`list-group-item list-group-item-action d-flex align-items-center gap-2 gap-xl-3 py-3 border-0 ${activeTab === 'users' ? 'bg-primary-subtle text-primary fw-bold border-start border-primary border-4' : 'text-secondary'}`}
                   onClick={() => setActiveTab('users')}
                 >
-                  <Users size={20} />
-                  Người dùng & Phân quyền
+                  <Users size={20} className="flex-shrink-0" />
+                  <span>Người dùng & Phân quyền</span>
                 </button>
               )}
             </div>
@@ -194,8 +194,8 @@ export default function TrangCaiDatHeThong() {
         </div>
 
         {/* Content */}
-        <div className="col-lg-9">
-          <div className="card shadow-sm border-0 p-4">
+        <div className="col-12 col-xl-9 col-xxl-10">
+          <div className="card shadow-sm border-0 p-3 p-md-4">
             
             {/* ================= TAB CẤU HÌNH CHUNG ================= */}
             {activeTab === 'general' && (
@@ -226,7 +226,8 @@ export default function TrangCaiDatHeThong() {
                   <p className="small text-secondary mb-3">Số ngày giữ lại dữ liệu nhật ký hoạt động trên hệ thống (mặc định 90 ngày).</p>
                   <input 
                     type="number" 
-                    className="form-control w-25" 
+                    className="form-control" 
+                    style={{ maxWidth: '220px' }}
                     value={config.log_retention_days || 90} 
                     onChange={e => handleConfigChange('log_retention_days', e.target.value)} 
                   />
@@ -300,14 +301,14 @@ export default function TrangCaiDatHeThong() {
                   <table className="table table-hover align-middle border">
                     <thead className="table-light">
                       <tr>
-                        <th className="text-center text-secondary small text-uppercase" style={{ width: '50px' }}>STT</th>
-                        <th className="text-secondary small text-uppercase">Tài khoản</th>
-                        <th className="text-secondary small text-uppercase">Họ và tên</th>
-                        <th className="text-secondary small text-uppercase">Email</th>
-                        <th className="text-secondary small text-uppercase">Vai trò</th>
-                        <th className="text-secondary small text-uppercase">Phân quyền tùy chỉnh</th>
-                        <th className="text-secondary small text-uppercase text-center">Trạng thái</th>
-                        <th className="text-secondary small text-uppercase text-end" style={{ width: '220px' }}>Thao tác</th>
+                        <th className="text-center text-secondary small text-uppercase" style={{ width: '5%' }}>STT</th>
+                        <th className="text-secondary small text-uppercase" style={{ width: '15%' }}>Tài khoản</th>
+                        <th className="text-secondary small text-uppercase" style={{ width: '16%' }}>Họ và tên</th>
+                        <th className="text-secondary small text-uppercase" style={{ width: '18%' }}>Email</th>
+                        <th className="text-secondary small text-uppercase" style={{ width: '10%' }}>Vai trò</th>
+                        <th className="text-secondary small text-uppercase" style={{ width: '12%' }}>Phân quyền</th>
+                        <th className="text-secondary small text-uppercase text-center" style={{ width: '9%' }}>Trạng thái</th>
+                        <th className="text-secondary small text-uppercase text-end" style={{ width: '15%' }}>Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>

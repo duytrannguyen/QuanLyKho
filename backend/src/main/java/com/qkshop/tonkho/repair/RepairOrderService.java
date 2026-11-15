@@ -193,7 +193,14 @@ public class RepairOrderService {
     @Transactional(rollbackFor = Exception.class)
     public RepairOrder updateRepairOrder(Long id, Map<String, Object> payload) {
         RepairOrder order = getOrderById(id);
-        boolean wasCancelled = "CANCELLED".equalsIgnoreCase(order.getStatus());
+        String initialStatus = order.getStatus() != null ? order.getStatus().trim().toUpperCase() : "COMPLETED";
+        String targetStatus = initialStatus;
+        if (payload.containsKey("status") && payload.get("status") != null) {
+            String s = payload.get("status").toString().trim().toUpperCase();
+            if (!s.isEmpty()) {
+                targetStatus = s;
+            }
+        }
 
         String customerName = (String) payload.get("customerName");
         String customerPhone = (String) payload.get("customerPhone");
@@ -234,12 +241,6 @@ public class RepairOrderService {
                 order.setPromisedDate(null);
             }
         }
-        if (payload.containsKey("status") && payload.get("status") != null) {
-            String newStatus = payload.get("status").toString().trim().toUpperCase();
-            if (!newStatus.equals(order.getStatus())) {
-                updateOrderStatus(order.getId(), newStatus);
-            }
-        }
 
         Object dateObj = payload.get("createdDate");
         if (dateObj != null && !dateObj.toString().trim().isEmpty()) {
@@ -275,8 +276,8 @@ public class RepairOrderService {
                 }
             }
 
-            // 1. Hoàn kho các linh kiện / phụ kiện của danh sách cũ trước khi xóa (nếu đơn chưa bị hủy)
-            if (!wasCancelled && order.getItems() != null) {
+            // 1. Hoàn kho các linh kiện / phụ kiện của danh sách cũ nếu đơn cũ đang ở trạng thái hoạt động (chưa bị CANCELLED)
+            if (!"CANCELLED".equals(initialStatus) && order.getItems() != null) {
                 for (RepairOrderItem oldItem : order.getItems()) {
                     if (oldItem.getSku() != null && !oldItem.getSku().trim().isEmpty()) {
                         int oldQty = oldItem.getQuantity() != null ? oldItem.getQuantity() : 1;
@@ -328,7 +329,8 @@ public class RepairOrderService {
                 }
 
                 String itemSku = (String) itemReq.get("sku");
-                if (!wasCancelled && itemSku != null && !itemSku.trim().isEmpty()) {
+                // Chỉ trừ kho linh kiện mới nếu trạng thái đích không phải CANCELLED
+                if (!"CANCELLED".equals(targetStatus) && itemSku != null && !itemSku.trim().isEmpty()) {
                     deductItemStock(
                             itemSku.trim(),
                             quantity,
@@ -356,6 +358,13 @@ public class RepairOrderService {
                 totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(quantity)));
             }
             order.setTotalAmount(totalAmount);
+            order.setStatus(targetStatus);
+        } else {
+            // Không sửa danh sách dịch vụ: Nếu có đổi trạng thái thì gọi updateOrderStatus
+            if (!targetStatus.equals(initialStatus)) {
+                updateOrderStatus(order.getId(), targetStatus);
+                order = getOrderById(id);
+            }
         }
 
         RepairOrder saved = repairOrderRepository.save(order);

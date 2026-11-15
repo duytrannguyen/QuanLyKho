@@ -62,6 +62,12 @@ class BackendAuditRemediationTest {
     @Autowired
     private ActiveInventoryRepository activeInventoryRepository;
 
+    @Autowired
+    private com.qkshop.tonkho.part.PartService partService;
+
+    @Autowired
+    private com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
+
     @BeforeEach
     void setUpSecurityContext() {
         SecurityContextHolder.getContext().setAuthentication(
@@ -199,5 +205,88 @@ class BackendAuditRemediationTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> machineService.updateMachine(testSerial, updates, "admin"));
         assertTrue(ex.getMessage().contains("Bán Hàng"));
+    }
+
+    @Test
+    void testAccessoryAndPartSkuFastMax() {
+        String nextAccSku1 = accessoryService.generateNextSku("CHUOT");
+        assertNotNull(nextAccSku1);
+        assertTrue(nextAccSku1.startsWith("PK-CHUOT-"));
+
+        String nextPartSku1 = partService.generateNextSku("RAM");
+        assertNotNull(nextPartSku1);
+        assertTrue(nextPartSku1.startsWith("LK-RAM-"));
+    }
+
+    @Test
+    void testReturnedMachineBlocksRmaWarranty() {
+        String retSerial = "SN-RETURNED-" + System.currentTimeMillis();
+        ActiveInventory ai = ActiveInventory.builder()
+                .cycleId("CYC-RET-" + System.currentTimeMillis())
+                .serialKey(retSerial)
+                .state(CycleState.READY)
+                .intakeType(IntakeType.CUSTOMER_RETURN)
+                .intakeAt(LocalDateTime.now())
+                .sourceModelText("Dell Latitude 5420")
+                .salePrice(new BigDecimal("9000000"))
+                .build();
+        activeInventoryRepository.save(ai);
+
+        Map<String, Object> checkResult = repairOrderService.checkWarrantyEligibility(retSerial, "0988776655");
+        assertTrue(Boolean.TRUE.equals(checkResult.get("isReturned")), "Máy nhập thu hồi phải có cờ isReturned = true");
+
+        // Tiếp nhận bảo hành 0đ phải bị từ chối
+        Map<String, Object> rmaPayload = new HashMap<>();
+        rmaPayload.put("customerName", "Khách Hàng Cũ");
+        rmaPayload.put("customerPhone", "0988776655");
+        rmaPayload.put("deviceModel", "Dell Latitude 5420");
+        rmaPayload.put("deviceSerial", retSerial);
+        rmaPayload.put("services", List.of(Map.of(
+                "serviceName", "Bảo hành nguồn theo máy",
+                "price", 0,
+                "warrantyPeriod", "Theo BH máy"
+        )));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> repairOrderService.createRepairOrder(rmaPayload));
+        assertTrue(ex.getMessage().contains("Từ chối tiếp nhận bảo hành") || ex.getMessage().contains("thu lại về kho"));
+
+        // Sửa chữa có phí (> 0đ) phải được tiếp nhận bình thường
+        Map<String, Object> paidPayload = new HashMap<>();
+        paidPayload.put("customerName", "Khách Hàng Cũ");
+        paidPayload.put("customerPhone", "0988776655");
+        paidPayload.put("deviceModel", "Dell Latitude 5420");
+        paidPayload.put("deviceSerial", retSerial);
+        paidPayload.put("services", List.of(Map.of(
+                "serviceName", "Thay màn hình IPS",
+                "price", 1500000,
+                "warrantyMonths", 6
+        )));
+
+        RepairOrder paidOrder = repairOrderService.createRepairOrder(paidPayload);
+        assertNotNull(paidOrder);
+        assertEquals(new BigDecimal("1500000"), paidOrder.getTotalAmount());
+    }
+
+    @Test
+    void testSalesReportKpiCalculatesAllCompletedOrders() {
+        LocalDateTime now = LocalDateTime.now();
+        com.qkshop.tonkho.salesreport.SalesOrder freeOrder = com.qkshop.tonkho.salesreport.SalesOrder.builder()
+                .transactionId("BM-TEST-FREE-" + System.currentTimeMillis())
+                .saleDate(now)
+                .orderStatus("Hoàn tất")
+                .paymentStatus("Đã thanh toán")
+                .orderCategory("MACHINE")
+                .modelName("ThinkPad X1 Carbon")
+                .serialKeys("SN-FREE-01")
+                .grossRevenue(BigDecimal.ZERO)
+                .discount(BigDecimal.ZERO)
+                .netRevenue(BigDecimal.ZERO)
+                .build();
+        salesOrderRepository.save(freeOrder);
+
+        Object[] kpis = salesOrderRepository.getSummaryKpis(now.minusHours(1), now.plusHours(1));
+        assertNotNull(kpis);
+        assertTrue(kpis.length > 0);
     }
 }

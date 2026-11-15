@@ -396,7 +396,7 @@ export default function TabNhatKyChamSoc({
                             <Calendar size={12} className="text-warning" />
                             <span>Ngày hẹn:</span>
                           </span>
-                          <div className="d-flex align-items-center gap-1">
+                          <div className="d-flex flex-wrap align-items-center gap-1">
                             <input
                               type="date"
                               className="form-control form-control-sm py-0 px-1.5 rounded-2 border-warning-subtle bg-white fw-bold text-dark text-center"
@@ -473,7 +473,7 @@ export default function TabNhatKyChamSoc({
                             <RotateCcw size={12} />
                             <span>Kỳ tới:</span>
                           </span>
-                          <div className="d-flex align-items-center gap-1">
+                          <div className="d-flex flex-wrap align-items-center gap-1">
                             <input
                               type="date"
                               className="form-control form-control-sm py-0 px-1.5 rounded-2 border-success-subtle bg-white fw-bold text-success text-center"
@@ -594,7 +594,7 @@ export default function TabNhatKyChamSoc({
                             <Calendar size={12} className="text-warning" />
                             <span>Ngày hẹn lại:</span>
                           </span>
-                          <div className="d-flex align-items-center gap-1">
+                          <div className="d-flex flex-wrap align-items-center gap-1">
                             <input
                               type="date"
                               className="form-control form-control-sm py-0 px-1.5 rounded-2 border-warning-subtle bg-white fw-bold text-dark text-center"

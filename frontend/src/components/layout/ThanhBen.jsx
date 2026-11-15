@@ -67,12 +67,12 @@ const navGroups = [
 
 // 2. HEADER
 const SidebarHeader = ({ isCollapsed, isMobile, setMobileOpen }) => (
-  <div className="d-flex align-items-center p-3 border-bottom border-secondary border-opacity-25" style={{ minHeight: '70px' }}>
+  <div className={`d-flex align-items-center p-3 border-bottom border-secondary border-opacity-25 ${isCollapsed ? 'justify-content-center' : ''}`} style={{ minHeight: '70px' }}>
     <div className="bg-primary text-white d-flex justify-content-center align-items-center rounded-3 flex-shrink-0 shadow" style={{ width: '40px', height: '40px' }}>
       <span className="fw-bold fs-5">QK</span>
     </div>
     
-    <div className={`text-white overflow-hidden transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 ms-0' : 'opacity-100 flex-grow-1 ms-3'}`} style={{ whiteSpace: 'nowrap' }}>
+    <div className={`text-white overflow-hidden transition-all duration-300 ${isCollapsed ? 'd-none' : 'opacity-100 flex-grow-1 ms-3'}`} style={{ whiteSpace: 'nowrap' }}>
       <div className="fw-bold fs-6">TỒN KHO V2</div>
       <div className="text-white-50 small">QKShop · Vận hành</div>
     </div>
@@ -112,7 +112,7 @@ const NavItem = ({ item, isCollapsed, isMobile, setMobileOpen }) => {
         <>
           <Icon size={20} className="flex-shrink-0" strokeWidth={isActive ? 2.5 : 2} />
           <span 
-            className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 ms-0' : 'opacity-100 w-auto ms-3'}`}
+            className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'd-none' : 'opacity-100 w-auto ms-3'}`}
             style={{ fontSize: '14px', whiteSpace: 'nowrap' }}
           >
             {label}
@@ -205,7 +205,7 @@ export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileO
   }, [hasPermission]);
 
   const isCollapsed = isMobile ? false : collapsed;
-  const sidebarWidth = isMobile ? '280px' : width;
+  const sidebarWidth = isMobile ? 'min(290px, 85vw)' : width;
 
   return (
     <>
@@ -220,25 +220,27 @@ export default function ThanhBen({ collapsed, onToggle, width, isMobile, mobileO
 
       {isMobile && (
         <div 
-          className="position-fixed top-0 start-0 w-100 h-100 bg-dark z-2"
+          className="position-fixed top-0 start-0 w-100 h-100 bg-dark"
           style={{ 
             opacity: mobileOpen ? 0.5 : 0,
             pointerEvents: mobileOpen ? 'auto' : 'none',
             transition: 'opacity 0.3s ease-in-out',
-            backdropFilter: 'blur(2px)'
+            backdropFilter: 'blur(2px)',
+            zIndex: 1040
           }}
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside 
-        className="d-flex flex-column position-fixed top-0 bottom-0 start-0 z-3 shadow"
+        className="d-flex flex-column position-fixed top-0 bottom-0 start-0 shadow"
         style={{ 
           width: sidebarWidth,
           backgroundColor: '#212529',
           transition: 'width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
           transform: isMobile ? (mobileOpen ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
-          overflowX: 'hidden'
+          overflowX: 'hidden',
+          zIndex: 1045
         }}
       >
         <SidebarHeader isCollapsed={isCollapsed} isMobile={isMobile} setMobileOpen={setMobileOpen} />

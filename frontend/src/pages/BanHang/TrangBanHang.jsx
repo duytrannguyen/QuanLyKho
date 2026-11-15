@@ -9,6 +9,7 @@ import KhuVucBaoHanhNangCap from './components/KhuVucBaoHanhNangCap';
 import KhuVucPhuKienQuaTang from './components/KhuVucPhuKienQuaTang';
 import KhuVucTaiChinhGhiChu from './components/KhuVucTaiChinhGhiChu';
 import ModalCaiDatQuaTang from './components/ModalCaiDatQuaTang';
+import ModalInHoaDonSauBan from './components/ModalInHoaDonSauBan';
 import './BanHang.css';
 
 export default function TrangBanHang() {
@@ -49,6 +50,8 @@ export default function TrangBanHang() {
     swapSsdSku,
     setSwapSsdSku,
     matchedCrmCustomer,
+    saleSuccessOrder,
+    setSaleSuccessOrder,
     isReady,
     grandTotal,
     handleFormChange,
@@ -240,6 +243,14 @@ export default function TrangBanHang() {
         onRemoveTempGift={handleRemoveTempGift}
         onSaveGiftBundle={handleSaveGiftBundle}
       />
+
+      {/* MODAL: IN HÓA ĐƠN XUẤT KHO KIÊM BẢO HÀNH SAU BÁN MÁY */}
+      {saleSuccessOrder && (
+        <ModalInHoaDonSauBan
+          order={saleSuccessOrder}
+          onClose={() => setSaleSuccessOrder(null)}
+        />
+      )}
     </>
   );
 }

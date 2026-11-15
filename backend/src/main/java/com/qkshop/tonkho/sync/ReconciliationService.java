@@ -139,6 +139,18 @@ public class ReconciliationService {
             }
         }
 
+        BigDecimal origPrice = null;
+        if (cc != null) {
+            if (cc.getConfig() != null && cc.getConfig().getDefaultSalePrice() != null
+                    && cc.getConfig().getDefaultSalePrice().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getConfig().getDefaultSalePrice();
+            } else if (cc.getGrossRevenue() != null && cc.getGrossRevenue().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getGrossRevenue();
+            } else if (cc.getSalePriceSnapshot() != null && cc.getSalePriceSnapshot().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getSalePriceSnapshot();
+            }
+        }
+
         MachineImportRequest req = MachineImportRequest.builder()
                 .serial(serial)
                 .importType("KHÁCH ĐỔI/TRẢ")
@@ -152,6 +164,7 @@ public class ReconciliationService {
                 .ssd(ssd)
                 .screenSize(screenSize)
                 .touchscreen(touchscreen)
+                .price(origPrice)
                 .notes("Nhập lại kho từ đơn hủy/trả " + issue.getSourceReference() + (note != null && !note.isBlank() ? " | " + note : ""))
                 .build();
 

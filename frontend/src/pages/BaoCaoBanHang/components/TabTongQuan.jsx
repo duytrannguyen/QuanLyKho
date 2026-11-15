@@ -106,10 +106,10 @@ export default function TabTongQuan({ data, trendMetric, setTrendMetric, totalRe
             </div>
             <div className="card-body p-4 d-flex flex-column justify-content-center" style={{ minHeight: 380 }}>
               <ResponsiveContainer width="100%" height={340}>
-                <BarChart layout="vertical" data={data.revenueBySource || []} margin={{ top: 10, right: 110, left: 0, bottom: 0 }}>
+                <BarChart layout="vertical" data={data.revenueBySource || []} margin={{ top: 10, right: 95, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" opacity={0.5} />
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="source" tick={{ fontSize: 13, fill: '#334155', fontWeight: 600 }} axisLine={false} tickLine={false} width={130} />
+                  <YAxis type="category" dataKey="source" tick={{ fontSize: 13, fill: '#334155', fontWeight: 600 }} axisLine={false} tickLine={false} width={110} />
                   <Tooltip content={renderMoneyTooltip} cursor={{ fill: '#f8fafc' }} />
                   <Bar dataKey="revenue" name="Doanh thu" radius={[0, 6, 6, 0]} barSize={32}>
                     {(data.revenueBySource || []).map((entry, idx) => {

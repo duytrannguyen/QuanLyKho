@@ -310,7 +310,7 @@ export default function TrangTonKhoLinhKien() {
             </div>
 
             {/* Filters Area */}
-            <div className="col-12 col-lg-8 d-flex flex-wrap flex-md-nowrap gap-2 justify-content-lg-end">
+            <div className="col-12 col-lg-8 d-flex flex-wrap gap-2 justify-content-lg-end">
               <div className="input-group input-group-sm w-auto flex-grow-1 flex-md-grow-0 bg-light rounded-pill p-1">
                 <span className="input-group-text border-0 bg-transparent text-secondary pe-1"><Filter size={16}/></span>
                 <select 

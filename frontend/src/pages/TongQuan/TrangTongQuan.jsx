@@ -324,14 +324,14 @@ export default function TrangTongQuan() {
 
 function StatCard({ icon: Icon, colorClass, number, label }) {
   return (
-    <div className="col-12 col-sm-6 col-md-3">
-      <div className="card shadow-sm border-0 h-100 p-4 d-flex flex-row align-items-center gap-3" style={{transition: 'transform 0.2s'}}>
-        <div className={`rounded d-flex align-items-center justify-content-center flex-shrink-0 ${colorClass}`} style={{width: '48px', height: '48px'}}>
-          <Icon size={24} />
+    <div className="col-12 col-sm-6 col-xl-3">
+      <div className="card shadow-sm border-0 h-100 p-3 d-flex flex-row align-items-center gap-2 gap-sm-3" style={{transition: 'transform 0.2s'}}>
+        <div className={`rounded d-flex align-items-center justify-content-center flex-shrink-0 ${colorClass}`} style={{width: '42px', height: '42px'}}>
+          <Icon size={22} />
         </div>
-        <div>
-          <div className="fs-3 fw-bold text-dark lh-1 mb-1">{number}</div>
-          <div className="text-secondary small">{label}</div>
+        <div className="min-w-0">
+          <div className="fs-4 fs-md-3 fw-bold text-dark lh-1 mb-1">{number}</div>
+          <div className="text-secondary small lh-sm">{label}</div>
         </div>
       </div>
     </div>
@@ -340,11 +340,11 @@ function StatCard({ icon: Icon, colorClass, number, label }) {
 
 function HealthItem({ dotClass, label, value }) {
   return (
-    <div className="col-12 col-sm-6 col-md-3">
-      <div className="card shadow-sm border-0 h-100 p-3 d-flex flex-row align-items-center gap-3">
-        <span className={`rounded-circle flex-shrink-0 ${dotClass}`} style={{width: '12px', height: '12px'}}></span>
-        <div>
-          <div className="fw-medium text-dark small">{label}</div>
+    <div className="col-12 col-sm-6 col-xl-3">
+      <div className="card shadow-sm border-0 h-100 p-2.5 p-sm-3 d-flex flex-row align-items-center gap-2 gap-sm-3">
+        <span className={`rounded-circle flex-shrink-0 ${dotClass}`} style={{width: '10px', height: '10px'}}></span>
+        <div className="min-w-0">
+          <div className="fw-medium text-dark small lh-sm">{label}</div>
           <div className="text-secondary fw-bold" style={{fontSize: '0.75rem'}}>{value}</div>
         </div>
       </div>

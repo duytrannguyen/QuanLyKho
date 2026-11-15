@@ -3,7 +3,7 @@ import {
   TrendingUp, TrendingDown, Minus, RefreshCw, Calendar, DollarSign,
   ShoppingCart, Users, Percent, ArrowUpRight, AlertCircle,
   Filter, Layers, Laptop, ShieldAlert, Activity,
-  Package, Wrench, Info, Lock
+  Package, Wrench, Info, Lock, FileSpreadsheet
 } from 'lucide-react';
 import { salesReportApi } from '../../api';
 import { dinhDangTien } from '../../utils/dinh_dang';
@@ -29,6 +29,7 @@ export default function TrangBaoCaoBanHang() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async (selectedPreset, fromDate, toDate, silent = false) => {
@@ -85,6 +86,34 @@ export default function TrangBaoCaoBanHang() {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      showToast('Đang kết xuất file Excel báo cáo doanh số...', 'primary');
+      const params = { preset };
+      if (preset === 'CUSTOM') {
+        if (customFrom) params.from = customFrom;
+        if (customTo) params.to = customTo;
+      }
+      const response = await salesReportApi.exportExcel(params);
+      const blob = response instanceof Blob ? response : new Blob([response.data || response]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Bao_Cao_Doanh_So_QKShop_${preset}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast('Xuất file Excel báo cáo thành công!', 'success');
+    } catch (err) {
+      console.error('Lỗi xuất Excel báo cáo:', err);
+      showToast('Lỗi khi xuất file Excel: ' + (err?.response?.data?.userMessage || err.message), 'danger');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const kpis = data?.kpis;
   const totalRevenue = kpis?.actualRevenue?.current || 1;
 
@@ -100,7 +129,7 @@ export default function TrangBaoCaoBanHang() {
   }, [kpis]);
 
   return (
-    <div className="container-fluid px-3 px-xl-4 py-4 bg-body-tertiary min-vh-100 overflow-hidden">
+    <div className="container-fluid px-2 px-sm-3 px-xl-4 py-3 py-md-4 bg-body-tertiary min-vh-100">
 
       {/* ==================== 1. HEADER & CONTROL ==================== */}
       <div className="row align-items-center justify-content-between mb-4 gy-3">
@@ -128,6 +157,15 @@ export default function TrangBaoCaoBanHang() {
         </div>
 
         <div className="col-12 col-md-auto d-flex align-items-center gap-2">
+          <button
+            className="btn btn-outline-success border bg-white shadow-sm btn-sm d-inline-flex align-items-center gap-2 px-3 py-2 fw-semibold rounded-pill hover-lift"
+            onClick={handleExportExcel}
+            disabled={exporting || loading}
+            title="Xuất danh sách đơn hàng và dữ liệu doanh số ra file Excel (.xlsx)"
+          >
+            {exporting ? <div className="spinner-border spinner-border-sm text-success" role="status"></div> : <FileSpreadsheet size={16} className="text-success" />}
+            <span className="text-success">{exporting ? 'Đang xuất...' : 'Xuất Excel'}</span>
+          </button>
           <button
             className="btn btn-white border bg-white shadow-sm btn-sm d-inline-flex align-items-center gap-2 px-3 py-2 fw-semibold rounded-pill hover-lift"
             onClick={handleRebuild}
@@ -208,17 +246,17 @@ export default function TrangBaoCaoBanHang() {
             {/* Thực tế */}
             <div className="col-12 col-sm-6 col-xl-3">
               <div className="card border-0 shadow-sm rounded-4 h-100 text-white" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' }}>
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
+                <div className="card-body p-3 p-xxl-4 d-flex flex-column justify-content-between">
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <span className="fw-semibold text-white-50 text-uppercase small" style={{ letterSpacing: '0.5px' }}>Doanh Thu Thực Tế (Net)</span>
-                      <div className="bg-white bg-opacity-25 rounded-circle p-2 d-flex align-items-center justify-content-center">
+                      <div className="bg-white bg-opacity-25 rounded-circle p-2 d-flex align-items-center justify-content-center flex-shrink-0">
                         <DollarSign size={20} className="text-white" />
                       </div>
                     </div>
-                    <h3 className="fw-bold fs-2 mb-0 text-white">{dinhDangTien(kpis?.actualRevenue?.current || 0)}</h3>
+                    <h3 className="fw-bold kpi-hero-value mb-0 text-white">{dinhDangTien(kpis?.actualRevenue?.current || 0)}</h3>
                   </div>
-                  <div className="d-flex justify-content-between align-items-end mt-4">
+                  <div className="d-flex justify-content-between align-items-end mt-4 flex-wrap gap-2">
                     <div className="bg-white bg-opacity-25 px-2 py-1 rounded-pill text-white fw-bold small d-flex align-items-center gap-1 shadow-sm">
                       {kpis?.actualRevenue?.trend === 'UP' ? <TrendingUp size={14} /> : kpis?.actualRevenue?.trend === 'DOWN' ? <TrendingDown size={14} /> : <Minus size={14} />}
                       {kpis?.actualRevenue?.changeText}
@@ -232,17 +270,17 @@ export default function TrangBaoCaoBanHang() {
             {/* Niêm yết */}
             <div className="col-12 col-sm-6 col-xl-3">
               <div className="card border-0 shadow-sm rounded-4 h-100 bg-white hover-lift-card">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
+                <div className="card-body p-3 p-xxl-4 d-flex flex-column justify-content-between">
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <span className="text-muted fw-bold text-uppercase small" style={{ letterSpacing: '0.5px' }}>Doanh Thu Niêm Yết</span>
-                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center bg-warning-subtle text-warning-emphasis">
+                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center bg-warning-subtle text-warning-emphasis flex-shrink-0">
                         <Percent size={20} />
                       </div>
                     </div>
-                    <h3 className="fw-bold text-dark fs-3 mb-0">{dinhDangTien(kpis?.grossRevenue?.current || 0)}</h3>
+                    <h3 className="fw-bold text-dark kpi-hero-value mb-0">{dinhDangTien(kpis?.grossRevenue?.current || 0)}</h3>
                   </div>
-                  <div className="d-flex justify-content-between align-items-end mt-4">
+                  <div className="d-flex justify-content-between align-items-end mt-4 flex-wrap gap-2">
                     <span className="text-danger fw-bold small">Giảm: {dinhDangTien(kpis?.totalDiscount?.current || 0)}</span>
                     <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">
                       Tỷ lệ {(kpis?.discountRate?.current || 0).toFixed(1)}%
@@ -255,19 +293,19 @@ export default function TrangBaoCaoBanHang() {
             {/* Sản lượng */}
             <div className="col-12 col-sm-6 col-xl-3">
               <div className="card border-0 shadow-sm rounded-4 h-100 bg-white hover-lift-card">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
+                <div className="card-body p-3 p-xxl-4 d-flex flex-column justify-content-between">
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <span className="text-muted fw-bold text-uppercase small" style={{ letterSpacing: '0.5px' }}>Số Máy Bán Hoàn Tất</span>
-                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center bg-success-subtle text-success-emphasis">
+                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center bg-success-subtle text-success-emphasis flex-shrink-0">
                         <ShoppingCart size={20} />
                       </div>
                     </div>
-                    <h3 className="fw-bold text-dark fs-3 mb-0">
+                    <h3 className="fw-bold text-dark kpi-hero-value mb-0">
                       {kpis?.soldUnits?.current?.toLocaleString('vi-VN') || 0} <span className="fs-6 text-muted fw-semibold">máy</span>
                     </h3>
                   </div>
-                  <div className="d-flex justify-content-between align-items-end mt-4">
+                  <div className="d-flex justify-content-between align-items-end mt-4 flex-wrap gap-2">
                     {renderTrendBadge(kpis?.soldUnits)}
                     <span className="text-muted small fw-medium">Đơn hoàn thành</span>
                   </div>
@@ -278,17 +316,17 @@ export default function TrangBaoCaoBanHang() {
             {/* AOV */}
             <div className="col-12 col-sm-6 col-xl-3">
               <div className="card border-0 shadow-sm rounded-4 h-100 bg-white hover-lift-card">
-                <div className="card-body p-4 d-flex flex-column justify-content-between">
+                <div className="card-body p-3 p-xxl-4 d-flex flex-column justify-content-between">
                   <div>
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <span className="text-muted fw-bold text-uppercase small" style={{ letterSpacing: '0.5px' }}>Giá Trị TB / Đơn (AOV)</span>
-                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center" style={{ backgroundColor: '#f3e8ff', color: '#7e22ce' }}>
+                      <div className="rounded-circle p-2 d-flex align-items-center justify-content-center flex-shrink-0" style={{ backgroundColor: '#f3e8ff', color: '#7e22ce' }}>
                         <ArrowUpRight size={20} />
                       </div>
                     </div>
-                    <h3 className="fw-bold text-dark fs-3 mb-0">{dinhDangTien(kpis?.aov?.current || 0)}</h3>
+                    <h3 className="fw-bold text-dark kpi-hero-value mb-0">{dinhDangTien(kpis?.aov?.current || 0)}</h3>
                   </div>
-                  <div className="d-flex justify-content-between align-items-end mt-4">
+                  <div className="d-flex justify-content-between align-items-end mt-4 flex-wrap gap-2">
                     {renderTrendBadge(kpis?.aov)}
                     <span className="text-muted small fw-medium">Quy mô đơn hàng</span>
                   </div>

@@ -127,6 +127,11 @@ export default function KhuVucBaoHanhNangCap({
                   if (!checked) {
                     handleFormChange('isDelivered', false);
                     handleFormChange('deliveryDate', '');
+                    handleFormChange('shippingCarrier', '');
+                    handleFormChange('trackingCode', '');
+                    handleFormChange('shippingAddress', '');
+                    handleFormChange('depositAmount', '');
+                    handleFormChange('codAmount', '');
                   }
                 }}
               />
@@ -142,71 +147,51 @@ export default function KhuVucBaoHanhNangCap({
             {formData.isShipping && (
               <div className="mt-2 pt-2 border-top border-secondary border-opacity-10">
                 <div className="row g-2 mb-2">
-                  <div className="col-md-4 col-12">
+                  <div className="col-md-6 col-12">
                     <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
-                      Đơn vị vận chuyển
+                      Đơn vị vận chuyển (Tự nhập hoặc chọn gợi ý)
                     </label>
-                    <select
-                      className="form-select pos-input"
+                    <input
+                      type="text"
+                      list="shippingCarriersList"
+                      className="form-control pos-input fw-medium"
+                      placeholder="VD: GHTK, Viettel Post, Xe khách, Chành xe..."
                       value={formData.shippingCarrier || ''}
                       onChange={(e) => handleFormChange('shippingCarrier', e.target.value)}
-                    >
-                      <option value="">-- Chọn đơn vị --</option>
-                      <option value="Giao Hàng Tiết Kiệm (GHTK)">Giao Hàng Tiết Kiệm (GHTK)</option>
-                      <option value="Viettel Post">Viettel Post</option>
-                      <option value="Giao Hàng Nhanh (GHN)">Giao Hàng Nhanh (GHN)</option>
-                      <option value="J&T Express">J&T Express</option>
-                      <option value="Ahamove">Ahamove</option>
-                      <option value="GrabExpress">GrabExpress</option>
-                      <option value="Khác / Tự giao">Khác / Tự giao</option>
-                    </select>
+                    />
+                    <datalist id="shippingCarriersList">
+                      <option value="Giao Hàng Tiết Kiệm (GHTK)" />
+                      <option value="Viettel Post" />
+                      <option value="Giao Hàng Nhanh (GHN)" />
+                      <option value="J&T Express" />
+                      <option value="Ahamove" />
+                      <option value="GrabExpress" />
+                      <option value="Xe khách / Chành xe" />
+                      <option value="Tự giao hàng" />
+                    </datalist>
                   </div>
-                  <div className="col-md-4 col-12">
+                  <div className="col-md-6 col-12">
                     <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
                       Mã vận đơn
                     </label>
                     <input
                       type="text"
-                      className="form-control pos-input"
-                      placeholder="VD: S123456789VN"
+                      className="form-control pos-input font-monospace"
+                      placeholder="VD: S123456789VN (Nếu có)"
                       value={formData.trackingCode || ''}
                       onChange={(e) => handleFormChange('trackingCode', e.target.value)}
                     />
                   </div>
-                  <div className="col-md-4 col-12">
+                  <div className="col-12">
                     <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
-                      Tiền cọc trước (VNĐ)
+                      Địa chỉ nhận hàng (Giao hàng)
                     </label>
                     <input
                       type="text"
                       className="form-control pos-input"
-                      placeholder="0"
-                      value={formData.depositAmount ? formatCurrency(formData.depositAmount) : ''}
-                      onChange={(e) => handleFormChange('depositAmount', parseCurrency(e.target.value))}
-                    />
-                  </div>
-                  <div className="col-md-8 col-12">
-                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
-                      Địa chỉ nhận hàng
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control pos-input"
-                      placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP"
+                      placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP..."
                       value={formData.shippingAddress || ''}
                       onChange={(e) => handleFormChange('shippingAddress', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-4 col-12">
-                    <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.73rem' }}>
-                      Thu hộ COD (VNĐ)
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control pos-input"
-                      placeholder="Tự tính nếu để trống"
-                      value={formData.codAmount ? formatCurrency(formData.codAmount) : ''}
-                      onChange={(e) => handleFormChange('codAmount', parseCurrency(e.target.value))}
                     />
                   </div>
                 </div>

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Edit3, Save, Wrench, User, Phone, Calendar, ClipboardList, ShieldAlert, Monitor } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { tinhNgayHetHanBaoHanh } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [customerName, setCustomerName] = useState(order.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(order.customerPhone || '');
@@ -28,9 +30,7 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
 
     if (field === 'warrantyPeriod') {
       const autoExpiry = tinhNgayHetHanBaoHanh(order.createdDate || order.orderDate, value);
-      if (autoExpiry) {
-        item.warrantyExpiry = autoExpiry;
-      }
+      item.warrantyExpiry = autoExpiry || '';
     }
 
     updated[index] = item;
@@ -57,6 +57,10 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
       }
 
       const lower = wPeriod.toLowerCase();
+      if ((order.isReturned || order.warrantyCancelled) && (lower.includes('theo bh') || lower.includes('bảo hành máy') || lower.includes('rma'))) {
+        showToast(`Dịch vụ "${sName}": Máy này đã được shop thu lại về kho, bảo hành cũ đã bị hủy. Không thể chọn "Theo BH máy"!`, 'danger');
+        return;
+      }
       if ((lower.includes('từ chối') || lower.includes('tu choi')) && !sNote) {
         showToast(`Dịch vụ "${sName}": Do từ chối bảo hành, bắt buộc nhập lý do vào cột Ghi chú`, 'danger');
         return;
@@ -71,12 +75,27 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
         deviceModel: deviceModel.trim(),
         technicianName: technicianName.trim(),
         note: note.trim(),
-        items: items.map(it => ({
-          id: it.id,
-          warrantyPeriod: it.warrantyPeriod,
-          warrantyExpiry: it.warrantyExpiry || null,
-          note: it.note
-        }))
+        items: items.map(it => {
+          let calculatedMonths = 0;
+          const periodText = (it.warrantyPeriod || '').trim();
+          const lower = periodText.toLowerCase();
+          if (!lower.includes('không') && !lower.includes('từ chối') && !lower.includes('theo bh') && lower !== '0' && lower !== 'none') {
+            const match = lower.match(/(\d+)/);
+            if (match) {
+              const val = parseInt(match[1], 10);
+              if (lower.includes('năm') || lower.includes('nam')) calculatedMonths = val * 12;
+              else if (lower.includes('ngày') || lower.includes('ngay')) calculatedMonths = Math.ceil(val / 30);
+              else calculatedMonths = val;
+            }
+          }
+          return {
+            id: it.id,
+            warrantyPeriod: periodText,
+            warrantyMonths: calculatedMonths,
+            warrantyExpiry: it.warrantyExpiry || null,
+            note: it.note || ''
+          };
+        })
       });
       showToast('Cập nhật phiếu sửa chữa thành công!', 'success');
       onSuccess?.();
@@ -200,13 +219,13 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
                     <table className="table table-hover align-middle mb-0">
                       <thead className="table-light text-secondary small">
                         <tr>
-                          <th className="ps-4 py-3" style={{ minWidth: '220px' }}>Dịch vụ / Linh kiện</th>
-                          <th className="py-3 text-center" style={{ width: '80px' }}>SL</th>
-                          <th className="py-3" style={{ minWidth: '180px' }}>
+                          <th className="ps-3 py-3" style={{ width: '26%' }}>Dịch vụ / Linh kiện</th>
+                          <th className="py-3 text-center" style={{ width: '8%' }}>SL</th>
+                          <th className="py-3" style={{ width: '22%' }}>
                             Gói bảo hành <span className="text-danger">*</span>
                           </th>
-                          <th className="py-3" style={{ minWidth: '160px' }}>Ngày hết hạn</th>
-                          <th className="pe-4 py-3" style={{ minWidth: '250px' }}>
+                          <th className="py-3" style={{ width: '18%' }}>Ngày hết hạn</th>
+                          <th className="pe-3 py-3" style={{ width: '26%' }}>
                             Ghi chú / Tem <span className="text-muted fw-normal" style={{ fontSize: '11px' }}>(bắt buộc nếu từ chối)</span>
                           </th>
                         </tr>
@@ -283,14 +302,26 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
             </div>
 
             {/* Footer */}
-            <div className="modal-footer bg-white border-top py-3 px-4 d-flex justify-content-end gap-2">
-              <button type="button" className="btn btn-light border px-4 fw-medium text-secondary" onClick={onClose} disabled={isSaving}>
-                Hủy bỏ
+            <div className="modal-footer bg-white border-top py-3 px-4 d-flex justify-content-between">
+              <button
+                type="button"
+                className="btn btn-outline-primary px-3 fw-semibold d-flex align-items-center gap-1.5"
+                onClick={() => {
+                  onClose();
+                  navigate('/dich-vu-sua-chua', { state: { editOrder: order } });
+                }}
+              >
+                <Wrench size={16} /> Mở Giao Diện Sửa Chữa Đầy Đủ
               </button>
-              <button type="submit" className="btn btn-primary px-4 fw-bold d-flex align-items-center gap-2 shadow-sm" disabled={isSaving}>
-                {isSaving ? <span className="spinner-border spinner-border-sm" /> : <Save size={18} />}
-                <span>Lưu thay đổi</span>
-              </button>
+              <div className="d-flex gap-2">
+                <button type="button" className="btn btn-light border px-4 fw-medium text-secondary" onClick={onClose} disabled={isSaving}>
+                  Hủy bỏ
+                </button>
+                <button type="submit" className="btn btn-primary px-4 fw-bold d-flex align-items-center gap-2 shadow-sm" disabled={isSaving}>
+                  {isSaving ? <span className="spinner-border spinner-border-sm" /> : <Save size={18} />}
+                  <span>Lưu thay đổi</span>
+                </button>
+              </div>
             </div>
           </form>
 

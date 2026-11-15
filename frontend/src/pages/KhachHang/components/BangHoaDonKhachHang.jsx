@@ -150,13 +150,13 @@ export default function BangHoaDonKhachHang({
         <table className="table table-hover table-borderless align-middle mb-0">
           <thead className="table-light border-bottom">
             <tr>
-              <th className="py-2.5 text-center text-secondary fw-semibold" style={{ width: '45px' }}>STT</th>
-              <th className="py-2.5 text-secondary fw-semibold" style={{ width: '135px' }}>Mã đơn & Ngày</th>
-              <th className="py-2.5 text-secondary fw-semibold">Thiết bị & Cấu hình</th>
-              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '185px' }}>Bảo hành & CSKH</th>
-              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '110px' }}>Trạng thái đơn</th>
-              <th className="py-2.5 text-secondary fw-semibold text-end" style={{ width: '120px' }}>Thành tiền</th>
-              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '115px' }}>Thao tác</th>
+              <th className="py-2.5 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+              <th className="py-2.5 text-secondary fw-semibold" style={{ width: '15%' }}>Mã đơn & Ngày</th>
+              <th className="py-2.5 text-secondary fw-semibold" style={{ width: '28%' }}>Thiết bị & Cấu hình</th>
+              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '18%' }}>Bảo hành & CSKH</th>
+              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '11%' }}>Trạng thái đơn</th>
+              <th className="py-2.5 text-secondary fw-semibold text-end" style={{ width: '12%' }}>Thành tiền</th>
+              <th className="py-2.5 text-secondary fw-semibold text-center" style={{ width: '11%' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody className="border-top-0">

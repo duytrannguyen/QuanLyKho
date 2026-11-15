@@ -71,6 +71,7 @@ services:
       # Để backend gọi đúng vào tên service 'db' trong mạng nội bộ Docker
       DB_HOST: db
       DB_PORT: 3306
+      JAVA_OPTS: ${JAVA_OPTS:-"-XX:+UseContainerSupport -Xms256m -Xmx512m -XX:+UseG1GC -XX:ParallelGCThreads=1 -XX:ConcGCThreads=1 -XX:CICompilerCount=2 -Xss256k -Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom -Duser.timezone=Asia/Ho_Chi_Minh -Dfile.encoding=UTF-8"}
     ports:
       # Backend nội bộ, người dùng bên ngoài đi qua Nginx/Frontend
       - "127.0.0.1:${PORT:-8080}:8080"

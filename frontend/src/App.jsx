@@ -1,5 +1,7 @@
 // Import Bootstrap 5 CSS
 import 'bootstrap/dist/css/bootstrap.min.css';
+// Import Global Responsive Design System
+import './styles/responsive.css';
 // (Tuỳ chọn) Import Bootstrap JS nếu bạn cần dùng Dropdown, Modal, Collapse...
 // import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 

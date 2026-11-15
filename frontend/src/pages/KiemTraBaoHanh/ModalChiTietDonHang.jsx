@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
@@ -10,6 +11,7 @@ import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { getCleanWarrantyType, formatDate, formatMoney } from '../../utils/dinh_dang';
 
 export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery, onReturnOrder }) {
+  const navigate = useNavigate();
   const { hasPermission, requirePermission } = useAuth();
   const { showToast } = useToast();
   const canManageShip = hasPermission('SHIP_MANAGE');
@@ -43,11 +45,14 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Trích xuất phụ kiện và quà tặng từ saleNote
+  // Trích xuất phụ kiện, quà tặng và phụ kiện bán thêm từ saleNote
   const extractAccessoriesAndNote = (note) => {
-    if (!note) return { accessories: [], cleanNote: '' };
+    if (!note) return { accessories: [], giftAccessories: [], paidAccessories: [], paidTotal: 0, cleanNote: '' };
     let cleanNote = note;
-    const items = [];
+    const allItems = [];
+    const giftItems = [];
+    const paidItems = [];
+    let paidTotal = 0;
 
     // Tìm quà tặng mặc định
     const giftMarker = 'Quà tặng mặc định: ';
@@ -58,12 +63,15 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
       const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
       content.split(',').forEach(s => {
         const t = s.trim();
-        if (t) items.push(t + ' (Quà tặng)');
+        if (t) {
+          giftItems.push(t);
+          allItems.push(t + ' (Quà tặng)');
+        }
       });
       cleanNote = cleanNote.substring(0, giftIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
     }
 
-    // Tìm phụ kiện bán kèm / bán thêm
+    // Tìm phụ kiện bán kèm / bán thêm có tính phí
     const extraMarkers = ['Phụ kiện bán thêm: ', 'Phụ kiện bán kèm: '];
     for (const marker of extraMarkers) {
       const extraIdx = cleanNote.indexOf(marker);
@@ -73,17 +81,33 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
         const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
         content.split(',').forEach(s => {
           const t = s.trim();
-          if (t) items.push(t);
+          if (t) {
+            allItems.push(t);
+            const priceMatch = t.match(/\[([0-9.,]+)\s*đ?\]/);
+            const qtyMatch = t.match(/\(x([0-9]+)\)/i);
+            const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+            const price = priceMatch ? Number(priceMatch[1].replace(/[^0-9]/g, '')) : 0;
+            const name = t.replace(/\(x[0-9]+\)/gi, '').replace(/\[[0-9.,]+\s*đ?\]/g, '').trim();
+
+            paidItems.push({
+              name,
+              quantity: qty,
+              price,
+              total: price * qty,
+              rawText: t
+            });
+            paidTotal += (price * qty);
+          }
         });
         cleanNote = cleanNote.substring(0, extraIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
       }
     }
 
     cleanNote = cleanNote.replace(/^\|\s*|\s*\|\s*$/g, '').trim();
-    return { accessories: items, cleanNote };
+    return { accessories: allItems, giftAccessories: giftItems, paidAccessories: paidItems, paidTotal, cleanNote };
   };
 
-  const { accessories, cleanNote } = extractAccessoriesAndNote(order.saleNote);
+  const { accessories, giftAccessories, paidAccessories, paidTotal, cleanNote } = extractAccessoriesAndNote(order.saleNote);
   const StatusIcon = statusInfo?.icon || ShieldCheck;
 
   const extractUpgradeTotal = (note) => {
@@ -104,10 +128,12 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
   const discAmt = Number(order.discount) || 0;
   const originalAmt = Number(order.grossRevenue) || (Number(order.defaultSalePrice) > 0 ? Number(order.defaultSalePrice) : 0) || rawSalePrice;
 
-  // Nếu salePrice trong DB là giá máy gốc (chưa cộng phí nâng cấp), tự động tính đúng tổng thực thu
-  const finalAmt = (upgradeTotal > 0 && rawSalePrice <= originalAmt)
-    ? (Math.max(0, originalAmt - discAmt) + upgradeTotal)
-    : rawSalePrice;
+  // Tính đúng tổng thanh toán thực tế nếu salePrice chỉ là giá snapshot của máy
+  const finalAmt = Number(order.finalPrice) > 0 
+    ? Number(order.finalPrice)
+    : (rawSalePrice <= originalAmt && (upgradeTotal > 0 || paidTotal > 0))
+      ? (Math.max(0, originalAmt - discAmt) + upgradeTotal + paidTotal)
+      : rawSalePrice;
 
   // In phiếu bảo hành kiêm xuất kho
   const handlePrint = () => {
@@ -202,6 +228,16 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               <span class="info-label">Hình thức giao:</span>
               <span class="info-val">${order.isShipping ? `Đơn ship xa ${order.isDelivered ? `(Đã nhận: ${formatDate(order.deliveryDate)})` : '(Chờ nhận hàng)'}` : 'Mua tại cửa hàng'}</span>
             </div>
+            ${order.isShipping && order.shippingCarrier ? `
+            <div class="info-row">
+              <span class="info-label">Đơn vị vận chuyển:</span>
+              <span class="info-val">${order.shippingCarrier} ${order.trackingCode ? `(Mã VĐ: ${order.trackingCode})` : ''}</span>
+            </div>` : ''}
+            ${order.isShipping && order.shippingAddress ? `
+            <div class="info-row">
+              <span class="info-label">Địa chỉ nhận hàng:</span>
+              <span class="info-val">${order.shippingAddress}</span>
+            </div>` : ''}
           </div>
         </div>
 
@@ -233,13 +269,25 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   ${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
                 </td>
               </tr>
-              ${accessories.length > 0 ? `
+              ${paidAccessories.map((pAcc, pIdx) => `
               <tr>
-                <td style="text-align: center;">2</td>
-                <td colspan="3">
-                  <strong>Phụ kiện kèm theo:</strong> ${accessories.join(', ')}
+                <td style="text-align: center;">${pIdx + 2}</td>
+                <td colspan="2">
+                  <strong>${pAcc.name}</strong> <small style="color: #64748b;">(Phụ kiện bán thêm)</small>
                 </td>
-                <td style="text-align: right; color:#64748b;">Kèm máy</td>
+                <td style="text-align: center;">SL: ${pAcc.quantity}</td>
+                <td style="text-align: right; font-weight: 600;">
+                  ${formatMoney(pAcc.total > 0 ? pAcc.total : pAcc.price)}
+                </td>
+              </tr>
+              `).join('')}
+              ${giftAccessories.length > 0 ? `
+              <tr>
+                <td style="text-align: center;">${paidAccessories.length + 2}</td>
+                <td colspan="3">
+                  <strong>Quà tặng kèm theo:</strong> ${giftAccessories.join(', ')}
+                </td>
+                <td style="text-align: right; color:#64748b;">0 đ</td>
               </tr>` : ''}
             </tbody>
           </table>
@@ -247,6 +295,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
           <div class="total-box">
             <div style="color: #64748b; font-size: 13px;">Giá gốc / Niêm yết máy: <span style="${discAmt > 0 ? 'text-decoration: line-through;' : 'font-weight: 600; color: #0f172a;'}">${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}</span></div>
             ${upgradeTotal > 0 ? `<div style="color: #b45309; font-size: 13px; font-weight: 600;">Phí nâng cấp linh kiện: +${formatMoney(upgradeTotal)}</div>` : ''}
+            ${paidTotal > 0 ? `<div style="color: #0369a1; font-size: 13px; font-weight: 600;">Phụ kiện mua thêm: +${formatMoney(paidTotal)}</div>` : ''}
             ${discAmt > 0 ? `<div style="color: #dc2626; font-size: 13px; font-weight: 600;">Giảm giá / Ưu đãi: -${formatMoney(discAmt)}</div>` : ''}
             <div style="margin-top: 6px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">Tổng thanh toán thực tế: <span class="total-price">${formatMoney(finalAmt)}</span></div>
           </div>
@@ -560,10 +609,22 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                         </div>
                       )}
 
-                      {(order.shippingCarrier || order.trackingCode || order.shippingAddress || order.codAmount > 0) && (
+                      {(order.isShipping || order.shippingCarrier || order.trackingCode || order.shippingAddress || order.codAmount > 0) && (
                         <div className="p-3 rounded-3 bg-white border">
                           <div className="small fw-bold text-dark mb-2 d-flex align-items-center gap-1">
                             <Truck size={14} className="text-primary" /> Thông tin vận đơn & Giao nhận
+                          </div>
+                          {order.isShipping && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Hình thức đơn:</span>
+                              <span className="badge bg-primary text-white">Đơn ship xa</span>
+                            </div>
+                          )}
+                          <div className="d-flex justify-content-between small mb-1">
+                            <span className="text-muted">Trạng thái giao:</span>
+                            <span className={`fw-semibold ${order.isDelivered ? 'text-success' : 'text-warning'}`}>
+                              {order.isDelivered ? `Đã giao hàng (${formatDate(order.deliveryDate)})` : 'Đang giao / Chờ khách nhận hàng'}
+                            </span>
                           </div>
                           {order.shippingCarrier && (
                             <div className="d-flex justify-content-between small mb-1">
@@ -579,7 +640,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                           )}
                           {order.shippingAddress && (
                             <div className="d-flex justify-content-between small mb-1">
-                              <span className="text-muted">Địa chỉ:</span>
+                              <span className="text-muted">Địa chỉ nhận hàng:</span>
                               <span className="fw-medium text-dark text-end ms-2">{order.shippingAddress}</span>
                             </div>
                           )}
@@ -650,6 +711,15 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                           <span className="text-muted small">Phí nâng cấp linh kiện:</span>
                           <span className="fw-bold text-warning">
                             + {formatMoney(upgradeTotal)}
+                          </span>
+                        </div>
+                      )}
+
+                      {paidTotal > 0 && (
+                        <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                          <span className="text-muted small">Phụ kiện mua thêm:</span>
+                          <span className="fw-bold text-primary">
+                            + {formatMoney(paidTotal)}
                           </span>
                         </div>
                       )}
@@ -963,7 +1033,8 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
                   onClick={() => {
                     if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
-                    window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
+                    onClose();
+                    navigate(`/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`);
                   }}
                   title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
                 >

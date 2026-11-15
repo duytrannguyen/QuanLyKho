@@ -86,7 +86,7 @@ export default function PhanTrang({
       {/* Điều hướng các trang */}
       {currentTotalPages > 1 && (
         <nav aria-label="Page navigation">
-          <ul className="pagination pagination-sm m-0 gap-1 align-items-center">
+          <ul className="pagination pagination-sm m-0 gap-1 align-items-center flex-wrap justify-content-center">
             <li className={`page-item ${currentPage <= 1 ? 'disabled' : ''}`}>
               <button
                 type="button"

@@ -171,7 +171,7 @@ export default function TrangKiemDinh() {
           </div>
         </div>
         <div className="col-md-7 col-lg-8">
-          <ul className="nav nav-pills gap-2 flex-nowrap overflow-auto pb-1">
+          <ul className="nav nav-pills gap-2 flex-wrap">
             {['ĐANG MỞ', 'ĐANG XỬ LÝ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => {
               const count = tabCounts[tab] || 0;
               return (
@@ -200,15 +200,15 @@ export default function TrangKiemDinh() {
         <div className="col-xl-8 col-lg-7 col-md-12 mb-4 mb-lg-0">
           <div className="card shadow-sm border-0">
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0" style={{ tableLayout: 'fixed' }}>
+              <table className="table table-hover align-middle mb-0">
                 <thead className="table-light text-secondary small">
                   <tr>
-                    <th style={{ width: '5%' }} className="text-center">STT</th>
-                    <th style={{ width: '15%' }}>Serial</th>
-                    <th style={{ width: '15%' }}>Tên máy</th>
-                    <th style={{ width: '25%' }}>Cấu hình</th>
-                    <th style={{ width: '25%' }}>Loại yêu cầu</th>
-                    <th style={{ width: '15%' }}>Thời gian (Tồn/Chờ)</th>
+                    <th style={{ width: '6%' }} className="text-center">STT</th>
+                    <th style={{ width: '16%' }}>Serial</th>
+                    <th style={{ width: '24%' }}>Tên máy</th>
+                    <th style={{ width: '22%' }}>Cấu hình</th>
+                    <th style={{ width: '18%' }}>Loại yêu cầu</th>
+                    <th style={{ width: '14%' }}>Thời gian (Tồn/Chờ)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -220,11 +220,11 @@ export default function TrangKiemDinh() {
                       style={{ cursor: 'pointer' }}
                     >
                       <td className="text-center">{page * pageSize + index + 1}</td>
-                      <td><strong className="text-dark">{item.serial}</strong></td>
-                      <td className="text-truncate" title={item.name}>{item.name}</td>
-                      <td className="text-truncate" title={item.config}>{item.config}</td>
-                      <td>{item.type}</td>
-                      <td>
+                      <td className="text-nowrap"><strong className="text-dark font-monospace small">{item.serial}</strong></td>
+                      <td className="fw-medium text-dark" title={item.name}>{item.name}</td>
+                      <td className="small text-secondary" title={item.config}>{item.config}</td>
+                      <td className="small">{item.type}</td>
+                      <td className="text-nowrap">
                         <div className="small"><span className="text-secondary">Tồn:</span> {item.inventoryDays}</div>
                         <div className="small"><span className="text-secondary">Chờ:</span> <span className="text-danger fw-medium">{item.waitDays}</span></div>
                       </td>
@@ -338,10 +338,10 @@ export default function TrangKiemDinh() {
 
               {/* Khối Button hành động */}
               {activeItem.status !== 'PASSED' && activeItem.status !== 'REJECTED_RETURNED' && (
-                <div className="d-flex justify-content-end gap-2 pt-3 border-top">
-                  <button className="btn btn-outline-secondary fw-medium" onClick={handleUpdateProgress}>Lưu tiến độ</button>
-                  <button className="btn btn-outline-danger fw-medium" onClick={handleReject}>Hủy/Trả</button>
-                  <button className="btn btn-success fw-medium" onClick={handleApprove}>Xác nhận Đạt</button>
+                <div className="d-flex flex-wrap justify-content-end gap-2 pt-3 border-top">
+                  <button className="btn btn-outline-secondary fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleUpdateProgress}>Lưu tiến độ</button>
+                  <button className="btn btn-outline-danger fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleReject}>Hủy/Trả</button>
+                  <button className="btn btn-success fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleApprove}>Xác nhận Đạt</button>
                 </div>
               )}
             </div>

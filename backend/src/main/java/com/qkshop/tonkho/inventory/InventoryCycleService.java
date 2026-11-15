@@ -165,6 +165,26 @@ public class InventoryCycleService {
         throw new IllegalArgumentException("Không tìm thấy máy trong kho với từ khóa/serial: " + keyword);
     }
 
+    public ActiveInventory lookupSaleCandidateForUpdate(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            throw new IllegalArgumentException("Từ khóa tìm kiếm serial máy không được để trống");
+        }
+        String clean = keyword.trim();
+        String upper = clean.toUpperCase();
+
+        Optional<ActiveInventory> aiOpt = activeInventoryRepo.findBySerialKeyOrCycleIdForUpdate(upper);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        aiOpt = activeInventoryRepo.findBySerialKeyOrCycleIdForUpdate(clean);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        return lookupSaleCandidate(keyword);
+    }
+
     public List<ActiveInventory> searchSaleCandidates(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return List.of();
@@ -202,14 +222,15 @@ public class InventoryCycleService {
             throw new IllegalArgumentException("Request " + requestId + " đã được xử lý (Idempotent).");
         }
 
-        ActiveInventory ai = lookupSaleCandidate(serialKey);
+        ActiveInventory ai = lookupSaleCandidateForUpdate(serialKey);
         if (ai.getState() != CycleState.READY) {
-            throw new IllegalStateException("Máy không ở trạng thái Sẵn sàng bán (READY). Trạng thái hiện tại: " + ai.getState());
+            throw new IllegalStateException("Máy " + serialKey + " không ở trạng thái Sẵn sàng bán (READY) hoặc vừa được bán bởi nhân viên khác. Trạng thái hiện tại: " + ai.getState());
         }
 
         BigDecimal originalListedPrice = ai.getSalePrice();
-        ai.setSalePrice(finalPrice);
-        activeInventoryRepo.save(ai);
+        if ((originalListedPrice == null || originalListedPrice.compareTo(BigDecimal.ZERO) <= 0) && ai.getConfig() != null) {
+            originalListedPrice = ai.getConfig().getDefaultSalePrice();
+        }
 
         LocalDateTime sDate = LocalDateTime.now();
         if (saleDetails != null && saleDetails.containsKey("saleDate") && saleDetails.get("saleDate") != null) {
@@ -426,12 +447,13 @@ public class InventoryCycleService {
                     } else {
                         // Phụ kiện mua thêm có tính phí - đồng nhất logic lấy giá với AccessoryService.deductAccessories
                         BigDecimal resolvedPrice = accessoryService.resolvePaidAccessoryPrice(a, null);
-                        a.put("price", resolvedPrice);
+                        Map<String, Object> mutableAcc = new java.util.HashMap<>(a);
+                        mutableAcc.put("price", resolvedPrice);
                         BigDecimal itemTotal = resolvedPrice.multiply(BigDecimal.valueOf(qty));
                         totalPaidAccessoriesAmount = totalPaidAccessoriesAmount.add(itemTotal);
                         String priceStr = resolvedPrice.compareTo(BigDecimal.ZERO) > 0 ? " [" + resolvedPrice + "đ]" : "";
                         paidItems.add(nameWithQty + priceStr);
-                        generalAccessories.add(a);
+                        generalAccessories.add(mutableAcc);
                     }
                 }
 
@@ -467,6 +489,43 @@ public class InventoryCycleService {
                 String newNote = currentNote.isEmpty() ? accNote.toString()
                                                        : currentNote + " | " + accNote.toString();
                 closed.setSaleNote(newNote);
+            }
+
+            // Thu hồi linh kiện zin tháo máy (swapParts: RAM, SSD zin của khách để lại khi nâng cấp)
+            Object swapPartsObj = saleDetails.get("swapParts");
+            if (swapPartsObj instanceof List<?> swapList && !swapList.isEmpty()) {
+                List<String> swappedItems = new java.util.ArrayList<>();
+                for (Object itemObj : swapList) {
+                    if (itemObj instanceof Map<?, ?> itemMap) {
+                        String sku = (String) itemMap.get("sku");
+                        int qty = 1;
+                        if (itemMap.get("quantity") != null) {
+                            try {
+                                qty = Integer.parseInt(itemMap.get("quantity").toString());
+                            } catch (Exception ignored) {}
+                        }
+                        String reason = (String) itemMap.get("reason");
+                        if (sku != null && !sku.trim().isEmpty()) {
+                            boolean swapped = partService.swapInPart(
+                                    sku.trim(),
+                                    qty,
+                                    closed.getCycleId(),
+                                    closed.getCustomerName(),
+                                    closed.getCustomerPhone(),
+                                    salesperson,
+                                    reason != null ? reason : ("Thu hồi linh kiện tháo máy nâng cấp chu kỳ " + closed.getCycleId())
+                            );
+                            if (swapped) {
+                                swappedItems.add(sku.trim() + " (x" + qty + ")");
+                            }
+                        }
+                    }
+                }
+                if (!swappedItems.isEmpty()) {
+                    String swapNote = "Thu hồi linh kiện swap: " + String.join(", ", swappedItems);
+                    String curNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
+                    closed.setSaleNote(curNote.isEmpty() ? swapNote : curNote + " | " + swapNote);
+                }
             }
 
             BigDecimal machineNetRevenue = finalPrice.subtract(totalPaidAccessoriesAmount);

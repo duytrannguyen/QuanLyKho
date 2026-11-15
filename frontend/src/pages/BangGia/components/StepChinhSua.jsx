@@ -7,6 +7,7 @@ import { useToast } from '../../../contexts/notification/NguCanhThongBao';
 import { PriceCard } from './PriceCard';
 import {
   DEFAULT_WARRANTY,
+  WARRANTY_OPTIONS,
   PAGE_LAYOUTS,
   getCardSizeMm
 } from './bangGiaConstants';
@@ -182,6 +183,13 @@ export default function StepChinhSua({ items, pageSize, onChangeItem, onBulkUpda
       <div className="card-body p-4">
         {/* Thanh công cụ hàng loạt */}
         <div className="bg-light border rounded p-3 mb-4">
+          <datalist id="banggia-warranty-options">
+            {WARRANTY_OPTIONS.map(opt => (
+              <option key={opt} value={opt} />
+            ))}
+            <option value="Bảo hành 1 đổi 1 trong 30 ngày" />
+            <option value="Bảo hành phần cứng 01 tháng" />
+          </datalist>
           <div className="fw-bold small text-uppercase text-secondary mb-2">Thao tác nhanh cho toàn bộ danh sách:</div>
           <div className="row g-2 align-items-end">
             <div className="col-md-6">
@@ -208,7 +216,7 @@ export default function StepChinhSua({ items, pageSize, onChangeItem, onBulkUpda
 
         <div className="row g-4">
           {/* Danh sách máy */}
-          <div className="col-xl-8">
+          <div className="col-lg-7 col-xl-8">
             {items.map((item, idx) => (
               <EditItemCard
                 key={item.uniqueKey}
@@ -223,7 +231,7 @@ export default function StepChinhSua({ items, pageSize, onChangeItem, onBulkUpda
           </div>
 
           {/* Xem trước trực tiếp */}
-          <div className="col-xl-4">
+          <div className="col-lg-5 col-xl-4">
             <div style={{ position: 'sticky', top: 16 }}>
               <div className="card border">
                 <div className="card-header bg-white d-flex justify-content-between align-items-center">

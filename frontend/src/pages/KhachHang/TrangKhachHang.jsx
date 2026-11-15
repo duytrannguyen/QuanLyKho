@@ -304,7 +304,7 @@ export default function TrangKhachHang() {
           <div className="card-header bg-white border-bottom p-3 px-4">
 
             {/* TẦNG 1: PHỄU TIẾN TRÌNH CSKH (PIPELINE TABS) - Thay thế hoàn toàn dropdown trùng lặp */}
-            <div className="d-flex align-items-center gap-2 overflow-x-auto pb-2 pb-md-0 mb-3 border-bottom border-light flex-wrap">
+            <div className="d-flex align-items-center gap-2 pb-2 pb-md-0 mb-3 border-bottom border-light flex-wrap">
               <span className="text-secondary small fw-bold text-uppercase d-none d-md-inline-block me-1" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
                 Phễu chăm sóc:
               </span>
@@ -494,15 +494,15 @@ export default function TrangKhachHang() {
             <table className="table table-hover table-borderless align-middle mb-0">
               <thead className="table-light border-bottom">
                 <tr>
-                  <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '50px' }}>STT</th>
-                  <th className="py-3 text-secondary fw-semibold">Khách hàng</th>
-                  <th className="py-3 text-secondary fw-semibold">Số điện thoại & Liên hệ</th>
-                  <th className="py-3 text-secondary fw-semibold text-center">Phân hạng</th>
-                  <th className="py-3 text-secondary fw-semibold text-center" style={{ minWidth: '160px' }}>Trạng thái CSKH</th>
-                  <th className="py-3 text-secondary fw-semibold text-center">Tổng đơn</th>
-                  <th className="py-3 text-secondary fw-semibold text-end">Tổng chi tiêu</th>
-                  <th className="py-3 text-secondary fw-semibold text-end">Giao dịch gần nhất</th>
-                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '180px' }}>Thao tác</th>
+                  <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+                  <th className="py-3 text-secondary fw-semibold" style={{ width: '19%' }}>Khách hàng</th>
+                  <th className="py-3 text-secondary fw-semibold" style={{ width: '16%' }}>Số điện thoại & Liên hệ</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Phân hạng</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '13%' }}>Trạng thái CSKH</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '7%' }}>Tổng đơn</th>
+                  <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '11%' }}>Tổng chi tiêu</th>
+                  <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '9%' }}>Giao dịch gần nhất</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '11%' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody className="border-top-0">

@@ -212,14 +212,14 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
           <table className="table table-hover table-borderless align-middle mb-0">
             <thead className="table-light border-bottom">
               <tr>
-                <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '60px' }}>STT</th>
-                <th className="py-3 text-secondary fw-semibold">Mã đơn & Ngày</th>
-                <th className="py-3 text-secondary fw-semibold text-center">Danh mục</th>
-                <th className="py-3 text-secondary fw-semibold">Tên & SĐT tạm trên đơn</th>
-                <th className="py-3 text-secondary fw-semibold" style={{ minWidth: 220 }}>Sản phẩm</th>
-                <th className="py-3 text-secondary fw-semibold text-center">Trạng thái</th>
-                <th className="py-3 text-secondary fw-semibold text-end">Thành tiền</th>
-                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '280px' }}>Thao tác</th>
+                <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '13%' }}>Mã đơn & Ngày</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Danh mục</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '16%' }}>Tên & SĐT tạm trên đơn</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '20%' }}>Sản phẩm</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Trạng thái</th>
+                <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '11%' }}>Thành tiền</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '17%' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody className="border-top-0">

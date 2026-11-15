@@ -25,6 +25,10 @@ export const CLOSE_TYPE_MAP = {
   RETURN: 'Đã trả khách',
   CANCEL: 'Đã hủy',
   TRANSFER: 'Chuyển kho',
+  OTHER: 'Xuất khác',
+  GIFT: 'Xuất tặng',
+  INTERNAL: 'Dùng nội bộ',
+  SUPPLIER_RETURN: 'Trả NCC',
 };
 
 // Helper để format với fallback

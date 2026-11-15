@@ -17,7 +17,7 @@ export default function TabKhachHang({ data }) {
     <div className="fade show active">
       <div className="row g-4 mb-4">
         {/* Card 1: Khách Mới vs Khách Cũ */}
-        <div className="col-12 col-md-4">
+        <div className="col-12 col-lg-4">
           <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
             <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
               <Users className="text-primary" size={22} />
@@ -59,7 +59,7 @@ export default function TabKhachHang({ data }) {
         </div>
 
         {/* Card 2: Học Sinh / Sinh Viên */}
-        <div className="col-12 col-md-4">
+        <div className="col-12 col-lg-4">
           <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
             <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
               <Sparkles className="text-info" size={22} />
@@ -101,7 +101,7 @@ export default function TabKhachHang({ data }) {
         </div>
 
         {/* Card 3: Nguồn Tiếp Cận Lần Đầu */}
-        <div className="col-12 col-md-4">
+        <div className="col-12 col-lg-4">
           <div className="card border-0 shadow-sm rounded-4 h-100 bg-white p-4 d-flex flex-column">
             <h5 className="fw-bold d-flex align-items-center justify-content-center gap-2 mb-3 text-dark text-center">
               <Smartphone className="text-purple" size={22} style={{ color: '#7c3aed' }} />
@@ -110,10 +110,10 @@ export default function TabKhachHang({ data }) {
 
             <div style={{ height: 230, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 10, right: 25, left: 25, bottom: 10 }}>
+                <PieChart margin={{ top: 10, right: 20, left: 20, bottom: 10 }}>
                   <Pie
                     data={data.firstSourceMix || []} dataKey="value" nameKey="name"
-                    cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} stroke="none"
+                    cx="50%" cy="50%" innerRadius={42} outerRadius={62} paddingAngle={2} stroke="none"
                     label={renderPieOuterAgentLabel} labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
                   >
                     {(data.firstSourceMix || []).map((item, i) => (
@@ -125,7 +125,7 @@ export default function TabKhachHang({ data }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-auto pt-3 border-top border-light-subtle" style={{ maxHeight: 220, overflowY: 'auto' }}>
+            <div className="mt-auto pt-3 border-top border-light-subtle">
               {(data.firstSourceMix || []).map((item, idx) => (
                 <div key={idx} className="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-light border border-light-subtle">
                   <div className="d-flex align-items-center gap-2">

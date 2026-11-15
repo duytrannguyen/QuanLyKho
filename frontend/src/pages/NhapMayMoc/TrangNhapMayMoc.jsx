@@ -339,43 +339,43 @@ export default function TrangNhapMayMoc() {
       <div className="row g-4">
         {/* ================= CARD TRÁI: THÔNG TIN MÁY & CẤU HÌNH ================= */}
         <div className="col-xl-8 col-lg-7 col-md-12 mb-4 mb-lg-0">
-          <form className="card shadow-sm border-0 rounded-4 p-4 p-xl-5 h-100 bg-white" onSubmit={tab === 'single' ? handleSubmit : (e) => e.preventDefault()}>
+          <form className="card shadow-sm border-0 rounded-4 p-3 p-md-4 h-100 bg-white" onSubmit={tab === 'single' ? handleSubmit : (e) => e.preventDefault()}>
             
             {/* --- SECTION 1: THÔNG TIN CƠ BẢN --- */}
             <div className="d-flex align-items-center mb-4 pb-2 border-bottom">
               <h5 className="fw-bolder text-primary mb-0">Thông tin nhập kho</h5>
             </div>
 
-            <div className="row g-4 mb-4">
-              <div className="col-md-6">
-                <label className={labelClass}>Serial (Ngăn cách bằng dấu phẩy nếu nhập nhiều máy) <span className="text-danger">*</span></label>
+            <div className="row g-3 g-md-4 mb-4">
+              <div className="col-12 col-sm-6">
+                <label className={labelClass}>Serial <span className="text-muted fw-normal small">(cách nhau bằng dấu phẩy)</span> <span className="text-danger">*</span></label>
                 <div className="input-group">
                   <input className="form-control bg-light" placeholder="Quét mã vạch hoặc nhập nhiều Serial cách nhau dấu phẩy (VD: SN01, SN02)..."
                     value={form.serial} onChange={e => handleChange('serial', e.target.value)} onBlur={handleSerialBlur} />
                   {isLoadingSerial && <span className="input-group-text bg-light"><div className="spinner-border spinner-border-sm text-primary"></div></span>}
                 </div>
               </div>
-              <div className="col-md-6">
+              <div className="col-12 col-sm-6">
                 <label className={labelClass}>Hãng <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Ví dụ: Dell, HP..." list="brand-options"
                   value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
                 <datalist id="brand-options">{filterOptions.brands.map(b => <option key={b} value={b} />)}</datalist>
               </div>
 
-              <div className="col-md-6">
+              <div className="col-12 col-sm-6">
                 <label className={labelClass}>Dòng máy <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Ví dụ: Latitude, Nitro 5..." list="line-options"
                   value={form.productLine} onChange={e => handleChange('productLine', e.target.value)} />
                 <datalist id="line-options">{filterOptions.productLines.map(l => <option key={l} value={l} />)}</datalist>
               </div>
-              <div className="col-md-6">
+              <div className="col-12 col-sm-6">
                 <label className={labelClass}>Model đầy đủ <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Ví dụ: Dell Latitude 7430..." list="model-options"
                   value={form.modelFull} onChange={e => handleChange('modelFull', e.target.value)} />
                 <datalist id="model-options">{filterOptions.models.map(m => <option key={m} value={m} />)}</datalist>
               </div>
 
-              <div className="col-md-4">
+              <div className="col-12 col-sm-4">
                 <label className={labelClass}>Phân khúc</label>
                 <select className="form-select text-dark" value={form.segment} onChange={e => handleChange('segment', e.target.value)}>
                   <option value="">Tự đề xuất theo dòng máy</option>
@@ -385,7 +385,7 @@ export default function TrangNhapMayMoc() {
                   <option value="MacBook">MacBook</option>
                 </select>
               </div>
-              <div className="col-md-4">
+              <div className="col-12 col-sm-4">
                 <label className={labelClass}>Nghiệp vụ <span className="text-danger">*</span></label>
                 <select className="form-select text-dark" value={form.importType} onChange={e => handleChange('importType', e.target.value)}>
                   <option value="PURCHASE">{INTAKE_TYPE_MAP['PURCHASE']}</option>
@@ -394,7 +394,7 @@ export default function TrangNhapMayMoc() {
                   <option value="OPENING_BALANCE">{INTAKE_TYPE_MAP['OPENING_BALANCE']}</option>
                 </select>
               </div>
-              <div className="col-md-4">
+              <div className="col-12 col-sm-4">
                 <label className={labelClass}>Trạng thái <span className="text-danger">*</span></label>
                 <select className="form-select text-dark" value={form.initialStatus} onChange={e => handleChange('initialStatus', e.target.value)}>
                   <option value="READY">{CYCLE_STATE_MAP['READY']}</option>
@@ -488,39 +488,39 @@ export default function TrangNhapMayMoc() {
               <h5 className="fw-bolder text-dark mb-0">Cấu hình chi tiết</h5>
             </div>
 
-            <div className="row g-4 mb-4">
-              <div className="col-12 col-sm-6 col-xl-3">
+            <div className="row g-3 mb-4">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>CPU <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Core i5..." list="cpu-options"
                   value={form.cpu} onChange={e => handleChange('cpu', e.target.value)} />
                 <datalist id="cpu-options">{filterOptions.cpus.map(cpu => <option key={cpu} value={cpu} />)}</datalist>
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>GPU <span className="text-danger">*</span></label>
                 <input className="form-control" placeholder="Intel Iris Xe..." list="gpu-options"
                   value={form.gpu} onChange={e => handleChange('gpu', e.target.value)} />
                 <datalist id="gpu-options">{filterOptions.gpus.map(gpu => <option key={gpu} value={gpu} />)}</datalist>
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>RAM <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.ram} onChange={e => handleChange('ram', e.target.value)}>
                   <option>4GB</option><option>8GB</option><option>16GB</option><option>32GB</option><option>64GB</option>
                 </select>
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>SSD <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.ssd} onChange={e => handleChange('ssd', e.target.value)}>
                   <option>128GB</option><option>256GB</option><option>512GB</option><option>1TB</option><option>2TB</option>
                 </select>
               </div>
 
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>Cảm ứng <span className="text-danger">*</span></label>
                 <select className="form-select" value={form.touchscreen} onChange={e => handleChange('touchscreen', e.target.value)}>
                   <option>Không cảm ứng</option><option>Cảm ứng</option>
                 </select>
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>Màn hình</label>
                 <input className="form-control" placeholder="VD: 14 inch" list="screen-options"
                   value={form.screenSize} onChange={e => handleChange('screenSize', e.target.value)} />
@@ -528,12 +528,12 @@ export default function TrangNhapMayMoc() {
                   {filterOptions.screenSizes.map(size => <option key={size} value={size} />)}
                 </datalist>
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>Giá bán (VND)</label>
                 <input className="form-control text-success fw-bold" placeholder="Bổ sung sau..."
                   value={formatCurrency(form.price)} onChange={e => handleChange('price', parseCurrency(e.target.value))} />
               </div>
-              <div className="col-12 col-sm-6 col-xl-3">
+              <div className="col-12 col-sm-6 col-xxl-3">
                 <label className={labelClass}>Ghi chú</label>
                 <input className="form-control" placeholder="Nếu có..."
                   value={form.notes} onChange={e => handleChange('notes', e.target.value)} />
@@ -567,7 +567,7 @@ export default function TrangNhapMayMoc() {
                 Danh sách xác nhận <span className="badge bg-primary rounded-pill ms-2">{previewGroups.reduce((a, b) => a + b.count, 0)} máy</span>
               </h5>
               
-              <div className="d-flex flex-column gap-3 mb-4 pe-2" style={{ maxHeight: '550px', overflowY: 'auto' }}>
+              <div className="d-flex flex-column gap-3 mb-4">
                 {previewGroups.map((group, idx) => (
                   <div key={idx} className={`p-3 border rounded-3 bg-light shadow-sm position-relative ${group.isUpdate ? 'border-info' : 'border-success'}`}>
                     <div className="fw-bold text-dark fs-6 mb-1">
