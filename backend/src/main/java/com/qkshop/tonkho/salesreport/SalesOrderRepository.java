@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,8 +15,32 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     Optional<SalesOrder> findByTransactionId(String transactionId);
 
+    List<SalesOrder> findByTransactionIdIn(Collection<String> transactionIds);
+
+    List<SalesOrder> findByCrmCustomerId(Long crmCustomerId);
+
     @Query("SELECT s FROM SalesOrder s WHERE s.matchedCycleId = :matchedCycleId AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL) ORDER BY s.id DESC")
     List<SalesOrder> findMachineOrdersByMatchedCycleId(@Param("matchedCycleId") String matchedCycleId);
+
+    @Query("SELECT s FROM SalesOrder s WHERE s.matchedCycleId IN :matchedCycleIds AND (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL) ORDER BY s.id DESC")
+    List<SalesOrder> findMachineOrdersByMatchedCycleIdIn(@Param("matchedCycleIds") Collection<String> matchedCycleIds);
+
+    @Query("""
+        SELECT s FROM SalesOrder s
+        WHERE (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL)
+          AND (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%')
+          AND (
+              LOWER(COALESCE(s.serialKeys, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              OR COALESCE(s.customerPhone, '') LIKE CONCAT('%', :keyword, '%')
+              OR LOWER(COALESCE(s.customerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              OR LOWER(COALESCE(s.transactionId, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          )
+        ORDER BY s.saleDate DESC, s.id DESC
+    """)
+    List<SalesOrder> searchMachineOrders(@Param("keyword") String keyword);
+
+    @Query("SELECT s FROM SalesOrder s WHERE (s.orderCategory = 'MACHINE' OR s.orderCategory IS NULL) AND (s.transactionId IS NULL OR s.transactionId NOT LIKE 'PK-KEM-%') AND s.matchedCycleId IS NULL ORDER BY s.saleDate DESC, s.id DESC")
+    List<SalesOrder> findUnlinkedMachineOrders();
 
     default Optional<SalesOrder> findByMatchedCycleId(String matchedCycleId) {
         return findMachineOrdersByMatchedCycleId(matchedCycleId).stream().findFirst();

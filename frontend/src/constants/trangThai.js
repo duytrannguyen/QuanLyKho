@@ -23,6 +23,7 @@ export const INTAKE_TYPE_MAP = {
 export const CLOSE_TYPE_MAP = {
   SALE: 'Đã bán',
   RETURN: 'Đã trả khách',
+  CUSTOMER_RETURN: 'Khách đổi trả',
   CANCEL: 'Đã hủy',
   TRANSFER: 'Chuyển kho',
   OTHER: 'Xuất khác',

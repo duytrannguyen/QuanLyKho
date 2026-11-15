@@ -1,4 +1,11 @@
 import { formatCurrency, formatDate } from './dinh_dang';
+import logoQK from '../assets/qkshop_logo.png';
+
+const getLogoUrl = () => (
+  logoQK.startsWith('data:') || logoQK.startsWith('http')
+    ? logoQK
+    : `${window.location.origin}${logoQK}`
+);
 
 /**
  * In Phiếu Tiếp Nhận Máy Sửa Chữa & Bảo Hành (RMA)
@@ -55,7 +62,7 @@ export const printIntakeTicket = (order) => {
 <body>
   <div class="header">
     <div>
-      <div class="logo">QKSHOP.VN</div>
+      <div class="logo"><img src="${getLogoUrl()}" alt="QKSHOP.VN" style="height: 32px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
       <div style="font-size: 11px; color: #64748b;">Dịch vụ Tiếp nhận Sửa Chữa & Bảo Hành Laptop</div>
       <div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
     </div>
@@ -195,7 +202,7 @@ export const printPaymentInvoice = (order) => {
 <body>
   <div class="header">
     <div>
-      <div class="logo">QKSHOP.VN</div>
+      <div class="logo"><img src="${getLogoUrl()}" alt="QKSHOP.VN" style="height: 32px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
       <div style="font-size: 11px; color: #64748b;">Hóa Đơn Dịch Vụ Sửa Chữa & Bảo Hành</div>
       <div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
     </div>

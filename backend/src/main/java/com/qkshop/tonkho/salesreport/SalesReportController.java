@@ -24,6 +24,7 @@ public class SalesReportController {
 
     private final SalesReportService salesReportService;
     private final SalesOrderBackfillService backfillService;
+    private final OrderDataSyncService orderDataSyncService;
 
     /**
      * Lấy dữ liệu tổng hợp Dashboard Báo Cáo Bán Hàng theo bộ lọc thời gian.
@@ -63,11 +64,15 @@ public class SalesReportController {
     @PostMapping("/rebuild")
     @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_MANAGE', 'SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildData() {
-        log.info("[SALES_REPORT] Yêu cầu nạp lại toàn bộ dữ liệu đơn hàng sales_orders.");
+        log.info("[SALES_REPORT] Yêu cầu nạp lại và đồng bộ toàn bộ dữ liệu đơn hàng sales_orders.");
         int count = backfillService.backfillAllSales();
+        Map<String, Object> syncSummary = orderDataSyncService.reconcileAllHistoricalData();
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("totalImported", count);
+        result.putAll(syncSummary);
         return ResponseEntity.ok(ApiResponse.okWithMessage(
-                "Đã làm mới và đồng bộ thành công " + count + " đơn hàng vào hệ thống báo cáo.",
-                Map.of("totalImported", count)
+                "Đã làm mới và đồng bộ toàn diện " + count + " đơn hàng vào hệ thống báo cáo.",
+                result
         ));
     }
 }

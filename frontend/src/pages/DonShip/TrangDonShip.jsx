@@ -132,10 +132,10 @@ export default function TrangDonShip() {
     setRestoreAccessories(true);
     setRestoreUpgradeParts(true);
 
-    // Tự động xác định giá gốc niêm yết của máy (bóc tách riêng, không lấy tổng hóa đơn thanh toán cũ)
-    const origPrice = Number(order.defaultSalePrice) > 0 
-      ? Number(order.defaultSalePrice) 
-      : (Number(order.grossRevenue) > 0 ? Number(order.grossRevenue) : Number(order.salePrice));
+    // Tự động xác định giá gốc niêm yết của máy (ưu tiên grossRevenue lúc xuất bán, fallback defaultSalePrice)
+    const origPrice = Number(order.grossRevenue) > 0
+      ? Number(order.grossRevenue)
+      : (Number(order.defaultSalePrice) > 0 ? Number(order.defaultSalePrice) : Number(order.salePrice));
     setReturnSalePrice(origPrice > 0 ? String(origPrice) : '');
   };
 

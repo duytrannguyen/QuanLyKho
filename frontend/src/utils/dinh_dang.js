@@ -205,4 +205,45 @@ export const getItemExpiryStatus = (expiryDate, periodText = '') => {
   return { text: `Còn hạn (${diffDays} ngày)`, badge: 'bg-success bg-opacity-10 text-success border border-success-subtle', icon: ShieldCheck };
 };
 
+/**
+ * Biểu thức chính quy kiểm tra số điện thoại Việt Nam hợp lệ (10 chữ số, bắt đầu bằng 02, 03, 05, 07, 08, 09)
+ */
+export const PHONE_REGEX = /^(0[235789])[0-9]{8}$/;
+
+/**
+ * Chuẩn hóa chuỗi số điện thoại nhập vào (loại bỏ ký tự không phải số, chuyển đầu +84/84/0084 về 0)
+ */
+export const normalizePhoneInput = (rawPhone) => {
+  if (!rawPhone) return '';
+  let digits = String(rawPhone).trim().replace(/\D/g, '');
+  if (digits.startsWith('0084') && digits.length === 13) {
+    digits = '0' + digits.slice(4);
+  } else if (digits.startsWith('84') && digits.length === 11) {
+    digits = '0' + digits.slice(2);
+  } else if (digits.length === 9 && digits.charAt(0) !== '0') {
+    digits = '0' + digits;
+  }
+  return digits;
+};
+
+/**
+ * Kiểm tra số điện thoại có đúng định dạng 10 chữ số chuẩn Việt Nam hay không
+ */
+export const isValidVietnamPhone = (rawPhone) => {
+  const clean = normalizePhoneInput(rawPhone);
+  return PHONE_REGEX.test(clean);
+};
+
+/**
+ * Tạo nhanh thông tin Khách vãng lai với SĐT chuẩn 10 chữ số (0999 + 6 số cuối timestamp)
+ */
+export const taoThongTinKhachVangLai = () => {
+  const timestamp = Date.now().toString().slice(-6);
+  return {
+    customerName: `Khách vãng lai ${timestamp}`,
+    customerPhone: `0999${timestamp}`
+  };
+};
+
+
 

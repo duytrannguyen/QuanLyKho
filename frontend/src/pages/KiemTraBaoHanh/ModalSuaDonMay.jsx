@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Edit3, Save, AlertCircle, Calendar, User, Phone, Laptop, FileText, Truck, Clock, CheckCircle } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { tinhNgayHetHanBaoHanh, getTodayDateString } from '../../utils/dinh_dang';
+import { tinhNgayHetHanBaoHanh, getTodayDateString, normalizePhoneInput, isValidVietnamPhone } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
   const { showToast } = useToast();
@@ -85,6 +85,12 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
       return;
     }
 
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
     if (isShipping && isDelivered && !deliveryDate) {
       showToast('Vui lòng chọn ngày khách nhận hàng', 'warning');
       return;
@@ -94,7 +100,7 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
     try {
       await apiBaoHanh.updateMachineOrder(order.cycleId, {
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerPhone: cleanPhone,
         isShipping,
         isDelivered: isShipping ? isDelivered : true,
         deliveryDate: isShipping ? (isDelivered ? (deliveryDate || null) : null) : null,

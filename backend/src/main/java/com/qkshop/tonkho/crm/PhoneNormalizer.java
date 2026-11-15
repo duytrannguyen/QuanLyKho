@@ -14,16 +14,16 @@ public final class PhoneNormalizer {
         String digits = raw.replaceAll("\\D", "");
         if (digits.isEmpty()) return null;
 
-        if (digits.startsWith("0084")) {
+        if (digits.startsWith("0084") && digits.length() == 13) {
             digits = "0" + digits.substring(4);
         } else if (digits.startsWith("84") && digits.length() == 11) {
             digits = "0" + digits.substring(2);
-        } else if (digits.length() == 9) {
+        } else if (digits.length() == 9 && digits.charAt(0) != '0') {
             // Excel/Sheet thường làm mất số 0 đầu
             digits = "0" + digits;
         }
 
-        if (digits.length() == 10 && digits.charAt(0) == '0') {
+        if (digits.matches("^0[235789]\\d{8}$")) {
             return digits;
         }
         return null;

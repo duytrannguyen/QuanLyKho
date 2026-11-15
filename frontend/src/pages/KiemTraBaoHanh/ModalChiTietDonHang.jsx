@@ -9,6 +9,7 @@ import { apiSuaChua } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { getCleanWarrantyType, formatDate, formatMoney } from '../../utils/dinh_dang';
+import logoQK from '../../assets/qkshop_logo.png';
 
 export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery, onReturnOrder }) {
   const navigate = useNavigate();
@@ -183,7 +184,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
       <body>
         <div class="header">
           <div>
-            <div class="logo">QKSHOP.VN</div>
+            <div class="logo"><img src="${logoQK.startsWith('data:') || logoQK.startsWith('http') ? logoQK : `${window.location.origin}${logoQK}`}" alt="QKSHOP.VN" style="height: 34px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
             <div class="subtitle">Hệ thống Laptop & Linh Kiện Chính Hãng</div>
             <div class="subtitle">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
           </div>
@@ -548,6 +549,29 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                         <span className="text-muted small">Ngày giao dịch:</span>
                         <div className="fw-medium text-dark">{formatDate(order.saleDate)}</div>
                       </div>
+
+                      {(order.customerType || order.lastSource || order.firstSource || order.isStudent) && (
+                        <div className="d-flex justify-content-between align-items-start pb-2 border-bottom gap-2">
+                          <span className="text-muted small">Hồ sơ CRM / Nguồn:</span>
+                          <div className="d-flex flex-wrap justify-content-end gap-1">
+                            {order.customerType && (
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info-subtle">
+                                {order.customerType}
+                              </span>
+                            )}
+                            {(order.lastSource || order.firstSource) && (
+                              <span className="badge bg-light text-dark border">
+                                {order.lastSource || order.firstSource}
+                              </span>
+                            )}
+                            {order.isStudent && (
+                              <span className="badge bg-success bg-opacity-10 text-success border border-success-subtle">
+                                Ưu đãi HSSV
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Vận chuyển & Giao nhận */}
                       <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">

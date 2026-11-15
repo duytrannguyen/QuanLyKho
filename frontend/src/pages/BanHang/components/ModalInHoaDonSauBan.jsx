@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 import { dinhDangTien, formatDate } from '../../../utils/dinh_dang';
+import logoQK from '../../../assets/qkshop_logo.png';
 
 // ======================================================
 // 1. HÀM HỖ TRỢ & CHUẨN HÓA DỮ LIỆU HÓA ĐƠN
@@ -347,7 +348,7 @@ function createPrintHTML(invoice) {
   <body>
     <div class="header">
       <div>
-        <div class="logo">QKSHOP.VN</div>
+        <div class="logo"><img src="${logoQK.startsWith('data:') || logoQK.startsWith('http') ? logoQK : `${window.location.origin}${logoQK}`}" alt="QKSHOP.VN" style="height: 32px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
         <div class="subtitle">Chuyên Laptop Doanh Nhân &amp; Máy Trạm Cao Cấp</div>
         <div class="subtitle">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
       </div>

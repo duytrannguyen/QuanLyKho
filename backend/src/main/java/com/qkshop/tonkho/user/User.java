@@ -37,7 +37,7 @@ public class User {
     private String email;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private UserRole role;
 
     @Column(name = "avatar_url", length = 500)

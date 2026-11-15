@@ -19,7 +19,7 @@ public class AccessoryService {
     private final AccessoryHistoryRepository accessoryHistoryRepository;
     private final AccessoryOrderRepository accessoryOrderRepository;
     private final AccessoryOrderItemRepository accessoryOrderItemRepository;
-    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     public List<Accessory> getAllAccessories(String keyword, String category, String stockFilter) {
@@ -174,6 +174,11 @@ public class AccessoryService {
             customerPhone == null || customerPhone.trim().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng nhập Tên khách hàng và Số điện thoại");
         }
+        String normalizedPhone = com.qkshop.tonkho.crm.PhoneNormalizer.normalize(customerPhone);
+        if (normalizedPhone == null) {
+            throw new IllegalArgumentException("Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)");
+        }
+        customerPhone = normalizedPhone;
 
         String salesperson = (String) payload.get("salesperson");
         String saleNote = (String) payload.get("saleNote");
@@ -326,65 +331,12 @@ public class AccessoryService {
     }
 
     private void syncAccessoryOrderToSalesOrder(AccessoryOrder order) {
-        if (salesOrderRepo == null) return;
+        if (orderDataSyncService == null) return;
         try {
-            LocalDateTime sDate = order.getSaleDate() != null ? order.getSaleDate() : LocalDateTime.now();
-            String txnId = order.getOrderCode();
-
-            String itemsSummary = (order.getItems() != null && !order.getItems().isEmpty())
-                    ? order.getItems().stream()
-                            .map(it -> it.getAccessoryName() + " (x" + it.getQuantity() + ")")
-                            .collect(java.util.stream.Collectors.joining(", "))
-                    : "Phụ kiện";
-
-            com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(txnId)
-                    .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
-                            .transactionId(txnId)
-                            .build());
-
-            so.setSaleDate(sDate);
-            so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
-            so.setCustomerName(order.getCustomerName());
-            so.setCustomerPhone(order.getCustomerPhone());
-            so.setCustomerType("Khách mua phụ kiện");
-            so.setFirstSource("Cửa hàng");
-            so.setLastSource("Cửa hàng");
-            so.setNormalizedSource("Mua tại cửa hàng");
-            so.setInboxType("Đơn mua thẳng");
-            so.setIsStudent(false);
-            if (Boolean.TRUE.equals(order.getIsShipping()) && !Boolean.TRUE.equals(order.getIsDelivered())) {
-                so.setOrderStatus("Chờ giao hàng");
-                so.setIsShipping(true);
-                so.setIsDelivered(false);
-                so.setDeliveryDate(null);
-            } else {
-                so.setOrderStatus("Hoàn tất");
-                so.setIsShipping(order.getIsShipping());
-                so.setIsDelivered(order.getIsDelivered());
-                so.setDeliveryDate(order.getDeliveryDate());
-            }
-            so.setPaymentStatus("Đã thanh toán");
-            so.setProductName("Phụ kiện: " + itemsSummary);
-            so.setBrand("PHỤ KIỆN");
-            so.setSeries("Phụ kiện");
-            so.setSegment("PHU_KIEN");
-            so.setModelName("Phụ kiện");
-            so.setConfigSummary(itemsSummary);
-            so.setGrossRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
-            so.setDiscount(order.getDiscount() != null ? order.getDiscount() : BigDecimal.ZERO);
-            so.setNetRevenue(order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO);
-            so.setNote(order.getSaleNote());
-            so.setSalesperson(order.getSalesperson());
-            so.setOrigin("WEB_APP");
-            so.setOrderCategory("ACCESSORY");
-            if (txnId.startsWith("PK-KEM-")) {
-                String rawCycle = txnId.substring("PK-KEM-".length());
-                so.setMatchedCycleId(rawCycle.startsWith("CYC-") ? rawCycle : "CYC-" + rawCycle);
-            }
-
-            salesOrderRepo.save(so);
+            orderDataSyncService.syncAccessoryOrderToSalesOrder(order, null, true);
         } catch (Exception e) {
-            org.slf4j.LoggerFactory.getLogger(AccessoryService.class).warn("Không thể đồng bộ SalesOrder từ AccessoryOrder: {}", e.getMessage());
+            org.slf4j.LoggerFactory.getLogger(AccessoryService.class)
+                    .warn("Không thể đồng bộ SalesOrder từ AccessoryOrder {}: {}", order.getOrderCode(), e.getMessage());
         }
     }
 

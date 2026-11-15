@@ -7,7 +7,7 @@ import {
 import { crmApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
-import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
+import { dinhDangTien, formatDate, normalizePhoneInput, isValidVietnamPhone, taoThongTinKhachVangLai } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
 import PhanTrang from '../../components/common/PhanTrang';
@@ -72,9 +72,9 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
   const handleAssign = async (orderId) => {
     if (!requirePermission('CRM_MANAGE', showToast, 'Gán đơn hàng chưa xác định vào hồ sơ khách')) return;
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
-      showToast('Vui lòng nhập số điện thoại hợp lệ gồm 10 chữ số (bắt đầu bằng 0)', 'error');
+    const cleanPhone = normalizePhoneInput(phone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
       return;
     }
     try {
@@ -292,8 +292,25 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     <td className="text-center px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
                         <div className="d-flex flex-column gap-2 bg-white p-3 rounded-4 border shadow-sm">
-                          <div className="text-start small fw-bold text-dark mb-1">
-                            Gán SĐT định danh khách hàng:
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="text-start small fw-bold text-dark">
+                              Gán SĐT định danh:
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-light text-primary border rounded-pill py-0 px-2 fw-medium"
+                              style={{ fontSize: '0.7rem' }}
+                              onClick={() => {
+                                const walkIn = taoThongTinKhachVangLai();
+                                setPhone(walkIn.customerPhone);
+                                if (!name.trim() || name.trim().toLowerCase() === 'khách lẻ') {
+                                  setName(walkIn.customerName);
+                                }
+                              }}
+                              title="Tạo nhanh SĐT 10 số chuẩn cho khách vãng lai"
+                            >
+                              + Khách vãng lai
+                            </button>
                           </div>
                           <div className="input-group input-group-sm">
                             <span className="input-group-text bg-light text-secondary"><Phone size={14} /></span>

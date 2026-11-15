@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShoppingBag, PackagePlus, CheckCircle, RotateCcw, User, Phone, Tag, Trash2, ShieldCheck, Printer, Search, Calendar, FileText, Minus, Plus, CreditCard, Info } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { apiPhuKien } from '../../api';
-import { formatCurrency, parseCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, formatDate, getTodayDateString, normalizePhoneInput, isValidVietnamPhone, taoThongTinKhachVangLai } from '../../utils/dinh_dang';
 
 export default function TrangBanPhuKien() {
   const { showToast, confirm } = useToast();
@@ -51,6 +51,12 @@ export default function TrangBanPhuKien() {
       showToast('Vui lòng nhập Thông tin khách hàng và Số điện thoại', 'danger');
       return;
     }
+
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
     
     const isConfirmed = await confirm(`Xác nhận xuất bán ${selectedAccessories.length} mã phụ kiện?`);
     if (!isConfirmed) return;
@@ -60,8 +66,8 @@ export default function TrangBanPhuKien() {
       const res = await apiPhuKien.sellStandalone({
         salesperson,
         saleDate,
-        customerName: customer,
-        customerPhone,
+        customerName: customer.trim(),
+        customerPhone: cleanPhone,
         saleNote,
         discount: discountNum,
         totalAmount: totalValue,
@@ -373,9 +379,9 @@ export default function TrangBanPhuKien() {
                 type="button" 
                 className="btn btn-sm btn-outline-primary py-1 px-3 rounded-pill fw-semibold"
                 onClick={() => {
-                  const timestamp = Date.now().toString().slice(-6);
-                  setCustomer(`Khách lẻ`);
-                  setCustomerPhone(`09${timestamp}`);
+                  const walkIn = taoThongTinKhachVangLai();
+                  setCustomer(walkIn.customerName);
+                  setCustomerPhone(walkIn.customerPhone);
                 }}
               >
                 + Điền Khách vãng lai

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Check, ChevronRight } from 'lucide-react';
-import logoQK from '../../../assets/qkshop_logo.jpg';
+import logoQK from '../../../assets/qkshop_logo.png';
 import {
   DEFAULT_WARRANTY,
   POLICY_LINES,
@@ -29,15 +29,15 @@ export function PriceCard({ item }) {
       margin: 0,
       boxSizing: 'border-box'
     }}>
-      <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-        <img src={logoQK} alt="QK Shop" style={{ height: '70px', maxWidth: '100%', objectFit: 'contain', marginTop: '-17px' }} />
+      <div style={{ textAlign: 'center', marginBottom: '6px', flexShrink: 0 }}>
+        <img src={logoQK} alt="QK Shop" style={{ height: '30px', maxWidth: '100%', objectFit: 'contain', display: 'inline-block' }} />
       </div>
 
       <div style={{
         background: '#000', color: '#fff', textAlign: 'center',
         fontWeight: 900, fontSize: '15px', lineHeight: 1.3,
         padding: '6px 8px', width: '100%', boxSizing: 'border-box',
-        wordWrap: 'break-word', flexShrink: 0, marginTop: '-20px'
+        wordWrap: 'break-word', flexShrink: 0
       }}>
         {modelTitle}
       </div>

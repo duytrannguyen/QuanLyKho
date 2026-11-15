@@ -8,7 +8,8 @@ import {
   ROUTE_PERMISSION_MAP, 
   PERMISSION_LABELS, 
   PERMISSION_DEPENDENCIES, 
-  CRITICAL_PERMISSIONS 
+  CRITICAL_PERMISSIONS,
+  useAuth
 } from '../../contexts/NguCanhXacThuc';
 
 // Định nghĩa preset quyền mặc định cho từng vai trò hệ thống
@@ -19,7 +20,7 @@ const ROLE_PRESETS = {
     'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'MACHINE_DELETE', 'INSPECTION',
     'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
     'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
-    'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE', 'SYSTEM_MANAGE'
+    'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE', 'SYSTEM_MANAGE'
   ],
   MANAGER: [
     'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
@@ -27,13 +28,13 @@ const ROLE_PRESETS = {
     'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'IMPORT_MACHINE', 'MACHINE_UPDATE', 'MACHINE_EXPORT_OTHER', 'INSPECTION',
     'IMPORT_ACCESSORY', 'INVENTORY_ACCESSORY', 'ACCESSORY_MANAGE', 'ACCESSORY_HISTORY', 'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
     'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
-    'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE'
+    'LOGS_VIEW', 'EXPORT_DATA', 'USER_MANAGE'
   ],
   STAFF: [
     'DASHBOARD_VIEW', 'SALES_REPORT_VIEW',
     'SALE_MACHINE', 'SALE_ACCESSORY', 'SHIP_MANAGE', 'PRICING_VIEW',
     'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART', 'INSPECTION',
-    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE', 'SYNC_VIEW'
+    'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW', 'CRM_VIEW', 'CRM_CARE'
   ]
 };
 
@@ -42,7 +43,7 @@ const JOB_TEMPLATES = [
   {
     id: 'STORE_MANAGER',
     label: 'Cửa hàng trưởng / Quản lý',
-    desc: 'Điều hành toàn bộ hoạt động kho bãi, bán hàng, sửa chữa, CRM & đối soát (trừ bảo trì máy chủ & xóa vĩnh viễn serial)',
+    desc: 'Điều hành toàn bộ hoạt động kho bãi, bán hàng, sửa chữa & CRM (trừ bảo trì máy chủ & xóa vĩnh viễn serial)',
     badgeColor: 'bg-primary',
     permissions: [
       'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
@@ -52,7 +53,7 @@ const JOB_TEMPLATES = [
       'IMPORT_PART', 'INVENTORY_PART', 'PART_MANAGE',
       'WARRANTY_CHECK', 'SERVICE_REPAIR', 'SERVICE_VIEW',
       'CRM_VIEW', 'CRM_CARE', 'CRM_MANAGE',
-      'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA'
+      'LOGS_VIEW', 'EXPORT_DATA'
     ]
   },
   {
@@ -100,13 +101,13 @@ const JOB_TEMPLATES = [
   {
     id: 'ACCOUNTANT_SYNC',
     label: 'Kế toán & Đối soát số liệu',
-    desc: 'Xem báo cáo doanh số, thống kê, sửa/hoàn đơn, đối soát Google Sheets & xuất Excel dữ liệu',
+    desc: 'Xem báo cáo doanh số, thống kê, sửa/hoàn đơn & xuất Excel dữ liệu nội bộ',
     badgeColor: 'bg-dark',
     permissions: [
       'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
       'SHIP_MANAGE', 'ORDER_EDIT', 'ORDER_RETURN',
       'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES', 'ACCESSORY_HISTORY',
-      'CRM_VIEW', 'SYNC_VIEW', 'SYNC_MANAGE', 'LOGS_VIEW', 'EXPORT_DATA'
+      'CRM_VIEW', 'LOGS_VIEW', 'EXPORT_DATA'
     ]
   },
   {
@@ -118,7 +119,7 @@ const JOB_TEMPLATES = [
       'DASHBOARD_VIEW', 'SALES_REPORT_VIEW', 'ANALYTICS_VIEW',
       'PRICING_VIEW', 'SEARCH_INVENTORY', 'MANAGE_MACHINE_CODES',
       'INVENTORY_ACCESSORY', 'ACCESSORY_HISTORY', 'INVENTORY_PART',
-      'WARRANTY_CHECK', 'SERVICE_VIEW', 'CRM_VIEW', 'SYNC_VIEW'
+      'WARRANTY_CHECK', 'SERVICE_VIEW', 'CRM_VIEW'
     ]
   }
 ];
@@ -131,6 +132,7 @@ export default function ModalNguoiDung({
   availablePermissions, 
   showToast 
 }) {
+  const { isSuperAdmin, isAdmin } = useAuth();
   const isEdit = Boolean(editingUser);
 
   const [formData, setFormData] = useState({
@@ -149,12 +151,15 @@ export default function ModalNguoiDung({
   const [permTypeFilter, setPermTypeFilter] = useState('ALL'); // 'ALL', 'VIEW', 'ACTION', 'SELECTED', 'UNSELECTED'
   const [showUiPreview, setShowUiPreview] = useState(true);
 
-  const isAdminRoot = isEdit && editingUser?.username === 'admin';
+  const isAdminRoot = isEdit && (editingUser?.username === 'admin' || editingUser?.role === 'SUPERADMIN');
 
   // Lọc và nhóm các quyền theo Group + Type + Search
   const groupedPermissions = useMemo(() => {
     const q = (permSearchTerm || '').trim().toLowerCase();
     const filtered = (availablePermissions || []).filter(p => {
+      // Quyền SUPERADMIN chỉ dành riêng cho tài khoản admin gốc, không hiển thị để cấp cho bất kỳ ai khác
+      if (p.code === 'SUPERADMIN') return false;
+
       const isCritical = Boolean(p.critical || CRITICAL_PERMISSIONS.has(p.code));
       if (permTypeFilter === 'VIEW' && p.type !== 'VIEW') return false;
       if (permTypeFilter === 'ACTION' && p.type !== 'ACTION') return false;
@@ -196,16 +201,17 @@ export default function ModalNguoiDung({
     if (!show) return;
 
     if (editingUser) {
+      const isRoot = editingUser.username === 'admin' || editingUser.role === 'SUPERADMIN';
       setFormData({
         username: editingUser.username || '',
         password: '',
         fullName: editingUser.fullName || '',
         email: editingUser.email || '',
-        role: editingUser.role || 'STAFF',
+        role: isRoot ? 'SUPERADMIN' : (editingUser.role || 'STAFF'),
         isActive: editingUser.isActive !== false,
       });
 
-      if (editingUser.role === 'ADMIN') {
+      if (isRoot || editingUser.role === 'ADMIN') {
         const allCodes = (availablePermissions || []).map(p => p.code);
         setSelectedPermissions(new Set(allCodes));
       } else if (editingUser.permissions && Array.isArray(editingUser.permissions)) {
@@ -230,6 +236,13 @@ export default function ModalNguoiDung({
   }, [show, editingUser, availablePermissions]);
 
   if (!show) return null;
+  if (!isSuperAdmin && !isAdmin) {
+    return null;
+  }
+  // Admin thường không thể can thiệp vào tài khoản admin gốc
+  if (isAdminRoot && !isSuperAdmin) {
+    return null;
+  }
 
   // Xử lý thay đổi input cơ bản
   const handleInputChange = (field, value) => {
@@ -353,7 +366,9 @@ export default function ModalNguoiDung({
 
   // Thao tác nhanh toàn cục
   const selectAllPermissions = () => {
-    const all = (availablePermissions || []).map(p => p.code);
+    const all = (availablePermissions || [])
+      .filter(p => p.code !== 'SUPERADMIN')
+      .map(p => p.code);
     setSelectedPermissions(new Set(all));
   };
 
@@ -419,9 +434,9 @@ export default function ModalNguoiDung({
       const payload = {
         fullName: formData.fullName.trim(),
         email: formData.email.trim() || null,
-        role: formData.role,
-        isActive: formData.isActive,
-        permissions: Array.from(selectedPermissions),
+        role: isAdminRoot ? 'SUPERADMIN' : formData.role,
+        isActive: isAdminRoot ? true : formData.isActive,
+        permissions: Array.from(selectedPermissions).filter(p => p !== 'SUPERADMIN'),
       };
 
       if (!isEdit) {
@@ -602,18 +617,33 @@ export default function ModalNguoiDung({
                       </label>
                       <select 
                         className="form-select"
-                        value={formData.role}
-                        disabled={isEdit && editingUser?.username === 'admin'}
+                        value={isAdminRoot ? 'SUPERADMIN' : formData.role}
+                        disabled={isAdminRoot || (!isSuperAdmin && editingUser?.role === 'ADMIN')}
                         onChange={e => handleInputChange('role', e.target.value)}
                       >
-                        <option value="ADMIN">ADMIN - Quản trị viên (Toàn quyền hệ thống)</option>
-                        <option value="MANAGER">MANAGER - Quản lý (Điều hành, Kho & Bán hàng)</option>
-                        <option value="STAFF">STAFF - Nhân viên (Bán hàng, Kiểm tra & Tra cứu)</option>
+                        {isAdminRoot ? (
+                          <option value="SUPERADMIN">👑 SUPERADMIN - Quản trị tối cao (Tài khoản gốc)</option>
+                        ) : isSuperAdmin ? (
+                          <>
+                            <option value="ADMIN">ADMIN - Quản trị viên</option>
+                            <option value="MANAGER">MANAGER - Quản lý</option>
+                            <option value="STAFF">STAFF - Nhân viên</option>
+                          </>
+                        ) : (
+                          <>
+                            {editingUser?.role === 'ADMIN' && (
+                              <option value="ADMIN">ADMIN - Quản trị viên (Hiện tại)</option>
+                            )}
+                            <option value="MANAGER">MANAGER - Quản lý</option>
+                            <option value="STAFF">STAFF - Nhân viên</option>
+                          </>
+                        )}
                       </select>
                       <div className="form-text small text-muted mt-2">
-                        {formData.role === 'ADMIN' && '👑 Quản trị viên: Có toàn bộ quyền hạn, cấu hình hệ thống và quản lý tài khoản.'}
-                        {formData.role === 'MANAGER' && '⭐ Quản lý: Có quyền quản lý kho, nhập/xuất, đối soát và báo cáo phân tích.'}
-                        {formData.role === 'STAFF' && '👤 Nhân viên: Tập trung thao tác bán hàng, kiểm định và tra cứu thông tin.'}
+                        {isAdminRoot && '👑 Quản trị tối cao (Superadmin): Tài khoản admin gốc duy nhất nắm toàn bộ quyền lực, tạo và phân quyền cho mọi tài khoản khác.'}
+                        {!isAdminRoot && formData.role === 'ADMIN' && '⭐ Quản trị viên (Admin): Có quyền tạo tài khoản nhân viên, phân quyền hạn và đổi mật khẩu.'}
+                        {!isAdminRoot && formData.role === 'MANAGER' && '⭐ Quản lý: Có quyền quản lý kho, nhập/xuất, đối soát và báo cáo phân tích.'}
+                        {!isAdminRoot && formData.role === 'STAFF' && '👤 Nhân viên: Tập trung thao tác bán hàng, kiểm định và tra cứu thông tin.'}
                       </div>
                     </div>
 
@@ -627,23 +657,28 @@ export default function ModalNguoiDung({
                           type="checkbox" 
                           role="switch" 
                           id="statusSwitch"
-                          checked={formData.isActive}
-                          disabled={isEdit && editingUser?.username === 'admin'}
+                          checked={isAdminRoot ? true : formData.isActive}
+                          disabled={isAdminRoot || !isSuperAdmin}
                           onChange={e => handleInputChange('isActive', e.target.checked)}
-                          style={{ width: '40px', height: '22px', cursor: 'pointer' }}
+                          style={{ width: '40px', height: '22px', cursor: (isAdminRoot || !isSuperAdmin) ? 'not-allowed' : 'pointer' }}
                         />
-                        <label className="form-check-label fw-semibold" htmlFor="statusSwitch" style={{ cursor: 'pointer' }}>
-                          {formData.isActive ? (
+                        <label className="form-check-label fw-semibold" htmlFor="statusSwitch" style={{ cursor: (isAdminRoot || !isSuperAdmin) ? 'not-allowed' : 'pointer' }}>
+                          {(isAdminRoot ? true : formData.isActive) ? (
                             <span className="text-success">Đang kích hoạt (Cho phép đăng nhập)</span>
                           ) : (
                             <span className="text-danger">Đã khóa (Chặn đăng nhập)</span>
                           )}
                         </label>
                       </div>
-                      {isEdit && editingUser?.username === 'admin' && (
+                      {isAdminRoot && (
                         <div className="form-text small text-warning mt-1">
                           <AlertTriangle size={14} className="me-1 d-inline" />
-                          Không thể khóa hoặc hạ quyền tài khoản admin gốc.
+                          Không thể khóa hoặc hạ quyền tài khoản Quản trị tối cao.
+                        </div>
+                      )}
+                      {!isAdminRoot && !isSuperAdmin && (
+                        <div className="form-text small text-muted mt-1">
+                          🔒 Chỉ tài khoản Quản trị tối cao (Superadmin) mới có quyền khóa hoặc mở khóa tài khoản người dùng.
                         </div>
                       )}
                     </div>

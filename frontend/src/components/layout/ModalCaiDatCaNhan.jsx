@@ -189,7 +189,8 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
 
   const selectedBg = AVATAR_COLORS.find(c => c.id === profileData.avatarColor)?.bg || AVATAR_COLORS[0].bg;
 
-  const isAdmin = (user.role || '').toUpperCase() === 'ADMIN' || (user.role || '').includes('Admin');
+  const isSuperAdmin = (user.username || '').toLowerCase() === 'admin' || (user.role || '').toUpperCase() === 'SUPERADMIN';
+  const isAdmin = isSuperAdmin || (user.role || '').toUpperCase() === 'ADMIN' || (user.role || '').includes('Admin');
   const userPermCount = isAdmin ? permissionsList.length : (user.permissions ? user.permissions.length : 0);
 
   return (
@@ -215,7 +216,13 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
                   Cài đặt & Hồ sơ cá nhân
                 </h5>
                 <p className="text-white-50 m-0" style={{ fontSize: '0.8rem' }}>
-                  Tài khoản: <strong className="text-white">{user.username}</strong> · Vai trò: <span className="badge bg-primary-subtle text-primary border">{user.role}</span>
+                  Tài khoản: <strong className="text-white">{user.username}</strong> · Vai trò: {isSuperAdmin ? (
+                    <span className="badge bg-warning text-dark border border-warning shadow-sm fw-bold">👑 SUPERADMIN</span>
+                  ) : user.role === 'ADMIN' ? (
+                    <span className="badge bg-primary text-white border shadow-xs fw-semibold">⭐ ADMIN</span>
+                  ) : (
+                    <span className="badge bg-primary-subtle text-primary border">{user.role}</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -294,9 +301,19 @@ export default function ModalCaiDatCaNhan({ show, onClose, initialTab = 'profile
                         Vai trò hệ thống
                       </label>
                       <div>
-                        <span className="badge bg-primary px-3 py-2 rounded-pill fs-6">
-                          {user.role}
-                        </span>
+                        {isSuperAdmin ? (
+                          <span className="badge bg-warning text-dark border border-warning px-3 py-2 rounded-pill fs-6 fw-bold shadow-sm">
+                            👑 SUPERADMIN (Quản trị tối cao)
+                          </span>
+                        ) : user.role === 'ADMIN' ? (
+                          <span className="badge bg-primary text-white px-3 py-2 rounded-pill fs-6 fw-semibold shadow-xs">
+                            ⭐ ADMIN (Quản trị viên)
+                          </span>
+                        ) : (
+                          <span className="badge bg-primary-subtle text-primary border px-3 py-2 rounded-pill fs-6">
+                            {user.role}
+                          </span>
+                        )}
                       </div>
                     </div>
 

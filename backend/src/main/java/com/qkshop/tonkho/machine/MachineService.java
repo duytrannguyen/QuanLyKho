@@ -57,6 +57,7 @@ public class MachineService {
     private final CatalogService catalogService;
     private final com.qkshop.tonkho.catalog.BrandRepository brandRepository;
     private final com.qkshop.tonkho.log.EventLogRepository eventLogRepository;
+    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
     private final PlatformTransactionManager transactionManager;
     @Lazy
     private final com.qkshop.tonkho.intake.IntakeService intakeService;
@@ -131,13 +132,38 @@ public class MachineService {
                     : closedCycleRepository.findAllWithHierarchy();
         }
 
-        // Batch-fetch SerialRegistry một lần duy nhất thay vì N+1 query trên từng dòng
+        // Batch-fetch SerialRegistry & SalesOrder một lần duy nhất thay vì N+1 query trên từng dòng
         Set<String> allSerialKeys = new HashSet<>();
+        Set<String> closedCycleIds = new HashSet<>();
+        Set<String> closedSourceRefs = new HashSet<>();
         for (ActiveInventory ai : actives) {
             if (ai.getSerialKey() != null) allSerialKeys.add(ai.getSerialKey());
         }
         for (ClosedCycle cc : closeds) {
             if (cc.getSerialKey() != null) allSerialKeys.add(cc.getSerialKey());
+            if (cc.getCycleId() != null) closedCycleIds.add(cc.getCycleId());
+            if (cc.getSourceReference() != null && !cc.getSourceReference().isBlank()) {
+                closedSourceRefs.add(cc.getSourceReference());
+            }
+        }
+
+        Map<String, com.qkshop.tonkho.salesreport.SalesOrder> salesOrderByKey = new HashMap<>();
+        if (salesOrderRepository != null) {
+            if (!closedCycleIds.isEmpty()) {
+                salesOrderRepository.findMachineOrdersByMatchedCycleIdIn(closedCycleIds).forEach(so -> {
+                    if (so.getMatchedCycleId() != null) {
+                        salesOrderByKey.putIfAbsent("CYC:" + so.getMatchedCycleId(), so);
+                    }
+                });
+            }
+            if (!closedSourceRefs.isEmpty()) {
+                salesOrderRepository.findByTransactionIdIn(closedSourceRefs).forEach(so -> {
+                    if (so.getTransactionId() != null
+                            && (so.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(so.getOrderCategory()))) {
+                        salesOrderByKey.putIfAbsent("TXN:" + so.getTransactionId(), so);
+                    }
+                });
+            }
         }
 
         Map<String, SerialRegistry> srMap = allSerialKeys.isEmpty()
@@ -227,6 +253,43 @@ public class MachineService {
                 }
             }
 
+            com.qkshop.tonkho.salesreport.SalesOrder linkedSo = salesOrderByKey.get("CYC:" + cc.getCycleId());
+            if (linkedSo == null && cc.getSourceReference() != null) {
+                linkedSo = salesOrderByKey.get("TXN:" + cc.getSourceReference());
+            }
+
+            String customerName = (cc.getCustomerName() != null && !cc.getCustomerName().isBlank())
+                    ? cc.getCustomerName()
+                    : (linkedSo != null ? linkedSo.getCustomerName() : null);
+            String customerPhone = (cc.getCustomerPhone() != null && !cc.getCustomerPhone().isBlank())
+                    ? cc.getCustomerPhone()
+                    : (linkedSo != null ? linkedSo.getCustomerPhone() : null);
+            LocalDateTime saleDate = cc.getSaleDate() != null ? cc.getSaleDate()
+                    : (linkedSo != null && linkedSo.getSaleDate() != null ? linkedSo.getSaleDate() : cc.getClosedAt());
+            BigDecimal netPrice = cc.getSalePriceSnapshot() != null ? cc.getSalePriceSnapshot()
+                    : (linkedSo != null ? linkedSo.getNetRevenue() : null);
+            BigDecimal grossRev = cc.getGrossRevenue() != null ? cc.getGrossRevenue()
+                    : (linkedSo != null ? linkedSo.getGrossRevenue() : null);
+            BigDecimal disc = cc.getDiscount() != null ? cc.getDiscount()
+                    : (linkedSo != null ? linkedSo.getDiscount() : null);
+            String payStatus = (cc.getPaymentStatus() != null && !cc.getPaymentStatus().isBlank())
+                    ? cc.getPaymentStatus()
+                    : (linkedSo != null ? linkedSo.getPaymentStatus() : null);
+            String prodFull = (cc.getProductFullName() != null && !cc.getProductFullName().isBlank())
+                    ? cc.getProductFullName()
+                    : (linkedSo != null ? linkedSo.getProductName() : null);
+            String prodSum = (cc.getProductSummary() != null && !cc.getProductSummary().isBlank())
+                    ? cc.getProductSummary()
+                    : (linkedSo != null ? linkedSo.getConfigSummary() : null);
+            String salesperson = (linkedSo != null && linkedSo.getSalesperson() != null && !linkedSo.getSalesperson().isBlank())
+                    ? linkedSo.getSalesperson()
+                    : cc.getClosedBy();
+            String warrantyPeriod = (cc.getWarrantyPeriod() != null && !cc.getWarrantyPeriod().isBlank())
+                    ? cc.getWarrantyPeriod()
+                    : (linkedSo != null ? linkedSo.getWarrantyPeriod() : null);
+            java.time.LocalDate warrantyExpiry = cc.getWarrantyExpiry() != null ? cc.getWarrantyExpiry()
+                    : (linkedSo != null ? linkedSo.getWarrantyExpiry() : null);
+
             combined.add(ClosedCycleDTO.builder()
                     .cycleId(cc.getCycleId())
                     .serialKey(cc.getSerialKey())
@@ -237,14 +300,23 @@ public class MachineService {
                     .closeType(cc.getCloseType() != null ? cc.getCloseType().name() : null)
                     .intakeAt(cc.getIntakeAt())
                     .closedAt(cc.getClosedAt())
-                    .salePriceSnapshot(cc.getSalePriceSnapshot())
-                    .customerName(cc.getCustomerName())
-                    .note(cc.getSaleNote() != null ? cc.getSaleNote() : cc.getCloseReason())
-                    .sourceReference(cc.getSourceReference())
+                    .saleDate(saleDate)
+                    .grossRevenue(grossRev)
+                    .discount(disc)
+                    .salePriceSnapshot(netPrice)
+                    .paymentStatus(payStatus)
+                    .customerName(customerName)
+                    .customerPhone(customerPhone)
+                    .productFullName(prodFull)
+                    .productSummary(prodSum)
+                    .upgradeNote(cc.getUpgradeNote())
+                    .note(cc.getSaleNote() != null ? cc.getSaleNote() : (cc.getCloseReason() != null ? cc.getCloseReason() : (linkedSo != null ? linkedSo.getNote() : null)))
+                    .sourceReference(cc.getSourceReference() != null ? cc.getSourceReference() : (linkedSo != null ? linkedSo.getTransactionId() : null))
                     .closeReason(cc.getCloseReason())
                     .closedBy(cc.getClosedBy())
-                    .warrantyPeriod(cc.getWarrantyPeriod())
-                    .warrantyExpiry(cc.getWarrantyExpiry())
+                    .salesperson(salesperson)
+                    .warrantyPeriod(warrantyPeriod)
+                    .warrantyExpiry(warrantyExpiry)
                     .isShipping(cc.getIsShipping())
                     .isDelivered(cc.getIsDelivered())
                     .deliveryDate(cc.getDeliveryDate())
@@ -277,9 +349,13 @@ public class MachineService {
                     String q = query.trim().toLowerCase();
                     boolean match = (dto.getSerialKey() != null && dto.getSerialKey().toLowerCase().contains(q))
                             || (dto.getSourceModelText() != null && dto.getSourceModelText().toLowerCase().contains(q))
+                            || (dto.getProductFullName() != null && dto.getProductFullName().toLowerCase().contains(q))
                             || (dto.getConfigId() != null && dto.getConfigId().toLowerCase().contains(q))
                             || (dto.getConfigDisplayName() != null && dto.getConfigDisplayName().toLowerCase().contains(q))
-                            || (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(q));
+                            || (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(q))
+                            || (dto.getCustomerName() != null && dto.getCustomerName().toLowerCase().contains(q))
+                            || (dto.getCustomerPhone() != null && dto.getCustomerPhone().toLowerCase().contains(q))
+                            || (dto.getSourceReference() != null && dto.getSourceReference().toLowerCase().contains(q));
                     if (!match) return false;
                 }
                 if (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) {

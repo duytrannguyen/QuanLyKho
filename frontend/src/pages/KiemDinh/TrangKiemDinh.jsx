@@ -1,5 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import {
+  Search,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Save,
+  Clock,
+  Cpu,
+  AlertTriangle,
+  FileText,
+  Info,
+  ClipboardCheck,
+  Database,
+  X
+} from 'lucide-react';
 import { apiKiemDinh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { formatInspectionStatus } from '../../constants/trangThai';
@@ -137,216 +151,428 @@ export default function TrangKiemDinh() {
     }
   };
 
+  const totalPages = Math.ceil(filteredInspections.length / pageSize);
+  const isEditable = activeItem && activeItem.status !== 'PASSED' && activeItem.status !== 'REJECTED_RETURNED';
+
   return (
     <div className="container-fluid p-0">
-      
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+      {/* HEADER TRANG */}
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
         <div>
-          <h2 className="fw-bold m-0 text-dark">Kiểm định chất lượng máy (QC)</h2>
-          <p className="text-secondary m-0">Quét mã Serial hoặc tìm kiếm máy đang chờ kiểm tra kỹ thuật</p>
+          <h3 className="fw-bold m-0 text-dark d-flex align-items-center gap-2">
+            <ClipboardCheck size={24} className="text-primary" />
+            <span>Kiểm định chất lượng máy (QC)</span>
+          </h3>
+          <p className="text-secondary small m-0 mt-1">
+            Quét mã Serial hoặc tìm kiếm máy đang chờ kiểm tra kỹ thuật
+          </p>
         </div>
-        <button className="btn btn-outline-primary d-flex align-items-center gap-2" onClick={fetchInspections}>
-          <RefreshCw size={16} /> Làm mới danh sách
+        <button
+          className="btn btn-white bg-white border shadow-sm fw-medium text-dark d-flex align-items-center gap-2 px-3 py-2"
+          onClick={fetchInspections}
+        >
+          <RefreshCw size={16} className="text-primary" />
+          <span>Làm mới danh sách</span>
         </button>
       </div>
 
-      <div className="row g-3 align-items-center mb-4">
-        <div className="col-md-5 col-lg-4">
-          <div className="input-group shadow-sm">
-            <span className="input-group-text bg-white border-end-0 text-secondary">
-              <Search size={18} />
-            </span>
-            <input
-              type="text"
-              className="form-control border-start-0"
-              placeholder="Quét mã vạch hoặc nhập Serial, Tên máy, Mã phiếu..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="btn btn-outline-secondary border-start-0" type="button" onClick={() => setSearchQuery('')}>
-                Xóa
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="col-md-7 col-lg-8">
-          <ul className="nav nav-pills gap-2 flex-wrap">
-            {['ĐANG MỞ', 'ĐANG XỬ LÝ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => {
-              const count = tabCounts[tab] || 0;
-              return (
-                <li className="nav-item" key={tab}>
-                  <button
-                    className={`nav-link fw-medium border d-flex align-items-center gap-2 ${activeTab === tab ? 'active bg-primary border-primary' : 'bg-white text-secondary border-secondary-subtle'}`}
-                    onClick={() => setActiveTab(tab)}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    <span>{tab}</span>
-                    <span className={`badge rounded-pill ${activeTab === tab ? 'bg-white text-primary' : 'bg-light text-dark'}`}>
-                      {count}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </div>
-
-      <div className="mb-3 fw-medium text-secondary small">Hiển thị {filteredInspections.length} kết quả</div>
-
-      <div className="row g-4 align-items-start">
-        {/* CỘT TRÁI: BẢNG DỮ LIỆU */}
-        <div className="col-xl-8 col-lg-7 col-md-12 mb-4 mb-lg-0">
-          <div className="card shadow-sm border-0">
-            <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead className="table-light text-secondary small">
-                  <tr>
-                    <th style={{ width: '6%' }} className="text-center">STT</th>
-                    <th style={{ width: '16%' }}>Serial</th>
-                    <th style={{ width: '24%' }}>Tên máy</th>
-                    <th style={{ width: '22%' }}>Cấu hình</th>
-                    <th style={{ width: '18%' }}>Loại yêu cầu</th>
-                    <th style={{ width: '14%' }}>Thời gian (Tồn/Chờ)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInspections.slice(page * pageSize, (page + 1) * pageSize).map((item, index) => (
-                    <tr
-                      key={item.id}
-                      onClick={() => setActiveItem(item)}
-                      className={activeItem?.id === item.id ? 'table-primary' : ''}
-                      style={{ cursor: 'pointer' }}
+      {/* THANH CÔNG CỤ: TAB TRẠNG THÁI & TÌM KIẾM */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-body p-3">
+          {/* Hàng 1: Danh sách Tab trạng thái */}
+          <div className="border-bottom pb-3 mb-3">
+            <ul className="nav nav-pills gap-2 flex-wrap">
+              {['ĐANG MỞ', 'ĐANG XỬ LÝ', 'YÊU CẦU KIỂM TRA LẠI', 'ĐẠT', 'HỦY/TRẢ', 'TẤT CẢ'].map(tab => {
+                const count = tabCounts[tab] || 0;
+                const isActive = activeTab === tab;
+                return (
+                  <li className="nav-item" key={tab}>
+                    <button
+                      type="button"
+                      className={`nav-link btn-sm fw-semibold d-flex align-items-center gap-2 px-3 py-2 rounded-3 transition-all ${
+                        isActive
+                          ? 'active bg-primary text-white shadow-sm'
+                          : 'bg-light text-secondary border border-light-subtle'
+                      }`}
+                      onClick={() => setActiveTab(tab)}
+                      style={{ whiteSpace: 'nowrap' }}
                     >
-                      <td className="text-center">{page * pageSize + index + 1}</td>
-                      <td className="text-nowrap"><strong className="text-dark font-monospace small">{item.serial}</strong></td>
-                      <td className="fw-medium text-dark" title={item.name}>{item.name}</td>
-                      <td className="small text-secondary" title={item.config}>{item.config}</td>
-                      <td className="small">{item.type}</td>
-                      <td className="text-nowrap">
-                        <div className="small"><span className="text-secondary">Tồn:</span> {item.inventoryDays}</div>
-                        <div className="small"><span className="text-secondary">Chờ:</span> <span className="text-danger fw-medium">{item.waitDays}</span></div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredInspections.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center p-4 text-secondary">
-                        Không có dữ liệu
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      <span>{tab}</span>
+                      <span
+                        className={`badge rounded-pill ${
+                          isActive ? 'bg-white text-primary' : 'bg-white text-dark border'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* Hàng 2: Ô tìm kiếm & Bộ đếm kết quả */}
+          <div className="row g-3 align-items-center justify-content-between">
+            <div className="col-md-7 col-lg-6">
+              <div className="input-group">
+                <span className="input-group-text bg-light border-end-0 text-secondary">
+                  <Search size={18} />
+                </span>
+                <input
+                  type="text"
+                  className="form-control bg-light border-start-0 ps-0"
+                  placeholder="Quét mã vạch hoặc nhập Serial, Tên máy, Mã phiếu..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    className="btn btn-light border border-start-0 text-secondary d-flex align-items-center gap-1"
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X size={14} />
+                    <span>Xóa</span>
+                  </button>
+                )}
+              </div>
             </div>
-            
-            <div className="d-flex justify-content-between align-items-center p-3 border-top">
+
+            <div className="col-md-5 col-lg-6 d-flex flex-wrap justify-content-md-end align-items-center gap-3">
+              <span className="fw-medium text-secondary small bg-light px-3 py-2 rounded-3 border">
+                Hiển thị <strong className="text-dark">{filteredInspections.length}</strong> kết quả
+              </span>
+
               <div className="d-flex align-items-center gap-2">
-                <span className="small text-secondary">Hiển thị:</span>
-                <select className="form-select form-select-sm w-auto" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+                <span className="small text-secondary text-nowrap">Hiển thị:</span>
+                <select
+                  className="form-select form-select-sm w-auto fw-medium"
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value))}
+                >
                   <option value="15">15</option>
                   <option value="30">30</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
                 </select>
               </div>
-              
-              {Math.ceil(filteredInspections.length / pageSize) > 1 && (
-                <div className="d-flex gap-2 align-items-center">
-                  <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button>
-                  <span className="small text-secondary">
-                    Trang {page + 1} / {Math.ceil(filteredInspections.length / pageSize)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BỐ CỤC CHÍNH: BẢNG DỮ LIỆU (TRÁI) & CHI TIẾT KIỂM TRA (PHẢI) */}
+      <div className="row g-4 align-items-start">
+        {/* CỘT TRÁI: BẢNG DỮ LIỆU */}
+        <div className="col-xl-8 col-lg-7 col-md-12">
+          <div className="card shadow-sm border-0 overflow-hidden">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light text-secondary small text-uppercase">
+                  <tr>
+                    <th style={{ width: '6%' }} className="text-center py-3">STT</th>
+                    <th style={{ width: '16%' }} className="py-3">Serial</th>
+                    <th style={{ width: '24%' }} className="py-3">Tên máy</th>
+                    <th style={{ width: '22%' }} className="py-3">Cấu hình</th>
+                    <th style={{ width: '16%' }} className="py-3">Loại yêu cầu</th>
+                    <th style={{ width: '16%' }} className="py-3">Thời gian (Tồn/Chờ)</th>
+                  </tr>
+                </thead>
+                <tbody className="border-top-0">
+                  {filteredInspections
+                    .slice(page * pageSize, (page + 1) * pageSize)
+                    .map((item, index) => {
+                      const isSelected = activeItem?.id === item.id;
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => setActiveItem(item)}
+                          className={
+                            isSelected
+                              ? 'bg-primary-subtle bg-opacity-25 border-start border-4 border-primary'
+                              : ''
+                          }
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td className="text-center text-secondary small fw-medium">
+                            {page * pageSize + index + 1}
+                          </td>
+                          <td className="text-nowrap">
+                            <span className="badge bg-light text-dark border font-monospace fs-6 fw-bold px-2 py-1">
+                              {item.serial}
+                            </span>
+                          </td>
+                          <td>
+                            <div
+                              className="fw-semibold text-dark text-truncate"
+                              style={{ maxWidth: '220px' }}
+                              title={item.name}
+                            >
+                              {item.name}
+                            </div>
+                          </td>
+                          <td>
+                            <div
+                              className="small text-secondary text-truncate"
+                              style={{ maxWidth: '200px' }}
+                              title={item.config}
+                            >
+                              {item.config}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge bg-secondary-subtle text-secondary-emphasis fw-medium rounded-pill px-2 py-1">
+                              {item.type}
+                            </span>
+                          </td>
+                          <td className="text-nowrap">
+                            <div className="d-flex flex-column gap-1 small">
+                              <div className="d-flex align-items-center justify-content-between bg-light rounded px-2 py-0.5">
+                                <span className="text-secondary">Tồn:</span>
+                                <span className="fw-medium text-dark ms-1">{item.inventoryDays}</span>
+                              </div>
+                              <div className="d-flex align-items-center justify-content-between bg-danger-subtle bg-opacity-50 rounded px-2 py-0.5">
+                                <span className="text-secondary">Chờ:</span>
+                                <span className="text-danger fw-bold ms-1">{item.waitDays}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                  {filteredInspections.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-5 text-secondary">
+                        <div className="d-flex flex-column align-items-center gap-2">
+                          <ClipboardCheck size={36} className="text-secondary opacity-50" />
+                          <span className="fw-medium">Không có dữ liệu</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* FOOTER PHÂN TRANG */}
+            <div className="d-flex flex-wrap justify-content-between align-items-center px-3 py-2.5 bg-light border-top">
+              <div className="small text-secondary">
+                Hiển thị: <strong className="text-dark">{pageSize}</strong> dòng / trang
+              </div>
+
+              {totalPages > 1 && (
+                <div className="d-flex gap-2 align-items-center my-1">
+                  <button
+                    className="btn btn-sm btn-white bg-white border shadow-xs fw-medium"
+                    disabled={page === 0}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    Trước
+                  </button>
+                  <span className="small text-secondary px-2">
+                    Trang <strong className="text-dark">{page + 1}</strong> / {totalPages}
                   </span>
-                  <button className="btn btn-sm btn-outline-secondary" disabled={page >= Math.ceil(filteredInspections.length / pageSize) - 1} onClick={() => setPage(page + 1)}>Sau</button>
+                  <button
+                    className="btn btn-sm btn-white bg-white border shadow-xs fw-medium"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Sau
+                  </button>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* CỘT PHẢI: CHI TIẾT */}
-        {activeItem && (
-          <div className="col-xl-4 col-lg-5 col-md-12">
-            <div className="card shadow-sm border-0 p-4 sticky-top" style={{ top: '1rem', zIndex: 1 }}>
-              <h4 className="fw-bold text-dark mb-4">Chi tiết kiểm tra</h4>
-
-              <div className="d-flex justify-content-between align-items-start mb-4">
-                <div>
-                  <div className="fs-5 fw-bold text-dark mb-1">{activeItem.serial}</div>
-                  <div className="small text-secondary">{activeItem.name}</div>
-                </div>
-                <div className={`badge rounded-pill border py-1 px-3 ${activeItem.status === 'PASSED' ? 'bg-success-subtle text-success border-success-subtle' :
-                    (activeItem.status === 'REJECTED_RETURNED' ? 'bg-secondary-subtle text-secondary border-secondary-subtle' : 'bg-warning-subtle text-warning-emphasis border-warning-subtle')
-                  }`}>
+        {/* CỘT PHẢI: CHI TIẾT KIỂM TRA */}
+        <div className="col-xl-4 col-lg-5 col-md-12">
+          {activeItem ? (
+            <div
+              className="card shadow-sm border-0 sticky-top overflow-hidden"
+              style={{ top: '1rem', zIndex: 1 }}
+            >
+              {/* Header Card Chi tiết */}
+              <div className="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
+                <h5 className="fw-bold text-dark m-0">Chi tiết kiểm tra</h5>
+                <div
+                  className={`badge rounded-pill border py-1.5 px-3 fw-semibold ${
+                    activeItem.status === 'PASSED'
+                      ? 'bg-success-subtle text-success border-success-subtle'
+                      : activeItem.status === 'REJECTED_RETURNED'
+                      ? 'bg-secondary-subtle text-secondary border-secondary-subtle'
+                      : 'bg-warning-subtle text-warning-emphasis border-warning-subtle'
+                  }`}
+                >
                   {formatInspectionStatus(activeItem.status).toUpperCase()}
                 </div>
               </div>
 
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Mã yêu cầu</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.id}</span>
-              </div>
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Cấu hình</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.config}</span>
-              </div>
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Loại yêu cầu</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.type}</span>
-              </div>
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Ngày tồn kho</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.inventoryDays}</span>
-              </div>
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Thời gian chờ xử lý</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.waitDays}</span>
-              </div>
-              <div className="d-flex justify-content-between mb-3 border-bottom pb-2">
-                <span className="text-secondary small">Dữ liệu bắt buộc</span>
-                <span className="fw-bold text-dark small text-end ms-3 text-break">{activeItem.dataStatus}</span>
-              </div>
-
-              {activeItem.reason && (
-                <div className="mb-3 border-bottom pb-2">
-                  <div className="text-secondary small mb-1">Lý do / Ghi chú lỗi</div>
-                  <div className="fw-medium text-danger small text-break">{activeItem.reason}</div>
+              <div className="card-body p-3">
+                {/* Khối Định danh thiết bị */}
+                <div className="bg-light rounded-3 p-3 mb-3 border border-light-subtle">
+                  <div className="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <div className="fs-5 fw-bold text-primary font-monospace mb-1">
+                        {activeItem.serial}
+                      </div>
+                      <div className="fw-semibold text-dark">{activeItem.name}</div>
+                    </div>
+                    <span className="badge bg-white text-secondary border small">
+                      {activeItem.id}
+                    </span>
+                  </div>
                 </div>
-              )}
-              {activeItem.note && (
-                <div className="mb-3 border-bottom pb-2">
-                  <div className="text-secondary small mb-1">Ghi chú yêu cầu</div>
-                  <div className="fw-medium text-dark small text-break">{activeItem.note}</div>
+
+                {/* Lưới 3 chỉ số nhanh: Ngày tồn, Thời gian chờ, Dữ liệu bắt buộc */}
+                <div className="row g-2 mb-3 text-center">
+                  <div className="col-4">
+                    <div className="border rounded-3 p-2 h-100 bg-white">
+                      <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
+                        Ngày tồn kho
+                      </div>
+                      <div className="fw-bold text-dark small">{activeItem.inventoryDays}</div>
+                    </div>
+                  </div>
+                  <div className="col-4">
+                    <div className="border border-danger-subtle rounded-3 p-2 h-100 bg-danger-subtle bg-opacity-10">
+                      <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
+                        Thời gian chờ xử lý
+                      </div>
+                      <div className="fw-bold text-danger small">{activeItem.waitDays}</div>
+                    </div>
+                  </div>
+                  <div className="col-4">
+                    <div className="border rounded-3 p-2 h-100 bg-white">
+                      <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
+                        Dữ liệu bắt buộc
+                      </div>
+                      <div
+                        className={`fw-bold small ${
+                          activeItem.dataStatus === 'Đã đủ' ? 'text-success' : 'text-warning-emphasis'
+                        }`}
+                      >
+                        {activeItem.dataStatus}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              {/* Ghi chú */}
-              {activeItem.status !== 'PASSED' && activeItem.status !== 'REJECTED_RETURNED' && (
-                <textarea
-                  className="form-control mb-3"
-                  rows="3"
-                  placeholder="Ghi chú thêm nếu có..."
-                  value={progressNotes}
-                  onChange={(e) => setProgressNotes(e.target.value)}
-                />
-              )}
+                {/* Thông tin Mã yêu cầu, Loại yêu cầu, Cấu hình */}
+                <div className="border rounded-3 p-3 mb-3 bg-white">
+                  <div className="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                    <span className="text-secondary small">Mã yêu cầu</span>
+                    <span className="fw-bold text-dark small text-end ms-3 text-break font-monospace">
+                      {activeItem.id}
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                    <span className="text-secondary small">Loại yêu cầu</span>
+                    <span className="fw-bold text-dark small text-end ms-3 text-break">
+                      {activeItem.type}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-secondary small mb-1 d-flex align-items-center gap-1">
+                      <Cpu size={14} />
+                      <span>Cấu hình</span>
+                    </div>
+                    <div className="fw-semibold text-dark small bg-light rounded-2 p-2 text-break">
+                      {activeItem.config}
+                    </div>
+                  </div>
+                </div>
 
-              <div className="alert alert-info border-info small p-3 mb-4">
-                Lưu tiến độ không đóng yêu cầu. Kết quả cuối chỉ là Đạt hoặc Hủy/Trả.
+                {/* Khối cảnh báo Lý do / Ghi chú lỗi & Ghi chú yêu cầu */}
+                {activeItem.reason && (
+                  <div className="alert alert-danger border-danger-subtle py-2.5 px-3 mb-3 rounded-3">
+                    <div className="text-danger-emphasis small fw-semibold mb-1 d-flex align-items-center gap-1">
+                      <AlertTriangle size={15} />
+                      <span>Lý do / Ghi chú lỗi</span>
+                    </div>
+                    <div className="fw-medium text-danger small text-break">
+                      {activeItem.reason}
+                    </div>
+                  </div>
+                )}
+
+                {activeItem.note && (
+                  <div className="alert alert-warning border-warning-subtle py-2.5 px-3 mb-3 rounded-3">
+                    <div className="text-warning-emphasis small fw-semibold mb-1 d-flex align-items-center gap-1">
+                      <FileText size={15} />
+                      <span>Ghi chú yêu cầu</span>
+                    </div>
+                    <div className="fw-medium text-dark small text-break">
+                      {activeItem.note}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ô nhập Ghi chú tiến độ */}
+                {isEditable && (
+                  <div className="mb-3">
+                    <textarea
+                      className="form-control bg-light-subtle"
+                      rows="3"
+                      placeholder="Ghi chú thêm nếu có..."
+                      value={progressNotes}
+                      onChange={(e) => setProgressNotes(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {/* Thông báo hướng dẫn quy trình */}
+                <div className="alert alert-info border-info-subtle bg-info-subtle bg-opacity-25 text-info-emphasis small p-2.5 mb-3 d-flex align-items-start gap-2 rounded-3">
+                  <Info size={16} className="flex-shrink-0 mt-0.5 text-info" />
+                  <span>
+                    Lưu tiến độ không đóng yêu cầu. Kết quả cuối chỉ là Đạt hoặc Hủy/Trả.
+                  </span>
+                </div>
+
+                {/* Khối Button hành động */}
+                {isEditable && (
+                  <div className="pt-3 border-top d-flex flex-column gap-2">
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger fw-semibold flex-grow-1 d-flex align-items-center justify-content-center gap-1.5 py-2"
+                        onClick={handleReject}
+                      >
+                        <XCircle size={17} />
+                        <span>Hủy/Trả</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-success fw-semibold flex-grow-1 d-flex align-items-center justify-content-center gap-1.5 py-2 shadow-sm"
+                        onClick={handleApprove}
+                      >
+                        <CheckCircle2 size={17} />
+                        <span>Xác nhận Đạt</span>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary fw-medium w-100 d-flex align-items-center justify-content-center gap-1.5 py-1.5"
+                      onClick={handleUpdateProgress}
+                    >
+                      <Save size={16} />
+                      <span>Lưu tiến độ</span>
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* Khối Button hành động */}
-              {activeItem.status !== 'PASSED' && activeItem.status !== 'REJECTED_RETURNED' && (
-                <div className="d-flex flex-wrap justify-content-end gap-2 pt-3 border-top">
-                  <button className="btn btn-outline-secondary fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleUpdateProgress}>Lưu tiến độ</button>
-                  <button className="btn btn-outline-danger fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleReject}>Hủy/Trả</button>
-                  <button className="btn btn-success fw-medium flex-grow-1 flex-sm-grow-0" onClick={handleApprove}>Xác nhận Đạt</button>
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="card shadow-sm border-0 p-5 text-center text-secondary">
+              <div className="d-flex flex-column align-items-center gap-2">
+                <ClipboardCheck size={40} className="opacity-25" />
+                <div className="fw-medium">Không có dữ liệu</div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

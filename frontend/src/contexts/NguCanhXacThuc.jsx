@@ -35,12 +35,11 @@ export const PERMISSION_LABELS = {
   CRM_VIEW: 'Xem hồ sơ khách hàng & Máy hết bảo hành',
   CRM_CARE: 'Ghi nhận chăm sóc khách hàng (CSKH)',
   CRM_MANAGE: 'Quản lý hồ sơ CRM & Gán đơn khách lẻ',
-  SYNC_VIEW: 'Xem Đối soát & Lịch sử đồng bộ',
-  SYNC_MANAGE: 'Thực thi Đồng bộ & Xử lý sai lệch',
   LOGS_VIEW: 'Xem Nhật ký hoạt động hệ thống',
   EXPORT_DATA: 'Xuất dữ liệu báo cáo ra file Excel',
   USER_MANAGE: 'Quản trị người dùng & Phân quyền',
   SYSTEM_MANAGE: 'Cấu hình hệ thống & Bảo trì máy chủ',
+  SUPERADMIN: 'Quản trị tối cao (Superadmin)',
 };
 
 // Bản đồ phụ thuộc logic quyền hạn: Khi chọn quyền thao tác (ACTION), tự động bổ sung quyền xem màn hình (VIEW)
@@ -53,7 +52,6 @@ export const PERMISSION_DEPENDENCIES = {
   PART_MANAGE: ['INVENTORY_PART'],
   CRM_CARE: ['CRM_VIEW'],
   CRM_MANAGE: ['CRM_VIEW'],
-  SYNC_MANAGE: ['SYNC_VIEW'],
   PRICING_MANAGE: ['PRICING_VIEW'],
   ORDER_EDIT: ['WARRANTY_CHECK'],
   ORDER_RETURN: ['WARRANTY_CHECK'],
@@ -61,6 +59,7 @@ export const PERMISSION_DEPENDENCIES = {
 
 // Danh sách các quyền nhạy cảm / rủi ro cao cần lưu ý khi cấp
 export const CRITICAL_PERMISSIONS = new Set([
+  'SUPERADMIN',
   'MACHINE_DELETE',
   'ORDER_RETURN',
   'ORDER_EDIT',
@@ -90,9 +89,8 @@ export const ROUTE_PERMISSION_MAP = [
   { path: '/bao-hanh', label: 'Tra cứu đơn & Bảo hành', permission: 'WARRANTY_CHECK' },
   { path: '/khach-hang', label: 'Khách hàng (CRM)', permission: 'CRM_VIEW|CRM_CARE|CRM_MANAGE' },
   { path: '/khach-hang/het-han-bao-hanh', label: 'Máy hết hạn bảo hành', permission: 'CRM_VIEW|CRM_CARE|CRM_MANAGE' },
-  { path: '/doi-soat', label: 'Đối soát Google Sheet', permission: 'SYNC_VIEW|SYNC_MANAGE' },
   { path: '/nhat-ky', label: 'Nhật ký hoạt động', permission: 'LOGS_VIEW' },
-  { path: '/he-thong', label: 'Cấu hình & Phân quyền', permission: 'SYSTEM_MANAGE|USER_MANAGE' },
+  { path: '/he-thong', label: 'Cài đặt hệ thống' },
 ];
 
 export function getPermissionLabel(permissionCode) {
@@ -159,13 +157,40 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  const hasPermission = useCallback((permissionCode) => {
+  const isSuperAdmin = useMemo(() => {
+    if (!user) return false;
+    const username = (user.username || '').trim().toLowerCase();
+    const roleUpper = (user.role || '').toUpperCase();
+    // Quyền Quản trị tối cao SUPERADMIN CHỈ GÁN DUY NHẤT cho 1 tài khoản gốc
+    return username === 'admin' || roleUpper === 'SUPERADMIN';
+  }, [user]);
+
+  const isAdmin = useMemo(() => {
     if (!user) return false;
     const roleUpper = (user.role || '').toUpperCase();
+    return isSuperAdmin || roleUpper === 'ADMIN' || roleUpper.includes('ADMIN');
+  }, [user, isSuperAdmin]);
+
+  const hasPermission = useCallback((permissionCode) => {
+    if (!user) return false;
+    const username = (user.username || '').trim().toLowerCase();
+    const roleUpper = (user.role || '').toUpperCase();
+
+    // Tài khoản gốc duy nhất (Superadmin) luôn có toàn bộ quyền hạn
+    if (username === 'admin' || roleUpper === 'SUPERADMIN') {
+      return true;
+    }
+
+    if (!permissionCode) return true;
+
+    // Quyền SUPERADMIN chỉ dành riêng cho tài khoản gốc
+    if (permissionCode === 'SUPERADMIN') {
+      return false;
+    }
+
     if (roleUpper === 'ADMIN' || roleUpper.includes('ADMIN') || roleUpper === 'QUẢN TRỊ VIÊN') {
       return true;
     }
-    if (!permissionCode) return true;
 
     const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
 
@@ -212,6 +237,8 @@ export function AuthProvider({ children }) {
   const contextValue = useMemo(
     () => ({
       user,
+      isSuperAdmin,
+      isAdmin,
       login,
       logout,
       loading,
@@ -221,7 +248,7 @@ export function AuthProvider({ children }) {
       requirePermission,
       getPermissionLabel,
     }),
-    [user, login, logout, loading, refreshUser, hasPermission, getFirstPermittedRoute, requirePermission]
+    [user, isSuperAdmin, isAdmin, login, logout, loading, refreshUser, hasPermission, getFirstPermittedRoute, requirePermission]
   );
 
   return (

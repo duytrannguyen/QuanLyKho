@@ -107,19 +107,6 @@ export const systemApi = {
   deleteUser: (id) => axiosClient.delete(`/users/${id}`),
 };
 
-export const syncApi = {
-  run: (mode) => axiosClient.post('/sync/run', { mode }),
-  getIssues: () => axiosClient.get('/sync/issues', { silent: true }),
-  getRuns: () => axiosClient.get('/sync/runs', { silent: true }),
-  getLatestStatus: () => axiosClient.get('/sync/latest-status', { silent: true }),
-  recheckIssue: (id) => axiosClient.post(`/sync/issues/${id}/recheck`),
-  resolveIssue: (id, note) => axiosClient.post(`/sync/issues/${id}/resolve`, { note }),
-  resolveAllIssues: (issueType, note) => axiosClient.post('/sync/issues/resolve-all', { issueType, note }),
-  approveReturn: (id, note) => axiosClient.post(`/sync/issues/${id}/approve-return`, { note }),
-  getSyncSettings: () => axiosClient.get('/sync/settings', { silent: true }),
-  updateSyncSettings: (settings) => axiosClient.post('/sync/settings', settings),
-};
-
 export const notificationApi = {
   getAll: (params) => axiosClient.get('/notifications', { params, silent: true }),
   getUnreadCount: () => axiosClient.get('/notifications/unread-count', { silent: true }),

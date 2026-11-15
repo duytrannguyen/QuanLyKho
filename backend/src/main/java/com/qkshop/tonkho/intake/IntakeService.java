@@ -25,6 +25,7 @@ import com.qkshop.tonkho.catalog.Brand;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.machine.dto.BulkMachineImportRequest;
 import com.qkshop.tonkho.machine.dto.MachineImportRequest;
+import com.qkshop.tonkho.salesreport.OrderDataSyncService;
 import com.qkshop.tonkho.salesreport.SalesOrder;
 import com.qkshop.tonkho.salesreport.SalesOrderRepository;
 
@@ -61,6 +62,7 @@ public class IntakeService {
     private final ActiveInventoryRepository activeInventoryRepo;
     private final ClosedCycleRepository closedCycleRepo;
     private final SalesOrderRepository salesOrderRepo;
+    private final OrderDataSyncService orderDataSyncService;
     private final EventLogRepository eventLogRepo;
     private final ObjectMapper objectMapper;
     private final InspectionService inspectionService;
@@ -259,6 +261,40 @@ public class IntakeService {
                             .findFirst()
                             .orElse(null));
 
+            // Hoàn kho phụ kiện quà tặng kèm máy trước khi đồng bộ sổ cái
+            if (closedCycle != null && closedCycle.getCycleId() != null) {
+                if (accessoryOrderRepo != null && accessoryRepo != null && accessoryHistoryRepo != null) {
+                    for (String accOrderCode : OrderDataSyncService.resolveBundledAccessoryCodes(closedCycle.getCycleId())) {
+                        accessoryOrderRepo.findByOrderCode(accOrderCode).ifPresent(ao -> {
+                            if (!"RETURNED".equalsIgnoreCase(ao.getStatus()) && !"CANCELLED".equalsIgnoreCase(ao.getStatus())) {
+                                ao.setStatus("RETURNED");
+                                accessoryOrderRepo.save(ao);
+                                if (ao.getItems() != null) {
+                                    for (com.qkshop.tonkho.accessory.AccessoryOrderItem item : ao.getItems()) {
+                                        if (item.getSku() != null && item.getQuantity() != null && item.getQuantity() > 0) {
+                                            accessoryRepo.findBySku(item.getSku()).ifPresent(acc -> {
+                                                acc.setQuantity(acc.getQuantity() + item.getQuantity());
+                                                accessoryRepo.save(acc);
+                                                com.qkshop.tonkho.accessory.AccessoryHistory restHist = new com.qkshop.tonkho.accessory.AccessoryHistory();
+                                                restHist.setSku(acc.getSku());
+                                                restHist.setName(acc.getName());
+                                                restHist.setQuantity(item.getQuantity());
+                                                restHist.setPrice(item.getPrice());
+                                                restHist.setAction("RETURN");
+                                                restHist.setCustomerName(closedCycle.getCustomerName());
+                                                restHist.setCustomerPhone(closedCycle.getCustomerPhone());
+                                                restHist.setNote("Hoàn kho do khách trả máy chu kỳ " + closedCycle.getCycleId() + " (" + accOrderCode + ")");
+                                                accessoryHistoryRepo.save(restHist);
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
             if (closedCycle != null) {
                 closedCycle.setCloseType(CloseType.CUSTOMER_RETURN);
                 String reason = (intakeType == IntakeType.CUSTOMER_BUYBACK)
@@ -267,76 +303,33 @@ public class IntakeService {
                 closedCycle.setCloseReason(reason);
                 closedCycle.setWarrantyExpiry(null);
                 closedCycle.setWarrantyPeriod("Đã hủy (Đã thu lại máy)");
-                closedCycleRepo.save(closedCycle);
-            }
-
-            if (salesOrderRepo != null) {
-                Optional<SalesOrder> matchedSo = Optional.empty();
-                if (closedCycle != null && closedCycle.getCycleId() != null) {
-                    matchedSo = salesOrderRepo.findByMatchedCycleId(closedCycle.getCycleId());
+                closedCycle.setSaleNote((closedCycle.getSaleNote() != null ? closedCycle.getSaleNote() + " | " : "") + reason);
+                ClosedCycle savedCc = closedCycleRepo.save(closedCycle);
+                if (orderDataSyncService != null) {
+                    orderDataSyncService.syncClosedCycleToSalesOrder(savedCc);
                 }
-                if (matchedSo.isEmpty()) {
-                    matchedSo = salesOrderRepo.findBySerialKeysContaining(serialKey).stream()
-                            .filter(s -> s.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(s.getOrderCategory()))
-                            .max(Comparator.comparing(
-                                    (SalesOrder s) -> s.getSaleDate() != null ? s.getSaleDate() : LocalDateTime.MIN)
-                                    .thenComparing(s -> s.getId() != null ? s.getId() : 0L));
-                }
-
-                matchedSo.ifPresent(so -> {
-                    so.setOrderStatus("Trả hàng");
-                    so.setNetRevenue(BigDecimal.ZERO);
-                    so.setWarrantyExpiry(null);
-                    so.setWarrantyPeriod("Đã hủy (Đã thu máy)");
-                    String noteText = (intakeType == IntakeType.CUSTOMER_BUYBACK)
-                            ? "Shop thu mua lại máy - nhập lại kho " + newCycleId
-                            : "Khách trả máy - nhập lại kho " + newCycleId;
-                    so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + noteText);
-                    salesOrderRepo.save(so);
-                });
-
-                if (closedCycle != null && closedCycle.getCycleId() != null) {
-                    String pkKemTxnId = "PK-KEM-" + closedCycle.getCycleId().replace("CYC-", "");
-                    salesOrderRepo.findByTransactionId(pkKemTxnId).ifPresent(accSo -> {
-                        accSo.setOrderStatus("Trả hàng");
-                        accSo.setNetRevenue(BigDecimal.ZERO);
-                        accSo.setNote((accSo.getNote() != null ? accSo.getNote() + " | " : "") + "Khách trả máy kèm phụ kiện - nhập lại kho " + newCycleId);
-                        salesOrderRepo.save(accSo);
-                    });
-                }
+            } else if (salesOrderRepo != null) {
+                salesOrderRepo.findBySerialKeysContaining(serialKey).stream()
+                        .filter(s -> s.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(s.getOrderCategory()))
+                        .filter(s -> s.getTransactionId() == null || !s.getTransactionId().startsWith("PK-KEM-"))
+                        .max(Comparator.comparing(
+                                (SalesOrder s) -> s.getSaleDate() != null ? s.getSaleDate() : LocalDateTime.MIN)
+                                .thenComparing(s -> s.getId() != null ? s.getId() : 0L))
+                        .ifPresent(so -> {
+                            so.setOrderStatus("Trả hàng");
+                            so.setPaymentStatus("Đã hoàn tiền");
+                            so.setNetRevenue(BigDecimal.ZERO);
+                            so.setWarrantyExpiry(null);
+                            so.setWarrantyPeriod("Đã hủy (Đã thu máy)");
+                            String noteText = (intakeType == IntakeType.CUSTOMER_BUYBACK)
+                                    ? "Shop thu mua lại máy - nhập lại kho " + newCycleId
+                                    : "Khách trả máy - nhập lại kho " + newCycleId;
+                            so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + noteText);
+                            salesOrderRepo.save(so);
+                        });
             }
 
             if (closedCycle != null && closedCycle.getCycleId() != null) {
-                // Hoàn kho phụ kiện quà tặng kèm máy nếu chưa hoàn
-                if (accessoryOrderRepo != null && accessoryRepo != null && accessoryHistoryRepo != null) {
-                    String accOrderCode = "PK-KEM-" + closedCycle.getCycleId().replace("CYC-", "");
-                    accessoryOrderRepo.findByOrderCode(accOrderCode).ifPresent(ao -> {
-                        if (!"CANCELLED".equalsIgnoreCase(ao.getStatus())) {
-                            ao.setStatus("CANCELLED");
-                            accessoryOrderRepo.save(ao);
-                            if (ao.getItems() != null) {
-                                for (com.qkshop.tonkho.accessory.AccessoryOrderItem item : ao.getItems()) {
-                                    if (item.getSku() != null && item.getQuantity() != null && item.getQuantity() > 0) {
-                                        accessoryRepo.findBySku(item.getSku()).ifPresent(acc -> {
-                                            acc.setQuantity(acc.getQuantity() + item.getQuantity());
-                                            accessoryRepo.save(acc);
-                                            com.qkshop.tonkho.accessory.AccessoryHistory restHist = new com.qkshop.tonkho.accessory.AccessoryHistory();
-                                            restHist.setSku(acc.getSku());
-                                            restHist.setName(acc.getName());
-                                            restHist.setQuantity(item.getQuantity());
-                                            restHist.setPrice(item.getPrice());
-                                            restHist.setAction("RETURN");
-                                            restHist.setCustomerName(closedCycle.getCustomerName());
-                                            restHist.setCustomerPhone(closedCycle.getCustomerPhone());
-                                            restHist.setNote("Hoàn kho do khách trả máy chu kỳ " + closedCycle.getCycleId() + " (" + accOrderCode + ")");
-                                            accessoryHistoryRepo.save(restHist);
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
 
                 // Hoàn kho linh kiện nâng cấp nếu chưa hoàn
                 if (partRepo != null && partHistoryRepo != null) {

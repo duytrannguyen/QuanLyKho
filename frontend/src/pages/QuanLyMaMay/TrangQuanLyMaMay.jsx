@@ -122,7 +122,7 @@ export default function TrangQuanLyMaMay() {
 
   // Render tên máy
   const getMachineName = (record) => {
-    return record.sourceModelText || record.configId || '—';
+    return record.productFullName || record.sourceModelText || record.configId || '—';
   };
 
   // Render Badge trạng thái với màu sắc trực quan
@@ -133,7 +133,7 @@ export default function TrangQuanLyMaMay() {
       
       if (record.closeType === 'SALE') cls = 'bg-primary-subtle text-primary border border-primary-subtle';
       else if (record.closeType === 'OTHER') cls = 'bg-warning-subtle text-warning-emphasis border border-warning-subtle';
-      else if (record.closeType === 'RETURN' || record.closeType === 'CANCEL') cls = 'bg-danger-subtle text-danger border border-danger-subtle';
+      else if (record.closeType === 'CUSTOMER_RETURN' || record.closeType === 'RETURN' || record.closeType === 'CANCEL') cls = 'bg-danger-subtle text-danger border border-danger-subtle';
       else if (record.closeType === 'TRANSFER') cls = 'bg-info-subtle text-info border border-info-subtle';
 
       return <span className={`badge rounded-pill px-3 py-1 ${cls}`}>{label}</span>;
@@ -179,9 +179,9 @@ export default function TrangQuanLyMaMay() {
             const rows = results.map((r, i) => [
               i + 1,
               r.serialKey || '',
-              (r.sourceModelText || r.configId || '').replace(/,/g, ' '),
-              (r.configDisplayName || '').replace(/,/g, ' '),
-              r.salePriceSnapshot || '',
+              getMachineName(r).replace(/,/g, ' '),
+              (r.configDisplayName || r.productSummary || '').replace(/,/g, ' '),
+              r.salePriceSnapshot || r.grossRevenue || '',
               r.intakeType ? formatIntakeType(r.intakeType) : '',
               r.closeType ? formatCloseType(r.closeType) : (r.state ? formatCycleState(r.state) : ''),
               r.storageDays ?? ''
@@ -266,7 +266,7 @@ export default function TrangQuanLyMaMay() {
                   <>
                     <option value="SALE">Đã bán</option>
                     <option value="OTHER">Xuất khác</option>
-                    <option value="RETURN">Đã trả khách</option>
+                    <option value="CUSTOMER_RETURN">Khách đổi trả</option>
                     <option value="CANCEL">Đã hủy</option>
                     <option value="TRANSFER">Chuyển kho</option>
                   </>
@@ -328,11 +328,13 @@ export default function TrangQuanLyMaMay() {
                         <span className="fw-medium text-dark">{getMachineName(record)}</span>
                       </td>
                       <td>
-                        <span className="small text-secondary">{record.configDisplayName || '—'}</span>
+                        <span className="small text-secondary">{record.configDisplayName || record.productSummary || '—'}</span>
                       </td>
                       <td className="text-nowrap">
                         <span className={record.closeType === 'SALE' ? 'fw-bold text-success' : 'fw-semibold text-dark'}>
-                          {record.salePriceSnapshot ? formatCurrency(record.salePriceSnapshot) + ' ₫' : '—'}
+                          {(record.salePriceSnapshot || record.grossRevenue)
+                            ? `${formatCurrency(record.salePriceSnapshot || record.grossRevenue)} ₫`
+                            : '—'}
                         </span>
                       </td>
                       <td className="small text-secondary">
@@ -347,11 +349,28 @@ export default function TrangQuanLyMaMay() {
                               {record.sourceReference}
                             </span>
                           )}
+                          {(record.customerName || record.customerPhone) && (
+                            <div className="text-dark fw-medium mb-1">
+                              <span>{record.customerName || 'Khách lẻ'}</span>
+                              {record.customerPhone && (
+                                <span className="badge bg-light text-secondary border font-monospace ms-1">
+                                  {record.customerPhone}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {record.upgradeNote && (
+                            <div className="text-warning-emphasis small mb-1" title={record.upgradeNote}>
+                              Nâng cấp: {record.upgradeNote}
+                            </div>
+                          )}
                           <div className="text-secondary line-clamp-2" title={record.closeReason || record.note || ''}>
-                            {record.closeReason || record.note || (record.customerName ? `Khách: ${record.customerName}` : '—')}
+                            {record.closeReason || record.note || (!record.customerName ? '—' : '')}
                           </div>
-                          {record.closedBy && (
-                            <div className="text-muted" style={{ fontSize: '11px' }}>Bởi: {record.closedBy}</div>
+                          {(record.salesperson || record.closedBy) && (
+                            <div className="text-muted" style={{ fontSize: '11px' }}>
+                              Bởi: {record.salesperson || record.closedBy}
+                            </div>
                           )}
                         </td>
                       )}

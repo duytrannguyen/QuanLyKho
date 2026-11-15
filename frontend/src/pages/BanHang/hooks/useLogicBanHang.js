@@ -6,7 +6,9 @@ import {
   formatCurrency,
   parseCurrency,
   getTodayDateString,
-  tinhNgayHetHanBaoHanh
+  tinhNgayHetHanBaoHanh,
+  normalizePhoneInput,
+  isValidVietnamPhone
 } from '../../../utils/dinh_dang';
 
 export function useLogicBanHang() {
@@ -467,9 +469,8 @@ export function useLogicBanHang() {
       return;
     }
 
-    const cleanPhone = (formData.customerPhone || '').trim().replace(/[\s.-]/g, '');
-    const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
-    if (!phoneRegex.test(cleanPhone)) {
+    const cleanPhone = normalizePhoneInput(formData.customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
       showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
       return;
     }
@@ -625,8 +626,8 @@ export function useLogicBanHang() {
           saleRam: formData.saleRam,
           saleSsd: formData.saleSsd,
           upgradeNote: generatedUpgradeNote,
-          customerName: formData.customer,
-          customerPhone: formData.customerPhone,
+          customerName: formData.customer.trim(),
+          customerPhone: cleanPhone,
           productFullName: prodFullName,
           productSummary: prodSummary,
           isShipping: formData.isShipping,
@@ -667,8 +668,8 @@ export function useLogicBanHang() {
         serialKey: scannedMachine.serialKey,
         productFullName: prodFullName,
         productSummary: prodSummary,
-        customerName: formData.customer,
-        customerPhone: formData.customerPhone,
+        customerName: formData.customer.trim(),
+        customerPhone: cleanPhone,
         salesperson: formData.salesperson,
         saleDate: formData.saleDate,
         finalPrice: grandTotal,

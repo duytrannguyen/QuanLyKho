@@ -55,6 +55,39 @@ public final class CrmDtos {
         }
     }
 
+    public record OrderDetailLineItem(
+            String name,
+            String skuOrSerial,
+            Integer quantity,
+            BigDecimal price,
+            String warrantyPeriod,
+            LocalDate warrantyExpiry,
+            String note) {
+    }
+
+    public record OrderEnrichment(
+            Boolean isShipping,
+            Boolean isDelivered,
+            LocalDate deliveryDate,
+            String shippingCarrier,
+            String trackingCode,
+            String shippingAddress,
+            BigDecimal depositAmount,
+            BigDecimal codAmount,
+            String upgradeNote,
+            String deviceSerial,
+            String intakeCondition,
+            String accessoriesReceived,
+            LocalDate promisedDate,
+            String repairStatus,
+            String fallbackSalesperson,
+            java.util.List<OrderDetailLineItem> detailItems) {
+        public static OrderEnrichment empty() {
+            return new OrderEnrichment(null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, null, java.util.List.of());
+        }
+    }
+
     public record OrderItem(
             Long id,
             String transactionId,
@@ -90,22 +123,58 @@ public final class CrmDtos {
             LocalDate lastMaintenanceDate,
             LocalDate nextCareDate,
             Integer careCount,
-            Boolean isWarrantyVoided) {
+            Boolean isWarrantyVoided,
+            Boolean isShipping,
+            Boolean isDelivered,
+            LocalDate deliveryDate,
+            String shippingCarrier,
+            String trackingCode,
+            String shippingAddress,
+            BigDecimal depositAmount,
+            BigDecimal codAmount,
+            String upgradeNote,
+            String deviceSerial,
+            String intakeCondition,
+            String accessoriesReceived,
+            LocalDate promisedDate,
+            String repairStatus,
+            java.util.List<OrderDetailLineItem> detailItems) {
 
         public static OrderItem from(SalesOrder s) {
-            return from(s, null, false);
+            return from(s, null, false, null);
         }
 
         public static OrderItem from(SalesOrder s, OrderItem accompanyingOrder) {
-            return from(s, accompanyingOrder, false);
+            return from(s, accompanyingOrder, false, null);
         }
 
         public static OrderItem from(SalesOrder s, OrderItem accompanyingOrder, boolean isWarrantyVoided) {
+            return from(s, accompanyingOrder, isWarrantyVoided, null);
+        }
+
+        public static OrderItem from(SalesOrder s, OrderItem accompanyingOrder, boolean isWarrantyVoided, OrderEnrichment enrichment) {
             BigDecimal baseNet = s.getNetRevenue() != null ? s.getNetRevenue() : BigDecimal.ZERO;
             BigDecimal combined = baseNet;
             if (accompanyingOrder != null && accompanyingOrder.netRevenue() != null) {
                 combined = combined.add(accompanyingOrder.netRevenue());
             }
+            boolean shipping = Boolean.TRUE.equals(s.getIsShipping())
+                    || (enrichment != null && Boolean.TRUE.equals(enrichment.isShipping()));
+            boolean delivered = Boolean.TRUE.equals(s.getIsDelivered())
+                    || (enrichment != null && Boolean.TRUE.equals(enrichment.isDelivered()));
+            LocalDate deliveryDate = s.getDeliveryDate() != null
+                    ? s.getDeliveryDate()
+                    : (enrichment != null ? enrichment.deliveryDate() : null);
+            String carrier = firstNonBlank(s.getShippingCarrier(), enrichment != null ? enrichment.shippingCarrier() : null);
+            String tracking = firstNonBlank(s.getTrackingCode(), enrichment != null ? enrichment.trackingCode() : null);
+            String address = firstNonBlank(s.getShippingAddress(), enrichment != null ? enrichment.shippingAddress() : null);
+            BigDecimal deposit = firstPositiveOrNonNull(s.getDepositAmount(), enrichment != null ? enrichment.depositAmount() : null);
+            BigDecimal cod = firstPositiveOrNonNull(s.getCodAmount(), enrichment != null ? enrichment.codAmount() : null);
+            String resolvedSalesperson = firstNonBlank(s.getSalesperson(), enrichment != null ? enrichment.fallbackSalesperson() : null);
+            java.util.List<OrderDetailLineItem> items = enrichment != null && enrichment.detailItems() != null
+                    ? enrichment.detailItems()
+                    : java.util.List.of();
+
             return new OrderItem(
                     s.getId(),
                     s.getTransactionId(),
@@ -120,7 +189,7 @@ public final class CrmDtos {
                     s.getNetRevenue(),
                     s.getWarrantyPeriod(),
                     s.getWarrantyExpiry(),
-                    s.getSalesperson(),
+                    resolvedSalesperson,
                     s.getCustomerName(),
                     s.getCustomerPhone(),
                     s.getNote(),
@@ -141,7 +210,39 @@ public final class CrmDtos {
                     s.getLastMaintenanceDate(),
                     s.getNextCareDate(),
                     s.getCareCount() == null ? 0 : s.getCareCount(),
-                    isWarrantyVoided);
+                    isWarrantyVoided,
+                    shipping,
+                    delivered,
+                    deliveryDate,
+                    carrier,
+                    tracking,
+                    address,
+                    deposit,
+                    cod,
+                    enrichment != null ? enrichment.upgradeNote() : null,
+                    enrichment != null ? enrichment.deviceSerial() : null,
+                    enrichment != null ? enrichment.intakeCondition() : null,
+                    enrichment != null ? enrichment.accessoriesReceived() : null,
+                    enrichment != null ? enrichment.promisedDate() : null,
+                    enrichment != null ? enrichment.repairStatus() : null,
+                    items);
+        }
+
+        private static String firstNonBlank(String primary, String fallback) {
+            if (primary != null && !primary.isBlank()) {
+                return primary;
+            }
+            return (fallback != null && !fallback.isBlank()) ? fallback : null;
+        }
+
+        private static BigDecimal firstPositiveOrNonNull(BigDecimal primary, BigDecimal fallback) {
+            if (primary != null && primary.compareTo(BigDecimal.ZERO) > 0) {
+                return primary;
+            }
+            if (fallback != null && fallback.compareTo(BigDecimal.ZERO) > 0) {
+                return fallback;
+            }
+            return primary != null ? primary : fallback;
         }
     }
 

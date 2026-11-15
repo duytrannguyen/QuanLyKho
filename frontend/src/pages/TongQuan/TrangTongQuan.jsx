@@ -4,7 +4,7 @@ import {
   Eye, ShoppingBag, ClipboardCheck, AlertTriangle,
   PackagePlus, Search, RefreshCw, ArrowRight, Truck, Lock
 } from 'lucide-react';
-import { dashboardApi, syncApi } from '../../api';
+import { dashboardApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { formatEventType } from '../../utils/dinh_dang';
@@ -16,10 +16,7 @@ export default function TrangTongQuan() {
   const [summary, setSummary] = useState(null);
   const [priorities, setPriorities] = useState(null);
   const [activities, setActivities] = useState([]);
-  const [syncSettings, setSyncSettings] = useState(null);
-  const [latestSync, setLatestSync] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -28,38 +25,19 @@ export default function TrangTongQuan() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [sumRes, priRes, actRes, setRes, latRes] = await Promise.allSettled([
+      const [sumRes, priRes, actRes] = await Promise.allSettled([
         dashboardApi.getSummary(),
         dashboardApi.getPriorities(),
         dashboardApi.getRecentActivity(),
-        syncApi.getSyncSettings(),
-        syncApi.getLatestStatus(),
       ]);
 
       if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
       if (priRes.status === 'fulfilled') setPriorities(priRes.value.data);
       if (actRes.status === 'fulfilled') setActivities(actRes.value.data || []);
-      if (setRes.status === 'fulfilled') setSyncSettings(setRes.value.data);
-      if (latRes.status === 'fulfilled') setLatestSync(latRes.value.data);
     } catch (err) {
       console.error('TongQuan load error:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleManualSync = async () => {
-    if (!requirePermission('SYNC_MANAGE', showToast, 'Đồng bộ Google Sheet')) return;
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      await syncApi.run('MANUAL');
-      showToast('Đã thực hiện đồng bộ Google Sheet thành công!', 'success');
-      await loadData();
-    } catch (err) {
-      showToast(err.userMessage || err.message || 'Lỗi khi đồng bộ Google Sheet', 'danger');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -94,16 +72,13 @@ export default function TrangTongQuan() {
         </div>
         <div>
           <button
-            className={`btn d-flex align-items-center gap-2 shadow-sm ${
-              hasPermission('SYNC_MANAGE') ? 'btn-primary' : 'btn-outline-secondary'
-            }`}
-            onClick={handleManualSync}
-            disabled={syncing}
-            title={!hasPermission('SYNC_MANAGE') ? 'Cần quyền Đồng bộ CSDL (SYNC_MANAGE)' : 'Đồng bộ Google Sheet thủ công'}
+            className="btn btn-outline-primary d-flex align-items-center gap-2 shadow-sm"
+            onClick={loadData}
+            disabled={loading}
+            title="Làm mới số liệu điều hành"
           >
-            <RefreshCw size={16} className={syncing ? 'spinner-border spinner-border-sm' : ''} />
-            <span>{syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}</span>
-            {!hasPermission('SYNC_MANAGE') && <Lock size={14} className="text-muted" />}
+            <RefreshCw size={16} className={loading ? 'spinner-border spinner-border-sm' : ''} />
+            <span>{loading ? 'Đang tải...' : 'Làm mới'}</span>
           </button>
         </div>
       </div>
@@ -113,31 +88,7 @@ export default function TrangTongQuan() {
         <StatCard icon={Eye} colorClass="text-primary bg-primary bg-opacity-10" number={stats.totalActive} label="Tổng số máy trong kho" />
         <StatCard icon={ShoppingBag} colorClass="text-success bg-success bg-opacity-10" number={stats.readyToSell} label="Máy đủ điều kiện bán" />
         <StatCard icon={ClipboardCheck} colorClass="text-warning bg-warning bg-opacity-10" number={stats.needInspection} label="Máy chờ kỹ thuật" />
-        <StatCard icon={AlertTriangle} colorClass="text-danger bg-danger bg-opacity-10" number={stats.errorCount} label="Vấn đề cần đối soát" />
-      </div>
-
-      {/* Health Status */}
-      <div className="row g-3 mb-4">
-        <HealthItem
-          dotClass={syncSettings?.enabled ? 'bg-success' : 'bg-secondary'}
-          label="Google Sheet"
-          value={syncSettings?.enabled ? 'Đã kết nối' : 'Đang tắt kết nối'}
-        />
-        <HealthItem
-          dotClass="bg-warning"
-          label="Đồng bộ bán hàng"
-          value={syncSettings?.cronEnabled ? 'Tự động & Thủ công' : 'Thủ công có kiểm soát'}
-        />
-        <HealthItem
-          dotClass="bg-success"
-          label="Lần đồng bộ gần nhất"
-          value={latestSync?.finishedAt ? new Date(latestSync.finishedAt).toLocaleString('vi-VN') : 'Chưa có lượt chạy'}
-        />
-        <HealthItem
-          dotClass={syncSettings?.cronEnabled ? 'bg-success' : 'bg-secondary'}
-          label="Lịch tự động"
-          value={syncSettings?.cronEnabled ? 'Đang kích hoạt' : 'Chưa kích hoạt'}
-        />
+        <StatCard icon={AlertTriangle} colorClass="text-danger bg-danger bg-opacity-10" number={stats.withoutPrice} label="Máy chưa có giá bán" />
       </div>
 
       {/* Priority Tasks + Quick Actions */}
@@ -145,22 +96,6 @@ export default function TrangTongQuan() {
         <div className="col-md-6">
           <div className="card shadow-sm h-100 border-0 p-4">
             <h5 className="fw-bold mb-4">Việc cần xử lý</h5>
-            
-            <div className="d-flex align-items-center justify-content-between border-bottom pb-3 mb-3">
-              <div className="d-flex align-items-center gap-3">
-                <span className="badge rounded-circle bg-danger d-flex align-items-center justify-content-center p-2" style={{width: '32px', height: '32px'}}>P0</span>
-                <span className="fw-medium text-dark">{prio.p0_data_errors} lỗi dữ liệu đang mở</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleGuardedNavigate('/doi-soat', 'SYNC_VIEW', 'Xem trang đối soát')}
-                className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
-                title={!hasPermission('SYNC_VIEW') ? 'Cần quyền Đối soát (SYNC_VIEW)' : ''}
-              >
-                <span>Xử lý</span>
-                {!hasPermission('SYNC_VIEW') && <Lock size={12} className="text-muted" />}
-              </button>
-            </div>
             
             <div className="d-flex align-items-center justify-content-between border-bottom pb-3 mb-3">
               <div className="d-flex align-items-center gap-3">

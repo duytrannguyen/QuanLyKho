@@ -90,7 +90,7 @@ public class NotificationController {
         String title = payload.getOrDefault("title", "Thông báo thử nghiệm");
         String message = payload.getOrDefault("message", "Nội dung thông báo thời gian thực từ hệ thống QKShop.");
         String type = payload.getOrDefault("type", "SYNC_INFO");
-        String link = payload.getOrDefault("link", "/doi-soat");
+        String link = payload.getOrDefault("link", "/");
         return ResponseEntity.ok(ApiResponse.okWithMessage("Tạo thông báo thành công",
                 notificationService.sendNotification(title, message, type, link)));
     }

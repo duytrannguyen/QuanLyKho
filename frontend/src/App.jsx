@@ -20,7 +20,6 @@ const TrangKiemDinh = React.lazy(() => import('./pages/KiemDinh/TrangKiemDinh'))
 const TrangTimKiemTonKho = React.lazy(() => import('./pages/TimKiemTonKho/TrangTimKiemTonKho'));
 const TrangBanHang = React.lazy(() => import('./pages/BanHang/TrangBanHang'));
 const TrangThongKe = React.lazy(() => import('./pages/ThongKe/TrangThongKe'));
-const TrangDoiSoat = React.lazy(() => import('./pages/DoiSoat/TrangDoiSoat'));
 const TrangNhatKyHoatDong = React.lazy(() => import('./pages/NhatKyHoatDong/TrangNhatKyHoatDong'));
 const TrangCaiDatHeThong = React.lazy(() => import('./pages/CaiDatHeThong/TrangCaiDatHeThong'));
 const TrangQuanLyMaMay = React.lazy(() => import('./pages/QuanLyMaMay/TrangQuanLyMaMay'));
@@ -192,9 +191,9 @@ function AppRoutes() {
           <Route path="khach-hang/het-han-bao-hanh" element={<ProtectedRoute permission="CRM_VIEW|CRM_CARE|CRM_MANAGE"><TrangMayHetBaoHanh /></ProtectedRoute>} />
           <Route path="khach-hang/:id" element={<ProtectedRoute permission="CRM_VIEW|CRM_CARE|CRM_MANAGE"><TrangChiTietKhachHang /></ProtectedRoute>} />
           <Route path="phan-tich" element={<ProtectedRoute permission="ANALYTICS_VIEW"><TrangThongKe /></ProtectedRoute>} />
-          <Route path="doi-soat" element={<ProtectedRoute permission="SYNC_VIEW|SYNC_MANAGE"><TrangDoiSoat /></ProtectedRoute>} />
+          <Route path="doi-soat" element={<Navigate to="/" replace />} />
           <Route path="nhat-ky" element={<ProtectedRoute permission="LOGS_VIEW"><TrangNhatKyHoatDong /></ProtectedRoute>} />
-          <Route path="he-thong" element={<ProtectedRoute permission="SYSTEM_MANAGE|USER_MANAGE"><TrangCaiDatHeThong /></ProtectedRoute>} />
+          <Route path="he-thong" element={<ProtectedRoute><TrangCaiDatHeThong /></ProtectedRoute>} />
           <Route path="bang-gia" element={<ProtectedRoute permission="PRICING_VIEW|PRICING_MANAGE"><TrangBangGia /></ProtectedRoute>} />
           <Route path="bao-hanh" element={<ProtectedRoute permission="WARRANTY_CHECK"><TrangKiemTraBaoHanh /></ProtectedRoute>} />
         </Route>

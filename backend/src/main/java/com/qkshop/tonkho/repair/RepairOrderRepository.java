@@ -29,4 +29,9 @@ public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> 
     List<RepairOrder> searchOrders(@Param("keyword") String keyword);
 
     List<RepairOrder> findByDeviceSerialIgnoreCaseOrderByCreatedDateDesc(String deviceSerial);
+
+    @Query("SELECT DISTINCT r FROM RepairOrder r LEFT JOIN FETCH r.items WHERE r.orderCode IN :orderCodes")
+    List<RepairOrder> findByOrderCodeInWithItems(@Param("orderCodes") java.util.Collection<String> orderCodes);
+
+    List<RepairOrder> findByCustomerPhone(String customerPhone);
 }

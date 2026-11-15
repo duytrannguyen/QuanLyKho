@@ -3,10 +3,12 @@ import {
   X, Printer, Copy, Check, FileText, User, Phone, 
   Calendar, Laptop, ShieldCheck, AlertCircle, 
   Tag, Package, DollarSign, CheckCircle2, UserCheck, 
-  Hash, Layers, Cpu, HardDrive, Info, Smartphone
+  Hash, Layers, Cpu, HardDrive, Info, Smartphone,
+  Truck, MapPin, Wrench, Clock
 } from 'lucide-react';
 import { dinhDangTien, formatDate, getCleanWarrantyType } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
+import logoQK from '../../assets/qkshop_logo.png';
 
 export default function ModalChiTietHoaDonCRM({ order, onClose }) {
   const [copiedKey, setCopiedKey] = useState(null);
@@ -107,7 +109,7 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
       <body>
         <div class="header">
           <div>
-            <div class="logo">QKSHOP.VN</div>
+            <div class="logo"><img src="${logoQK.startsWith('data:') || logoQK.startsWith('http') ? logoQK : `${window.location.origin}${logoQK}`}" alt="QKSHOP.VN" style="height: 34px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
             <div class="subtitle">Hệ thống Laptop & Phụ Kiện Uy Tín</div>
             <div class="subtitle">Hotline: 0939 558 894 | Website: qkshop.vn</div>
           </div>
@@ -142,6 +144,28 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
               <span class="info-label">Gói bảo hành:</span>
               <span class="info-val">${getCleanWarrantyType(order.warrantyPeriod) || 'Theo quy định'}</span>
             </div>
+              ${(order.isShipping || order.shippingAddress || order.trackingCode || order.shippingCarrier || Number(order.depositAmount) > 0 || Number(order.codAmount) > 0) ? `
+              <div class="info-row">
+                <span class="info-label">Giao hàng:</span>
+                <span class="info-val">${order.isDelivered ? `Đã giao (${formatDate(order.deliveryDate)})` : (order.isShipping ? 'Đơn ship xa (chờ nhận)' : 'Tại cửa hàng')}</span>
+              </div>
+              ${order.shippingCarrier || order.trackingCode ? `
+              <div class="info-row">
+                <span class="info-label">Vận đơn:</span>
+                <span class="info-val">${[order.shippingCarrier, order.trackingCode].filter(Boolean).join(' - ')}</span>
+              </div>` : ''}
+              ${order.shippingAddress ? `
+              <div class="info-row" style="grid-column: span 2;">
+                <span class="info-label">Địa chỉ nhận:</span>
+                <span class="info-val">${String(order.shippingAddress).replace(/</g, '&lt;')}</span>
+              </div>` : ''}
+              ` : ''}
+              ${(order.orderCategory === 'REPAIR' && (order.deviceSerial || order.intakeCondition || order.accessoriesReceived || order.promisedDate)) ? `
+              ${order.deviceSerial ? `<div class="info-row"><span class="info-label">Serial tiếp nhận:</span><span class="info-val" style="font-family:monospace;">${String(order.deviceSerial).replace(/</g, '&lt;')}</span></div>` : ''}
+              ${order.promisedDate ? `<div class="info-row"><span class="info-label">Ngày hẹn trả:</span><span class="info-val">${formatDate(order.promisedDate)}</span></div>` : ''}
+              ${order.intakeCondition ? `<div class="info-row" style="grid-column: span 2;"><span class="info-label">Tình trạng máy:</span><span class="info-val">${String(order.intakeCondition).replace(/</g, '&lt;')}</span></div>` : ''}
+              ${order.accessoriesReceived ? `<div class="info-row" style="grid-column: span 2;"><span class="info-label">Phụ kiện kèm:</span><span class="info-val">${String(order.accessoriesReceived).replace(/</g, '&lt;')}</span></div>` : ''}
+              ` : ''}
           </div>
         </div>
 
@@ -152,45 +176,93 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
               <tr>
                 <th style="width: 40px; text-align: center;">STT</th>
                 <th>Sản phẩm / Mặt hàng</th>
-                <th>Serial / Model</th>
+                <th>Serial / SKU</th>
                 <th>Cấu hình / Chi tiết</th>
                 <th style="text-align: right;">Thành tiền</th>
               </tr>
             </thead>
             <tbody>
+              ${Array.isArray(order.detailItems) && order.detailItems.length > 0
+                ? order.detailItems.map((item, idx) => {
+                    const qty = Number(item.quantity || 1);
+                    const unitPrice = Number(item.price || 0);
+                    const lineTotal = unitPrice * qty;
+                    const itemDetails = [
+                      `SL: ${qty}`,
+                      item.warrantyPeriod ? `BH: ${getCleanWarrantyType(item.warrantyPeriod)}` : null,
+                      item.warrantyExpiry ? `Hết hạn: ${formatDate(item.warrantyExpiry)}` : null,
+                      item.note || null
+                    ].filter(Boolean).join(' | ');
+                    return `
+              <tr>
+                <td style="text-align: center;">${idx + 1}</td>
+                <td><strong>${String(item.name || 'Sản phẩm').replace(/</g, '&lt;')}</strong></td>
+                <td style="font-family: monospace; font-weight: bold;">${String(item.skuOrSerial || '—').replace(/</g, '&lt;')}</td>
+                <td>${String(itemDetails || '—').replace(/</g, '&lt;')}</td>
+                <td style="text-align: right; font-weight: bold;">${dinhDangTien(lineTotal)} đ</td>
+              </tr>`;
+                  }).join('')
+                : `
               <tr>
                 <td style="text-align: center;">1</td>
                 <td>
-                  <strong>${order.productName || 'Sản phẩm'}</strong>
-                  ${order.brand ? `<br><small style="color:#64748b;">Hãng: ${order.brand}</small>` : ''}
+                  <strong>${String(order.productName || 'Sản phẩm').replace(/</g, '&lt;')}</strong>
+                  ${order.brand ? `<br><small style="color:#64748b;">Hãng: ${String(order.brand).replace(/</g, '&lt;')}</small>` : ''}
+                  ${order.upgradeNote ? `<br><small style="color:#b45309;">Nâng cấp: ${String(order.upgradeNote).replace(/</g, '&lt;')}</small>` : ''}
                 </td>
                 <td style="font-family: monospace; font-weight: bold;">
-                  ${order.serialKeys || order.modelName || '—'}
+                  ${String(order.serialKeys || order.modelName || '—').replace(/</g, '&lt;')}
                 </td>
-                <td>${order.configSummary || order.note || '—'}</td>
+                <td>${String(order.configSummary || order.note || '—').replace(/</g, '&lt;')}</td>
                 <td style="text-align: right; font-weight: bold;">
                   ${dinhDangTien(order.netRevenue || 0)} đ
                 </td>
-              </tr>
-              ${order.accompanyingOrder ? `
+              </tr>`}
+              ${order.accompanyingOrder ? (
+                Array.isArray(order.accompanyingOrder.detailItems) && order.accompanyingOrder.detailItems.length > 0
+                  ? order.accompanyingOrder.detailItems.map((accItem, accIdx) => {
+                      const baseIdx = Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length : 1;
+                      const qty = Number(accItem.quantity || 1);
+                      const lineTotal = Number(accItem.price || 0) * qty;
+                      const accDetails = [
+                        `SL: ${qty}`,
+                        accItem.warrantyPeriod ? `BH: ${getCleanWarrantyType(accItem.warrantyPeriod)}` : null,
+                        accItem.note || null
+                      ].filter(Boolean).join(' | ');
+                      return `
               <tr>
-                <td style="text-align: center;">2</td>
+                <td style="text-align: center;">${baseIdx + accIdx + 1}</td>
                 <td>
-                  <strong>${order.accompanyingOrder.productName || 'Phụ kiện kèm'}</strong>
-                  <br><small style="color:#0284c7;">(Đơn kèm: ${order.accompanyingOrder.transactionId})</small>
+                  <strong>${String(accItem.name || 'Phụ kiện kèm').replace(/</g, '&lt;')}</strong>
+                  <br><small style="color:#0284c7;">(Đơn kèm: ${String(order.accompanyingOrder.transactionId).replace(/</g, '&lt;')})</small>
+                </td>
+                <td style="font-family: monospace;">${String(accItem.skuOrSerial || 'Kèm máy').replace(/</g, '&lt;')}</td>
+                <td>${String(accDetails || 'Theo máy').replace(/</g, '&lt;')}</td>
+                <td style="text-align: right; font-weight: bold;">${dinhDangTien(lineTotal)} đ</td>
+              </tr>`;
+                    }).join('')
+                  : `
+              <tr>
+                <td style="text-align: center;">${Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length + 1 : 2}</td>
+                <td>
+                  <strong>${String(order.accompanyingOrder.productName || 'Phụ kiện kèm').replace(/</g, '&lt;')}</strong>
+                  <br><small style="color:#0284c7;">(Đơn kèm: ${String(order.accompanyingOrder.transactionId).replace(/</g, '&lt;')})</small>
                 </td>
                 <td style="font-family: monospace;">Kèm máy</td>
-                <td>${order.accompanyingOrder.note || 'Theo máy'}</td>
+                <td>${String(order.accompanyingOrder.note || 'Theo máy').replace(/</g, '&lt;')}</td>
                 <td style="text-align: right; font-weight: bold;">
                   ${dinhDangTien(order.accompanyingOrder.netRevenue || 0)} đ
                 </td>
-              </tr>` : ''}
+              </tr>`
+              ) : ''}
             </tbody>
           </table>
 
           <div class="total-box">
             ${Number(order.grossRevenue) > 0 ? `<div style="color: #64748b; font-size: 13px;">Giá niêm yết: ${dinhDangTien(order.grossRevenue)} đ</div>` : ''}
             ${Number(order.discount) > 0 ? `<div style="color: #dc2626; font-size: 13px; font-weight: 600;">Chiết khấu / Giảm giá: -${dinhDangTien(order.discount)} đ</div>` : ''}
+            ${Number(order.depositAmount) > 0 ? `<div style="color: #059669; font-size: 13px;">Đã đặt cọc: ${dinhDangTien(order.depositAmount)} đ</div>` : ''}
+            ${Number(order.codAmount) > 0 ? `<div style="color: #dc2626; font-size: 13px;">Thu hộ COD: ${dinhDangTien(order.codAmount)} đ</div>` : ''}
             <div style="margin-top: 6px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
               Tổng thanh toán: <span class="total-price">${dinhDangTien(order.combinedNetRevenue || order.netRevenue || 0)} đ</span>
             </div>
@@ -464,13 +536,84 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                   </div>
                 </div>
 
+                {/* Khối Vận chuyển & Giao nhận (nếu là đơn ship hoặc có dữ liệu vận đơn) */}
+                {(order.isShipping || order.shippingCarrier || order.trackingCode || order.shippingAddress || Number(order.depositAmount) > 0 || Number(order.codAmount) > 0) && (
+                  <div className="card border-0 shadow-sm rounded-4">
+                    <div className="card-header bg-white border-bottom py-3 px-4">
+                      <h6 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                        <div className="bg-info bg-opacity-10 p-1 rounded text-info"><Truck size={16} /></div>
+                        Giao nhận & Vận chuyển
+                      </h6>
+                    </div>
+                    <div className="card-body p-4">
+                      <div className="d-flex flex-column gap-3">
+                        <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                          <span className="text-muted small">Hình thức đơn:</span>
+                          <span className={`badge rounded-pill ${order.isShipping ? 'bg-primary bg-opacity-10 text-primary border border-primary-subtle' : 'bg-light text-secondary border'}`}>
+                            {order.isShipping ? 'Đơn ship xa' : 'Tại cửa hàng'}
+                          </span>
+                        </div>
+
+                        {order.isShipping && (
+                          <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                            <span className="text-muted small">Trạng thái giao:</span>
+                            <span className={`badge rounded-pill border d-inline-flex align-items-center gap-1 ${order.isDelivered ? 'bg-success bg-opacity-10 text-success border-success-subtle' : 'bg-warning bg-opacity-15 text-warning-emphasis border-warning'}`}>
+                              {order.isDelivered ? <CheckCircle2 size={13} /> : <Clock size={13} />}
+                              {order.isDelivered
+                                ? `Đã giao${order.deliveryDate ? ` (${formatDate(order.deliveryDate)})` : ''}`
+                                : 'Đang giao / Chờ nhận hàng'}
+                            </span>
+                          </div>
+                        )}
+
+                        {order.shippingCarrier && (
+                          <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                            <span className="text-muted small">Đơn vị vận chuyển:</span>
+                            <span className="fw-semibold text-dark">{order.shippingCarrier}</span>
+                          </div>
+                        )}
+
+                        {order.trackingCode && (
+                          <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                            <span className="text-muted small">Mã vận đơn:</span>
+                            <span className="fw-bold text-primary font-monospace">{order.trackingCode}</span>
+                          </div>
+                        )}
+
+                        {order.shippingAddress && (
+                          <div className="pb-2 border-bottom">
+                            <div className="text-muted small mb-1 d-flex align-items-center gap-1">
+                              <MapPin size={13} /> Địa chỉ giao hàng:
+                            </div>
+                            <div className="fw-medium text-dark small">{order.shippingAddress}</div>
+                          </div>
+                        )}
+
+                        {Number(order.depositAmount) > 0 && (
+                          <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                            <span className="text-muted small">Đã đặt cọc:</span>
+                            <span className="fw-bold text-success">{dinhDangTien(order.depositAmount)} đ</span>
+                          </div>
+                        )}
+
+                        {Number(order.codAmount) > 0 && (
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span className="text-muted small">Thu hộ COD:</span>
+                            <span className="fw-bold text-danger">{dinhDangTien(order.codAmount)} đ</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
 
               {/* CỘT PHẢI: Thiết bị & Phụ kiện */}
               <div className="col-12 col-lg-7 d-flex flex-column gap-4">
                 
                 {/* Khối Thông tin sản phẩm */}
-                <div className="card border-0 shadow-sm rounded-4 h-100">
+                <div className="card border-0 shadow-sm rounded-4">
                   <div className="card-header bg-white border-bottom py-3 px-4">
                     <h6 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
                       <div className="bg-primary bg-opacity-10 p-1 rounded text-primary"><Laptop size={16} /></div>
@@ -520,10 +663,67 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                         <div className="col-12">
                           <div className="d-flex align-items-start gap-2">
                             <Cpu size={18} className="text-primary mt-1 flex-shrink-0" />
-                            <div>
+                            <div className="w-100">
                               <div className="text-muted small fw-semibold mb-1">Cấu hình chi tiết</div>
                               <div className="text-dark bg-white border rounded-3 p-3" style={{ whiteSpace: 'pre-line', fontSize: '0.9rem' }}>
                                 {order.configSummary}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.upgradeNote && (
+                        <div className="col-12">
+                          <div className="d-flex align-items-start gap-2">
+                            <HardDrive size={18} className="text-warning mt-1 flex-shrink-0" />
+                            <div className="w-100">
+                              <div className="text-muted small fw-semibold mb-1">Nâng cấp linh kiện / cấu hình</div>
+                              <div className="text-dark bg-warning bg-opacity-10 border border-warning-subtle rounded-3 p-3" style={{ whiteSpace: 'pre-line', fontSize: '0.9rem' }}>
+                                {order.upgradeNote}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.orderCategory === 'REPAIR' && (order.deviceSerial || order.intakeCondition || order.accessoriesReceived || order.promisedDate || order.repairStatus) && (
+                        <div className="col-12">
+                          <div className="d-flex align-items-start gap-2">
+                            <Wrench size={18} className="text-secondary mt-1 flex-shrink-0" />
+                            <div className="w-100">
+                              <div className="text-muted small fw-semibold mb-2">Thông tin tiếp nhận sửa chữa</div>
+                              <div className="bg-light border rounded-3 p-3 d-flex flex-column gap-2 small">
+                                {order.deviceSerial && (
+                                  <div className="d-flex justify-content-between">
+                                    <span className="text-muted">Serial máy tiếp nhận:</span>
+                                    <span className="font-monospace fw-bold text-dark">{order.deviceSerial}</span>
+                                  </div>
+                                )}
+                                {order.repairStatus && (
+                                  <div className="d-flex justify-content-between">
+                                    <span className="text-muted">Trạng thái sửa chữa:</span>
+                                    <span className="fw-semibold text-primary">{order.repairStatus}</span>
+                                  </div>
+                                )}
+                                {order.promisedDate && (
+                                  <div className="d-flex justify-content-between">
+                                    <span className="text-muted">Ngày hẹn trả:</span>
+                                    <span className="fw-semibold text-dark">{formatDate(order.promisedDate)}</span>
+                                  </div>
+                                )}
+                                {order.intakeCondition && (
+                                  <div>
+                                    <span className="text-muted">Tình trạng khi nhận: </span>
+                                    <span className="text-dark">{order.intakeCondition}</span>
+                                  </div>
+                                )}
+                                {order.accessoriesReceived && (
+                                  <div>
+                                    <span className="text-muted">Phụ kiện gửi kèm: </span>
+                                    <span className="text-dark">{order.accessoriesReceived}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -534,7 +734,7 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                         <div className="col-12">
                           <div className="d-flex align-items-start gap-2">
                             <Info size={18} className="text-warning mt-1 flex-shrink-0" />
-                            <div>
+                            <div className="w-100">
                               <div className="text-muted small fw-semibold mb-1">Ghi chú giao dịch</div>
                               <div className="text-dark bg-warning bg-opacity-10 border border-warning-subtle rounded-3 p-3 fst-italic" style={{ whiteSpace: 'pre-line', fontSize: '0.9rem' }}>
                                 {order.note}
@@ -548,33 +748,109 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                   </div>
                 </div>
 
+                {/* Chi tiết từng sản phẩm / dịch vụ (nếu có) */}
+                {Array.isArray(order.detailItems) && order.detailItems.length > 0 && (
+                  <div className="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div className="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                      <h6 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                        <div className="bg-primary bg-opacity-10 p-1 rounded text-primary"><Layers size={16} /></div>
+                        Chi tiết sản phẩm / dịch vụ ({order.detailItems.length})
+                      </h6>
+                    </div>
+                    <div className="table-responsive">
+                      <table className="table table-hover align-middle mb-0 small">
+                        <thead className="table-light text-secondary">
+                          <tr>
+                            <th className="ps-4">Tên mặt hàng / dịch vụ</th>
+                            <th>SKU / Serial</th>
+                            <th className="text-center">SL</th>
+                            <th>Bảo hành</th>
+                            <th className="text-end pe-4">Thành tiền</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {order.detailItems.map((item, idx) => {
+                            const lineTotal = Number(item.price || 0) * Number(item.quantity || 1);
+                            return (
+                              <tr key={`${item.skuOrSerial || item.name}-${idx}`}>
+                                <td className="ps-4">
+                                  <div className="fw-semibold text-dark">{item.name}</div>
+                                  {item.note && <div className="text-muted fst-italic" style={{ fontSize: '11px' }}>{item.note}</div>}
+                                </td>
+                                <td className="font-monospace text-secondary">{item.skuOrSerial || '—'}</td>
+                                <td className="text-center fw-semibold">{item.quantity || 1}</td>
+                                <td>
+                                  <div className="fw-medium text-primary">{getCleanWarrantyType(item.warrantyPeriod) || 'Không BH'}</div>
+                                  {item.warrantyExpiry && (
+                                    <div className="text-muted" style={{ fontSize: '11px' }}>Đến: {formatDate(item.warrantyExpiry)}</div>
+                                  )}
+                                </td>
+                                <td className="text-end pe-4 fw-bold text-dark">{dinhDangTien(lineTotal)} đ</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {/* Khối Phụ kiện kèm theo (nếu có) */}
                 {order.accompanyingOrder && (
                   <div className="card border-0 border-start border-info border-4 shadow-sm rounded-4 overflow-hidden">
-                    <div className="card-body p-4 bg-info bg-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-                      <div>
-                        <div className="d-flex align-items-center gap-2 mb-2">
-                          <Package size={18} className="text-info" />
-                          <h6 className="fw-bold text-dark m-0">Phụ kiện bán kèm</h6>
-                          <span className="badge bg-white text-info border border-info font-monospace rounded-pill ms-2">
-                            {order.accompanyingOrder.transactionId}
-                          </span>
-                        </div>
-                        <div className="fw-semibold text-dark fs-6">
-                          {order.accompanyingOrder.productName}
-                        </div>
-                        {order.accompanyingOrder.note && (
-                          <div className="text-muted small fst-italic mt-1">
-                            {order.accompanyingOrder.note}
+                    <div className="card-body p-4 bg-info bg-opacity-10 d-flex flex-column gap-3">
+                      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-2">
+                            <Package size={18} className="text-info" />
+                            <h6 className="fw-bold text-dark m-0">Phụ kiện bán kèm</h6>
+                            <span className="badge bg-white text-info border border-info font-monospace rounded-pill ms-2">
+                              {order.accompanyingOrder.transactionId}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="text-md-end bg-white p-3 rounded-4 shadow-sm border border-info-subtle">
-                        <div className="text-muted small mb-1">Giá phụ kiện</div>
-                        <div className="fs-5 fw-bolder text-info">
-                          +{dinhDangTien(order.accompanyingOrder.netRevenue || 0)} đ
+                          <div className="fw-semibold text-dark fs-6">
+                            {order.accompanyingOrder.productName}
+                          </div>
+                          {order.accompanyingOrder.note && (
+                            <div className="text-muted small fst-italic mt-1">
+                              {order.accompanyingOrder.note}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-md-end bg-white p-3 rounded-4 shadow-sm border border-info-subtle">
+                          <div className="text-muted small mb-1">Giá phụ kiện</div>
+                          <div className="fs-5 fw-bolder text-info">
+                            +{dinhDangTien(order.accompanyingOrder.netRevenue || 0)} đ
+                          </div>
                         </div>
                       </div>
+
+                      {Array.isArray(order.accompanyingOrder.detailItems) && order.accompanyingOrder.detailItems.length > 0 && (
+                        <div className="bg-white rounded-3 border p-2">
+                          <table className="table table-sm mb-0 small align-middle">
+                            <thead className="text-muted">
+                              <tr>
+                                <th>Phụ kiện</th>
+                                <th>SKU / Serial</th>
+                                <th className="text-center">SL</th>
+                                <th>Bảo hành</th>
+                                <th className="text-end">Đơn giá</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {order.accompanyingOrder.detailItems.map((accItem, idx) => (
+                                <tr key={`${accItem.skuOrSerial || accItem.name}-${idx}`}>
+                                  <td className="fw-medium text-dark">{accItem.name}</td>
+                                  <td className="font-monospace text-secondary">{accItem.skuOrSerial || '—'}</td>
+                                  <td className="text-center">{accItem.quantity || 1}</td>
+                                  <td className="text-primary">{getCleanWarrantyType(accItem.warrantyPeriod) || 'Theo máy'}</td>
+                                  <td className="text-end fw-semibold">{dinhDangTien(accItem.price || 0)} đ</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

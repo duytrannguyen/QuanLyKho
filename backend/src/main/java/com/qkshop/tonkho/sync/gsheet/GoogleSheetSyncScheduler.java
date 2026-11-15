@@ -31,8 +31,12 @@ public class GoogleSheetSyncScheduler {
 
     private LocalDateTime lastRunTime;
 
-    @Scheduled(fixedDelay = 60000) // Kiểm tra mỗi phút
+    @Scheduled(fixedDelay = 60000) // Đã tắt đồng bộ Google Sheet
     public void runDynamicSchedule() {
+        // Chức năng đồng bộ Google Sheet đã được ngừng sử dụng
+        if (true) {
+            return;
+        }
         boolean enabled = Boolean.parseBoolean(
                 systemConfigService.getConfig("GSHEET_SYNC_ENABLED", String.valueOf(props.isEnabled())));
 

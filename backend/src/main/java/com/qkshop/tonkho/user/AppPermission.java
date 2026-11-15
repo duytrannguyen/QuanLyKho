@@ -12,7 +12,7 @@ public enum AppPermission {
     DASHBOARD_VIEW("DASHBOARD_VIEW", "Tổng quan điều hành", "Tổng quan & Báo cáo",
             "Xem các chỉ số tổng quan, doanh số, cảnh báo kho và lối tắt điều hành", "VIEW", "Menu Bàn điều hành (/)", false),
     SALES_REPORT_VIEW("SALES_REPORT_VIEW", "Báo cáo doanh số", "Tổng quan & Báo cáo",
-            "Xem biểu đồ doanh thu, KPI và phân tích kênh bán theo Google Sheets", "VIEW", "Menu Báo cáo doanh số (/bao-cao-ban-hang)", false),
+            "Xem biểu đồ doanh thu, KPI và phân tích kênh bán hàng", "VIEW", "Menu Báo cáo doanh số (/bao-cao-ban-hang)", false),
     ANALYTICS_VIEW("ANALYTICS_VIEW", "Thống kê phân tích kho", "Tổng quan & Báo cáo",
             "Xem biểu đồ chuyên sâu, tỷ lệ quay vòng, tuổi thọ tồn kho và xuất nhập", "VIEW", "Menu Thống kê phân tích (/phan-tich)", false),
 
@@ -26,7 +26,7 @@ public enum AppPermission {
     ORDER_EDIT("ORDER_EDIT", "Sửa hóa đơn & Đơn hàng đã xuất", "Bán hàng & Giao vận",
             "Thao tác chỉnh sửa thông tin khách hàng, SĐT, giá bán, bảo hành trên đơn máy/phụ kiện/sửa chữa đã xuất", "ACTION", "Nút Sửa đơn tại Đơn ship & Tra cứu bảo hành", true),
     ORDER_RETURN("ORDER_RETURN", "Đổi trả & Hoàn đơn hàng về kho", "Bán hàng & Giao vận",
-            "Thao tác xác nhận hoàn hàng đơn ship, đổi trả máy hoặc thu hồi phụ kiện về lại tồn kho", "ACTION", "Nút Hoàn hàng tại Đơn ship & Duyệt hoàn Đối soát", true),
+            "Thao tác xác nhận hoàn hàng đơn ship, đổi trả máy hoặc thu hồi phụ kiện về lại tồn kho", "ACTION", "Nút Hoàn hàng tại Đơn ship & Tra cứu bảo hành", true),
     PRICING_VIEW("PRICING_VIEW", "Xem bảng giá niêm yết", "Bán hàng & Giao vận",
             "Truy cập màn hình Bảng giá, tra cứu giá bán lẻ niêm yết theo danh mục và xem trước thẻ giá", "VIEW", "Menu Bảng giá niêm yết (/bang-gia)", false),
     PRICING_MANAGE("PRICING_MANAGE", "Quản lý & Chỉnh sửa bảng giá in", "Bán hàng & Giao vận",
@@ -90,7 +90,10 @@ public enum AppPermission {
     USER_MANAGE("USER_MANAGE", "Quản trị người dùng & Phân quyền", "Hệ thống & Đối soát",
             "Truy cập quản lý tài khoản nhân sự: tạo tài khoản mới, cấp/thu hồi quyền chi tiết, đổi mật khẩu và khóa tài khoản", "ACTION", "Menu Cấu hình & Phân quyền - Tab Người dùng (/he-thong)", true),
     SYSTEM_MANAGE("SYSTEM_MANAGE", "Cấu hình hệ thống & Bảo trì máy chủ", "Hệ thống & Đối soát",
-            "Thao tác cấu hình thông số hệ thống, đồng bộ Google Sheets và thực thi bảo trì làm sạch dữ liệu", "ACTION", "Menu Cấu hình & Phân quyền - Tab Hệ thống (/he-thong)", true);
+            "Thao tác cấu hình thông số hệ thống và thực thi bảo trì, đồng bộ lại dữ liệu", "ACTION", "Menu Cấu hình & Phân quyền - Tab Hệ thống (/he-thong)", true),
+    SUPERADMIN("SUPERADMIN", "Quản trị tối cao (Superadmin)", "Hệ thống & Đối soát",
+            "Toàn quyền quản trị hệ thống cao nhất, chỉ dành riêng cho tài khoản gốc (admin). Có quyền tạo tài khoản, phân quyền và can thiệp toàn diện.",
+            "ACTION", "Trang Cài đặt hệ thống & Phân quyền (/he-thong)", true);
 
     private final String code;
     private final String name;
@@ -112,6 +115,7 @@ public enum AppPermission {
 
     public static List<PermissionDto> getAllPermissionDtos() {
         return Arrays.stream(values())
+                .filter(p -> p != SYNC_VIEW && p != SYNC_MANAGE)
                 .map(p -> PermissionDto.builder()
                         .code(p.getCode())
                         .name(p.getName())
@@ -130,14 +134,24 @@ public enum AppPermission {
                 .collect(Collectors.toSet());
     }
 
+    public static Set<String> standardAdminCodes() {
+        return Arrays.stream(values())
+                .filter(p -> p != SUPERADMIN)
+                .map(AppPermission::getCode)
+                .collect(Collectors.toSet());
+    }
+
     public static Set<String> getDefaultPermissionsForRole(UserRole role) {
         if (role == null) return Collections.emptySet();
         switch (role) {
-            case ADMIN:
+            case SUPERADMIN:
                 return allCodes();
+            case ADMIN:
+                return standardAdminCodes();
             case MANAGER:
                 return Arrays.stream(values())
-                        .filter(p -> p != SYSTEM_MANAGE && p != MACHINE_DELETE)
+                        .filter(p -> p != SYSTEM_MANAGE && p != MACHINE_DELETE && p != SUPERADMIN
+                                && p != SYNC_VIEW && p != SYNC_MANAGE)
                         .map(AppPermission::getCode)
                         .collect(Collectors.toSet());
             case STAFF:
@@ -158,8 +172,7 @@ public enum AppPermission {
                         SERVICE_REPAIR.getCode(),
                         SERVICE_VIEW.getCode(),
                         CRM_VIEW.getCode(),
-                        CRM_CARE.getCode(),
-                        SYNC_VIEW.getCode()
+                        CRM_CARE.getCode()
                 );
             default:
                 return Collections.emptySet();

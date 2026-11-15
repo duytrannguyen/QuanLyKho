@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
-  Wrench, Plus, Search, CheckCircle, RotateCcw, User, Phone, 
+  Wrench, Plus, Search, CheckCircle, RotateCcw, User, UserPlus, Phone, 
   Laptop, Trash2, Printer, ShieldCheck, Edit3, X, AlertCircle, Eye, Cpu, List, FileText, XCircle
 } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { apiSuaChua, apiLinhKien } from '../../api';
-import { formatCurrency, parseCurrency, formatDate, getTodayDateString, getItemExpiryStatus } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, formatDate, getTodayDateString, getItemExpiryStatus, normalizePhoneInput, isValidVietnamPhone, taoThongTinKhachVangLai } from '../../utils/dinh_dang';
 import { printIntakeTicket, printPaymentInvoice } from '../../utils/inPhieuSuaChua';
 
 // ======================================================================
@@ -373,6 +373,10 @@ export default function TrangSuaChua() {
 
   const handleSaveOrder = async () => {
     if (!customerName.trim() || !customerPhone.trim()) return showToast('Vui lòng nhập Tên khách hàng và Số điện thoại', 'danger');
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      return showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+    }
     if (!deviceModel.trim()) return showToast('Vui lòng nhập Tên máy', 'danger');
 
     const validServices = services.filter(s => (s.serviceName || '').trim().length > 0);
@@ -404,7 +408,7 @@ export default function TrangSuaChua() {
     setIsLoading(true);
     try {
       const payload = {
-        customerName: customerName.trim(), customerPhone: customerPhone.trim(), deviceModel: deviceModel.trim(),
+        customerName: customerName.trim(), customerPhone: cleanPhone, deviceModel: deviceModel.trim(),
         deviceSerial: deviceSerial ? deviceSerial.trim() : null, intakeCondition: intakeCondition ? intakeCondition.trim() : null,
         accessoriesReceived: accessoriesReceived ? accessoriesReceived.trim() : null, promisedDate: promisedDate || null,
         status: orderStatus || 'RECEIVED', technicianName: technicianName.trim(), createdDate, note: note.trim(),
@@ -483,7 +487,20 @@ export default function TrangSuaChua() {
               <div className="card-body p-4">
                 {editingOrderId && <div className="alert alert-warning border-warning-subtle bg-warning-subtle text-warning-emphasis rounded-3 mb-4 py-2 small d-flex align-items-center justify-content-between"><span>Đang chỉnh sửa hóa đơn <strong>{editingOrderCode}</strong>.</span><button className="btn btn-xs btn-outline-dark ms-2" onClick={resetForm}>Tạo mới</button></div>}
 
-                <h6 className="fw-bold mb-3 text-dark border-bottom pb-2">Thông tin Khách hàng & Thiết bị</h6>
+                <div className="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                  <h6 className="fw-bold m-0 text-dark">Thông tin Khách hàng & Thiết bị</h6>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary py-1 px-3 rounded-pill fw-semibold d-flex align-items-center"
+                    onClick={() => {
+                      const walkIn = taoThongTinKhachVangLai();
+                      setCustomerName(walkIn.customerName);
+                      setCustomerPhone(walkIn.customerPhone);
+                    }}
+                  >
+                    <UserPlus size={14} className="me-1" /> + Khách vãng lai
+                  </button>
+                </div>
                 <div className="row g-3 mb-4">
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Tên khách hàng *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><User size={16}/></span><input className="form-control border-start-0 ps-0" value={customerName} onChange={e => setCustomerName(e.target.value)} /></div></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Số điện thoại *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><Phone size={16}/></span><input className="form-control border-start-0 ps-0" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} /></div></div>

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { priceListApi } from '../../../api';
 import { useToast } from '../../../contexts/notification/NguCanhThongBao';
-import logoQK from '../../../assets/qkshop_logo.jpg';
+import logoQK from '../../../assets/qkshop_logo.png';
 import { PriceCard } from './PriceCard';
 import {
   DEFAULT_WARRANTY,
@@ -58,8 +58,8 @@ body { font-family: Arial, Helvetica, sans-serif; }
 .grid { display: grid; grid-template-columns: repeat(${layout.cols}, 1fr); grid-template-rows: repeat(${layout.rows}, 1fr); gap: 5px; padding: 5px; width: 100%; height: 100%; }
 .card { border: 1.5px solid #111; padding: 10px 14px; display: flex; flex-direction: column; overflow: hidden; width: 100%; height: 100%; background: #fff; }
 .logo { text-align: center; margin-bottom: 6px; flex-shrink: 0; }
-.logo img { height: 70px; max-width: 100%; object-fit: contain; margin-top: -17px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.model { background: #000; color: #fff; text-align: center; font-weight: 900; font-size: 15px; line-height: 1.3; padding: 6px 8px; margin-top: -20px; word-wrap: break-word; flex-shrink: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.logo img { height: 30px; max-width: 100%; object-fit: contain; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.model { background: #000; color: #fff; text-align: center; font-weight: 900; font-size: 15px; line-height: 1.3; padding: 6px 8px; word-wrap: break-word; flex-shrink: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .price { text-align: center; font-weight: 900; font-size: 20px; margin: 8px 0 4px; color: #000; flex-shrink: 0; }
 .divider { border-bottom: 2px solid #000; height: 0; margin: 0 8px 8px; flex-shrink: 0; }
 .specs { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 6px; color: #000; }

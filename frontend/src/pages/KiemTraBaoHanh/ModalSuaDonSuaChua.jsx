@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Edit3, Save, Wrench, User, Phone, Calendar, ClipboardList, ShieldAlert, Monitor } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { tinhNgayHetHanBaoHanh } from '../../utils/dinh_dang';
+import { tinhNgayHetHanBaoHanh, normalizePhoneInput, isValidVietnamPhone } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
   const navigate = useNavigate();
@@ -44,6 +44,12 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
       return;
     }
 
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
     // Kiểm tra tính hợp lệ của từng dịch vụ
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
@@ -71,7 +77,7 @@ export default function ModalSuaDonSuaChua({ order, onClose, onSuccess }) {
     try {
       await apiBaoHanh.updateRepairOrder(order.id, {
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerPhone: cleanPhone,
         deviceModel: deviceModel.trim(),
         technicianName: technicianName.trim(),
         note: note.trim(),

@@ -21,7 +21,7 @@ public class RepairOrderService {
     private final RepairOrderItemRepository repairOrderItemRepository;
     private final com.qkshop.tonkho.accessory.AccessoryRepository accessoryRepository;
     private final com.qkshop.tonkho.accessory.AccessoryHistoryRepository accessoryHistoryRepository;
-    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
     private final com.qkshop.tonkho.part.PartService partService;
     private final com.qkshop.tonkho.part.PartRepository partRepository;
     private final com.qkshop.tonkho.part.PartHistoryRepository partHistoryRepository;
@@ -53,6 +53,11 @@ public class RepairOrderService {
         if (customerPhone == null || customerPhone.trim().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng nhập số điện thoại khách");
         }
+        String normalizedPhone = com.qkshop.tonkho.crm.PhoneNormalizer.normalize(customerPhone);
+        if (normalizedPhone == null) {
+            throw new IllegalArgumentException("Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)");
+        }
+        customerPhone = normalizedPhone;
         if (deviceModel == null || deviceModel.trim().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng nhập tên máy của khách (VD: Dell XPS 9500)");
         }
@@ -210,7 +215,11 @@ public class RepairOrderService {
             order.setCustomerName(customerName.trim());
         }
         if (customerPhone != null && !customerPhone.trim().isEmpty()) {
-            order.setCustomerPhone(customerPhone.trim());
+            String normalizedPhone = com.qkshop.tonkho.crm.PhoneNormalizer.normalize(customerPhone);
+            if (normalizedPhone == null) {
+                throw new IllegalArgumentException("Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)");
+            }
+            order.setCustomerPhone(normalizedPhone);
         }
         if (deviceModel != null && !deviceModel.trim().isEmpty()) {
             order.setDeviceModel(deviceModel.trim());
@@ -508,63 +517,9 @@ public class RepairOrderService {
     }
 
     private void syncRepairOrderToSalesOrder(RepairOrder order) {
-        if (salesOrderRepository == null) return;
+        if (orderDataSyncService == null) return;
         try {
-            LocalDateTime sDate = order.getCreatedDate() != null ? order.getCreatedDate() : LocalDateTime.now();
-            String txnId = order.getOrderCode();
-
-            String servicesSummary = (order.getItems() != null && !order.getItems().isEmpty())
-                    ? order.getItems().stream()
-                            .map(RepairOrderItem::getServiceName)
-                            .collect(java.util.stream.Collectors.joining(", "))
-                    : order.getDeviceModel();
-
-            com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepository.findByTransactionId(txnId)
-                    .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
-                            .transactionId(txnId)
-                            .build());
-
-            boolean isCancelled = "CANCELLED".equalsIgnoreCase(order.getStatus());
-            boolean isCompleted = "COMPLETED".equalsIgnoreCase(order.getStatus());
-
-            so.setSaleDate(sDate);
-            so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
-            so.setCustomerName(order.getCustomerName());
-            so.setCustomerPhone(order.getCustomerPhone());
-            so.setCustomerType("Khách sửa chữa");
-            so.setFirstSource("Cửa hàng");
-            so.setLastSource("Khách mang máy đến");
-            so.setNormalizedSource(SourceNormalizer.normalizeSource("Cửa hàng", "Khách mang máy đến"));
-            so.setInboxType("Đơn mua thẳng");
-            so.setIsStudent(false);
-            if (isCancelled) {
-                so.setOrderStatus("Đã hủy");
-                so.setPaymentStatus("Đã hủy");
-                so.setNetRevenue(BigDecimal.ZERO);
-            } else if (isCompleted) {
-                so.setOrderStatus("Hoàn tất");
-                so.setPaymentStatus("Đã thanh toán");
-                so.setNetRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
-            } else {
-                so.setOrderStatus("Đang tiếp nhận/sửa");
-                so.setPaymentStatus("Chưa thanh toán");
-                so.setNetRevenue(BigDecimal.ZERO);
-            }
-            so.setProductName("Sửa chữa " + order.getDeviceModel() + ": " + servicesSummary);
-            so.setBrand("SỬA CHỮA");
-            so.setSeries("Dịch vụ sửa chữa");
-            so.setSegment("SUA_CHUA");
-            so.setModelName(order.getDeviceModel());
-            so.setSerialKeys(order.getDeviceSerial());
-            so.setConfigSummary(servicesSummary);
-            so.setGrossRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
-            so.setDiscount(BigDecimal.ZERO);
-            so.setNote(order.getNote());
-            so.setSalesperson(order.getTechnicianName());
-            so.setOrigin("WEB_APP");
-            so.setOrderCategory("REPAIR");
-
-            salesOrderRepository.save(so);
+            orderDataSyncService.syncRepairOrderToSalesOrder(order, true);
         } catch (Exception e) {
             log.warn("Không thể đồng bộ SalesOrder từ RepairOrder {}: {}", order.getOrderCode(), e.getMessage());
         }

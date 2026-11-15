@@ -1,6 +1,11 @@
 package com.qkshop.tonkho.crm;
 
+import com.qkshop.tonkho.accessory.AccessoryOrder;
+import com.qkshop.tonkho.accessory.AccessoryOrderItem;
 import com.qkshop.tonkho.crm.CrmDtos.*;
+import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.repair.RepairOrder;
+import com.qkshop.tonkho.repair.RepairOrderItem;
 import com.qkshop.tonkho.salesreport.SalesOrder;
 import com.qkshop.tonkho.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +35,9 @@ public class CrmQueryService {
     private final com.qkshop.tonkho.machine.SerialRegistryRepository serialRegistryRepo;
     private final com.qkshop.tonkho.inventory.ActiveInventoryRepository activeInventoryRepo;
     private final com.qkshop.tonkho.inventory.ClosedCycleRepository closedCycleRepo;
+    private final com.qkshop.tonkho.accessory.AccessoryOrderRepository accessoryOrderRepo;
+    private final com.qkshop.tonkho.repair.RepairOrderRepository repairOrderRepo;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
 
     @Transactional(readOnly = true)
     public PageResult<CustomerItem> searchCustomers(String keyword, String sortBy, String direction, int page, int size) {
@@ -397,6 +405,7 @@ public class CrmQueryService {
 
         List<SalesOrder> allCustomerOrders = orderRepo.findByCrmCustomerIdOrderBySaleDateDescIdDesc(customerId);
         MachineRepurchaseBatchContext batchCtx = buildBatchContext(allCustomerOrders);
+        Map<Long, OrderEnrichment> enrichmentMap = buildOrderEnrichments(allCustomerOrders);
 
         List<SalesOrder> accompanyingOrders = new ArrayList<>();
         List<SalesOrder> primaryOrders = new ArrayList<>();
@@ -435,7 +444,7 @@ public class CrmQueryService {
             }
 
             if (matchedMachine != null) {
-                accompanyingMap.put(matchedMachine.getId(), OrderItem.from(acc, null));
+                accompanyingMap.put(matchedMachine.getId(), OrderItem.from(acc, null, false, enrichmentMap.get(acc.getId())));
                 matchedAccIds.add(acc.getId());
             }
         }
@@ -445,12 +454,12 @@ public class CrmQueryService {
         for (SalesOrder o : primaryOrders) {
             OrderItem accItem = accompanyingMap.get(o.getId());
             boolean voided = isMachineRepurchased(o, batchCtx);
-            combinedList.add(OrderItem.from(o, accItem, voided));
+            combinedList.add(OrderItem.from(o, accItem, voided, enrichmentMap.get(o.getId())));
         }
 
         for (SalesOrder acc : accompanyingOrders) {
             if (!matchedAccIds.contains(acc.getId())) {
-                combinedList.add(OrderItem.from(acc, null, false));
+                combinedList.add(OrderItem.from(acc, null, false, enrichmentMap.get(acc.getId())));
             }
         }
 
@@ -486,8 +495,11 @@ public class CrmQueryService {
     @Transactional(readOnly = true)
     public PageResult<OrderItem> getUnlinkedOrders(int page, int size) {
         Page<SalesOrder> result = orderRepo.findUnlinkedOrders(PageRequest.of(Math.max(page, 0), clampSize(size)));
+        Map<Long, OrderEnrichment> enrichmentMap = buildOrderEnrichments(result.getContent());
         return new PageResult<>(
-                result.getContent().stream().map(OrderItem::from).toList(),
+                result.getContent().stream()
+                        .map(o -> OrderItem.from(o, null, false, enrichmentMap.get(o.getId())))
+                        .toList(),
                 result.getTotalElements(), result.getTotalPages(), result.getNumber(), result.getSize());
     }
 
@@ -495,7 +507,7 @@ public class CrmQueryService {
     public OrderItem getOrder(Long orderId) {
         SalesOrder order = orderRepo.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn với mã " + orderId));
-        OrderItem accItem = null;
+        SalesOrder matchedAcc = null;
         if ("MACHINE".equalsIgnoreCase(order.getOrderCategory()) || order.getOrderCategory() == null) {
             String mCycle = order.getMatchedCycleId() != null ? order.getMatchedCycleId().replace("CYC-", "").trim() : "";
             String serial = order.getSerialKeys() != null ? order.getSerialKeys().trim() : "";
@@ -506,14 +518,192 @@ public class CrmQueryService {
                         String cycleKey = c.getTransactionId().substring("PK-KEM-".length()).trim();
                         if ((!mCycle.isEmpty() && mCycle.equalsIgnoreCase(cycleKey)) ||
                             (!serial.isEmpty() && (cycleKey.startsWith(serial) || cycleKey.contains(serial)))) {
-                            accItem = OrderItem.from(c, null);
+                            matchedAcc = c;
                             break;
                         }
                     }
                 }
             }
         }
-        return OrderItem.from(order, accItem);
+        List<SalesOrder> toEnrich = new ArrayList<>();
+        toEnrich.add(order);
+        if (matchedAcc != null) {
+            toEnrich.add(matchedAcc);
+        }
+        Map<Long, OrderEnrichment> enrichmentMap = buildOrderEnrichments(toEnrich);
+        OrderItem accItem = matchedAcc != null
+                ? OrderItem.from(matchedAcc, null, false, enrichmentMap.get(matchedAcc.getId()))
+                : null;
+        return OrderItem.from(order, accItem, false, enrichmentMap.get(order.getId()));
+    }
+
+    private Map<Long, OrderEnrichment> buildOrderEnrichments(List<SalesOrder> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> cycleIds = new LinkedHashSet<>();
+        Set<String> machineSourceRefs = new LinkedHashSet<>();
+        Set<String> accOrderCodes = new LinkedHashSet<>();
+        Set<String> repairOrderCodes = new LinkedHashSet<>();
+
+        for (SalesOrder o : orders) {
+            if (o.getMatchedCycleId() != null && !o.getMatchedCycleId().isBlank()) {
+                String raw = o.getMatchedCycleId().trim();
+                cycleIds.add(raw);
+                if (raw.startsWith("CYC-")) {
+                    cycleIds.add(raw.substring(4));
+                } else {
+                    cycleIds.add("CYC-" + raw);
+                }
+            }
+            String txn = o.getTransactionId() != null ? o.getTransactionId().trim() : "";
+            if (!txn.isEmpty()) {
+                String cat = o.getOrderCategory() != null ? o.getOrderCategory().trim().toUpperCase(Locale.ROOT) : "MACHINE";
+                if ("ACCESSORY".equals(cat) || txn.startsWith("PK")) {
+                    accOrderCodes.add(txn);
+                } else if ("REPAIR".equals(cat) || txn.startsWith("SC")) {
+                    repairOrderCodes.add(txn);
+                } else {
+                    machineSourceRefs.add(txn);
+                }
+            }
+        }
+
+        Map<String, ClosedCycle> ccByCycleId = new HashMap<>();
+        if (!cycleIds.isEmpty()) {
+            for (ClosedCycle cc : closedCycleRepo.findByCycleIdIn(cycleIds)) {
+                if (cc.getCycleId() != null && !cc.getCycleId().isBlank()) {
+                    ccByCycleId.putIfAbsent(cc.getCycleId().trim().toLowerCase(Locale.ROOT), cc);
+                }
+            }
+        }
+
+        Map<String, ClosedCycle> ccBySourceRef = new HashMap<>();
+        if (!machineSourceRefs.isEmpty()) {
+            for (ClosedCycle cc : closedCycleRepo.findBySourceReferenceIn(machineSourceRefs)) {
+                if (cc.getSourceReference() != null && !cc.getSourceReference().isBlank()) {
+                    ccBySourceRef.putIfAbsent(cc.getSourceReference().trim().toLowerCase(Locale.ROOT), cc);
+                }
+            }
+        }
+
+        Map<String, AccessoryOrder> accByCode = new HashMap<>();
+        if (!accOrderCodes.isEmpty()) {
+            for (AccessoryOrder ao : accessoryOrderRepo.findByOrderCodeInWithItems(accOrderCodes)) {
+                if (ao.getOrderCode() != null && !ao.getOrderCode().isBlank()) {
+                    accByCode.putIfAbsent(ao.getOrderCode().trim().toLowerCase(Locale.ROOT), ao);
+                }
+            }
+        }
+
+        Map<String, RepairOrder> repByCode = new HashMap<>();
+        if (!repairOrderCodes.isEmpty()) {
+            for (RepairOrder ro : repairOrderRepo.findByOrderCodeInWithItems(repairOrderCodes)) {
+                if (ro.getOrderCode() != null && !ro.getOrderCode().isBlank()) {
+                    repByCode.putIfAbsent(ro.getOrderCode().trim().toLowerCase(Locale.ROOT), ro);
+                }
+            }
+        }
+
+        Map<Long, OrderEnrichment> result = new HashMap<>();
+        for (SalesOrder o : orders) {
+            if (o.getId() == null) {
+                continue;
+            }
+            ClosedCycle cc = resolveClosedCycleForOrder(o, ccByCycleId, ccBySourceRef);
+            String txnKey = o.getTransactionId() != null ? o.getTransactionId().trim().toLowerCase(Locale.ROOT) : "";
+            AccessoryOrder ao = txnKey.isEmpty() ? null : accByCode.get(txnKey);
+            RepairOrder ro = txnKey.isEmpty() ? null : repByCode.get(txnKey);
+
+            List<OrderDetailLineItem> detailItems = buildDetailItems(ao, ro);
+            Boolean isShipping = (cc != null && Boolean.TRUE.equals(cc.getIsShipping()))
+                    || (ao != null && Boolean.TRUE.equals(ao.getIsShipping()));
+            Boolean isDelivered = (cc != null && Boolean.TRUE.equals(cc.getIsDelivered()))
+                    || (ao != null && Boolean.TRUE.equals(ao.getIsDelivered()));
+            LocalDate deliveryDate = cc != null && cc.getDeliveryDate() != null
+                    ? cc.getDeliveryDate()
+                    : (ao != null ? ao.getDeliveryDate() : null);
+
+            String fallbackSalesperson = cc != null && cc.getClosedBy() != null && !cc.getClosedBy().isBlank()
+                    ? cc.getClosedBy()
+                    : (ao != null && ao.getSalesperson() != null && !ao.getSalesperson().isBlank()
+                            ? ao.getSalesperson()
+                            : (ro != null ? ro.getTechnicianName() : null));
+
+            result.put(o.getId(), new OrderEnrichment(
+                    isShipping,
+                    isDelivered,
+                    deliveryDate,
+                    cc != null ? cc.getShippingCarrier() : null,
+                    cc != null ? cc.getTrackingCode() : null,
+                    cc != null ? cc.getShippingAddress() : null,
+                    cc != null ? cc.getDepositAmount() : null,
+                    cc != null ? cc.getCodAmount() : null,
+                    cc != null ? cc.getUpgradeNote() : null,
+                    ro != null ? ro.getDeviceSerial() : null,
+                    ro != null ? ro.getIntakeCondition() : null,
+                    ro != null ? ro.getAccessoriesReceived() : null,
+                    ro != null ? ro.getPromisedDate() : null,
+                    ro != null ? ro.getStatus() : null,
+                    fallbackSalesperson,
+                    detailItems));
+        }
+        return result;
+    }
+
+    private ClosedCycle resolveClosedCycleForOrder(
+            SalesOrder o,
+            Map<String, ClosedCycle> ccByCycleId,
+            Map<String, ClosedCycle> ccBySourceRef) {
+        if (o.getMatchedCycleId() != null && !o.getMatchedCycleId().isBlank()) {
+            String key = o.getMatchedCycleId().trim().toLowerCase(Locale.ROOT);
+            ClosedCycle cc = ccByCycleId.get(key);
+            if (cc != null) {
+                return cc;
+            }
+            String alt = key.startsWith("cyc-") ? key.substring(4) : "cyc-" + key;
+            cc = ccByCycleId.get(alt);
+            if (cc != null) {
+                return cc;
+            }
+        }
+        if (o.getTransactionId() != null && !o.getTransactionId().isBlank()) {
+            return ccBySourceRef.get(o.getTransactionId().trim().toLowerCase(Locale.ROOT));
+        }
+        return null;
+    }
+
+    private List<OrderDetailLineItem> buildDetailItems(AccessoryOrder ao, RepairOrder ro) {
+        List<OrderDetailLineItem> items = new ArrayList<>();
+        if (ao != null && ao.getItems() != null) {
+            for (AccessoryOrderItem item : ao.getItems()) {
+                String sku = item.getSku() != null ? item.getSku().trim() : "";
+                String sn = item.getSerialNumber() != null ? item.getSerialNumber().trim() : "";
+                String skuOrSerial = (!sku.isEmpty() && !sn.isEmpty())
+                        ? (sku + " | SN: " + sn)
+                        : (!sn.isEmpty() ? sn : (sku.isEmpty() ? null : sku));
+                items.add(new OrderDetailLineItem(
+                        item.getAccessoryName(),
+                        skuOrSerial,
+                        item.getQuantity(),
+                        item.getPrice(),
+                        item.getWarrantyPeriod(),
+                        item.getWarrantyExpiry(),
+                        item.getNote()));
+            }
+        } else if (ro != null && ro.getItems() != null) {
+            for (RepairOrderItem item : ro.getItems()) {
+                items.add(new OrderDetailLineItem(
+                        item.getServiceName(),
+                        item.getSku(),
+                        item.getQuantity(),
+                        item.getPrice(),
+                        item.getWarrantyPeriod(),
+                        item.getWarrantyExpiry(),
+                        item.getNote()));
+            }
+        }
+        return items;
     }
 
     @Transactional(readOnly = true)
@@ -556,6 +746,7 @@ public class CrmQueryService {
         c.setPreferenceNote(req.preferenceNote() != null ? req.preferenceNote().trim() : null);
 
         customerRepo.save(c);
+        orderDataSyncService.propagateCustomerToOrders(c);
         invalidateCache();
         return CustomerItem.from(c);
     }
@@ -575,6 +766,43 @@ public class CrmQueryService {
             order.setCustomerName(name);
         }
         orderRepo.save(order);
+
+        // Đồng bộ SĐT chuẩn hóa & tên về các bảng đơn gốc (ClosedCycle, PK-KEM-, AccessoryOrder, RepairOrder)
+        if (order.getMatchedCycleId() != null && !order.getMatchedCycleId().isBlank()) {
+            closedCycleRepo.findByCycleId(order.getMatchedCycleId()).ifPresent(cc -> {
+                cc.setCustomerPhone(phone);
+                if (!name.isEmpty()) cc.setCustomerName(name);
+                closedCycleRepo.save(cc);
+            });
+            for (String pkKemCode : com.qkshop.tonkho.salesreport.OrderDataSyncService.resolveBundledAccessoryCodes(order.getMatchedCycleId())) {
+                accessoryOrderRepo.findByOrderCode(pkKemCode).ifPresent(ao -> {
+                    ao.setCustomerPhone(phone);
+                    if (!name.isEmpty()) ao.setCustomerName(name);
+                    accessoryOrderRepo.save(ao);
+                });
+            }
+        }
+        if (order.getTransactionId() != null && !order.getTransactionId().isBlank()) {
+            String txnId = order.getTransactionId().trim();
+            accessoryOrderRepo.findByOrderCode(txnId).ifPresent(ao -> {
+                ao.setCustomerPhone(phone);
+                if (!name.isEmpty()) ao.setCustomerName(name);
+                accessoryOrderRepo.save(ao);
+            });
+            repairOrderRepo.findByOrderCode(txnId).ifPresent(ro -> {
+                ro.setCustomerPhone(phone);
+                if (!name.isEmpty()) ro.setCustomerName(name);
+                repairOrderRepo.save(ro);
+            });
+        }
+
+        orderDataSyncService.syncCustomerFromOrder(
+                order,
+                phone,
+                name.isEmpty() ? order.getCustomerName() : name,
+                order.getShippingAddress(),
+                !name.isEmpty());
+
         invalidateCache();
     }
 

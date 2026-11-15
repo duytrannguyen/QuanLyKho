@@ -23,4 +23,8 @@ public interface NotificationRepository extends JpaRepository<AppNotification, L
     @Modifying
     @Query("DELETE FROM AppNotification n WHERE n.isRead = true")
     int deleteAllRead();
+
+    @Modifying
+    @Query("UPDATE AppNotification n SET n.link = '/' WHERE n.link = '/doi-soat'")
+    int clearLegacySyncLinks();
 }
