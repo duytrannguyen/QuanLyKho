@@ -221,8 +221,8 @@ export default function TrangNhapPhuKien() {
         </button>
       </div>
 
-      <div className="row">
-        <div className="col-lg-7" style={{ width: "50%", padding: "0px" }}>
+      <div className="row g-4">
+        <div className="col-12 col-lg-7">
           <div className="card shadow-sm border-0 rounded-4">
             <div className="card-header bg-white border-bottom p-3">
               {/* Toggle Nhập Mới / Có Sẵn */}
@@ -412,7 +412,7 @@ export default function TrangNhapPhuKien() {
           </div>
         </div>
 
-        <div className="col-lg-6 mt-4 mt-lg-0">
+        <div className="col-12 col-lg-5">
           <div className="alert alert-info border-info d-flex flex-column gap-2 p-4 shadow-sm">
             <strong className="d-flex align-items-center gap-2 text-info-emphasis fs-5">
               <span className="badge rounded-circle bg-info text-white d-flex align-items-center justify-content-center p-0" style={{ width: '24px', height: '24px' }}><i className="bi bi-info"></i>i</span>

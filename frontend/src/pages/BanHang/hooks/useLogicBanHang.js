@@ -6,7 +6,9 @@ import {
   formatCurrency,
   parseCurrency,
   getTodayDateString,
-  tinhNgayHetHanBaoHanh
+  tinhNgayHetHanBaoHanh,
+  normalizePhoneInput,
+  isValidVietnamPhone
 } from '../../../utils/dinh_dang';
 
 export function useLogicBanHang() {
@@ -53,9 +55,13 @@ export function useLogicBanHang() {
   const [isUpgraded, setIsUpgraded] = useState(false);
   const [defaultSpecs, setDefaultSpecs] = useState({ ram: '', ssd: '' });
 
-  // State: Phụ kiện & Bộ quà tặng mặc định
+  // State: Phụ kiện, Sạc kèm theo máy & Bộ quà tặng mặc định
   const [availableAccessories, setAvailableAccessories] = useState([]);
+  const [allAccessories, setAllAccessories] = useState([]);
   const [selectedAccessories, setSelectedAccessories] = useState([]);
+  const [selectedCharger, setSelectedCharger] = useState(null);
+  const [chargerSearchTerm, setChargerSearchTerm] = useState('');
+  const [showChargerDropdown, setShowChargerDropdown] = useState(false);
   const [accSearchTerm, setAccSearchTerm] = useState('');
   const [showAccDropdown, setShowAccDropdown] = useState(false);
   const [defaultGiftBundle, setDefaultGiftBundle] = useState([]);
@@ -74,6 +80,9 @@ export function useLogicBanHang() {
   const [upgradeSsdPrice, setUpgradeSsdPrice] = useState('');
   const [swapRamSku, setSwapRamSku] = useState('');
   const [swapSsdSku, setSwapSsdSku] = useState('');
+
+  // State: Đơn hàng vừa bán thành công (dùng để in phiếu xuất kho kiêm bảo hành ngay tại quầy)
+  const [saleSuccessOrder, setSaleSuccessOrder] = useState(null);
 
   // State: Khách hàng nhận diện từ CRM
   const [matchedCrmCustomer, setMatchedCrmCustomer] = useState(null);
@@ -132,13 +141,16 @@ export function useLogicBanHang() {
 
   const fetchData = async () => {
     try {
-      const [accRes, giftRes, partsRes] = await Promise.all([
+      const [accRes, allAccRes, giftRes, partsRes] = await Promise.all([
         apiPhuKien.getAvailable(),
+        apiPhuKien.getAll().catch(() => null),
         apiPhuKien.getDefaultGifts().catch(() => ({ data: { data: '[]' } })),
         apiLinhKien.getAvailable().catch(() => ({ data: { data: [] } }))
       ]);
       const accList = accRes.data || [];
+      const fullAccList = Array.isArray(allAccRes?.data) && allAccRes.data.length > 0 ? allAccRes.data : accList;
       setAvailableAccessories(accList);
+      setAllAccessories(fullAccList);
       setAvailableParts(partsRes.data?.data || partsRes.data || []);
 
       let bundle = [];
@@ -242,6 +254,9 @@ export function useLogicBanHang() {
       setUpgradeSsdPrice('');
       setSwapRamSku('');
       setSwapSsdSku('');
+      setSelectedCharger(null);
+      setChargerSearchTerm('');
+      setShowChargerDropdown(false);
       setDefaultGiftDeduction(0);
 
       if (defaultGiftBundleRef.current && defaultGiftBundleRef.current.length > 0) {
@@ -322,6 +337,40 @@ export function useLogicBanHang() {
 
   const handleRemoveAccessory = (sku) => {
     setSelectedAccessories(prev => prev.filter(item => !(item.sku === sku && !item.isFromDefaultBundle)));
+  };
+
+  // Handlers: Sạc kèm theo máy (0đ - BH theo máy)
+  const handleSelectCharger = (acc) => {
+    if (!acc || acc.quantity <= 0) return;
+    setSelectedCharger({
+      sku: acc.sku,
+      name: acc.name,
+      category: acc.category,
+      quantity: acc.quantity,
+      isCustom: false
+    });
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
+  };
+
+  const handleSelectCustomCharger = (rawName) => {
+    const cleanName = (rawName || '').trim();
+    if (!cleanName) return;
+    setSelectedCharger({
+      sku: null,
+      name: cleanName,
+      category: 'SAC',
+      quantity: null,
+      isCustom: true
+    });
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
+  };
+
+  const handleClearCharger = () => {
+    setSelectedCharger(null);
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
   };
 
   // Gift Modal logic
@@ -425,6 +474,9 @@ export function useLogicBanHang() {
     setSwapRamSku('');
     setSwapSsdSku('');
     setSelectedAccessories([]);
+    setSelectedCharger(null);
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
     setDefaultGiftDeduction(0);
     setMatchedCrmCustomer(null);
     setFormData({
@@ -462,6 +514,46 @@ export function useLogicBanHang() {
     if (!isReady || !formData.customer.trim() || !formData.customerPhone.trim()) {
       showToast('Vui lòng nhập đầy đủ thông tin Khách hàng và Số điện thoại', 'danger');
       return;
+    }
+
+    const cleanPhone = normalizePhoneInput(formData.customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
+    if (formData.warrantyOption === 'Bảo hành hãng' && (!formData.warrantyExpiry || !formData.warrantyExpiry.trim())) {
+      showToast('Vui lòng chọn ngày hết hạn cho gói Bảo hành hãng', 'danger');
+      return;
+    }
+
+    if (formData.warrantyOption === 'Khác' && (!formData.customWarranty || !formData.customWarranty.trim())) {
+      showToast('Vui lòng nhập chi tiết gói bảo hành khác', 'danger');
+      return;
+    }
+
+    if (!selectedCharger && chargerSearchTerm.trim()) {
+      showToast(
+        'Bạn đang gõ tên sạc kèm theo máy nhưng chưa chọn. Vui lòng chọn trong danh sách, bấm "Dùng sạc ngoài kho", hoặc xóa ô tìm kiếm sạc.',
+        'warning'
+      );
+      return;
+    }
+
+    if (selectedCharger && !selectedCharger.isCustom && selectedCharger.sku) {
+      const sameSkuInAccessories = selectedAccessories
+        .filter(sa => sa.sku === selectedCharger.sku)
+        .reduce((sum, sa) => sum + (Number(sa.quantity) || 1), 0);
+      const stockItem =
+        allAccessories.find(a => a.sku === selectedCharger.sku) ||
+        availableAccessories.find(a => a.sku === selectedCharger.sku);
+      if (stockItem && sameSkuInAccessories + 1 > stockItem.quantity) {
+        showToast(
+          `Tổng số lượng xuất cho "${selectedCharger.name}" (${sameSkuInAccessories + 1}) vượt quá tồn kho (${stockItem.quantity})`,
+          'warning'
+        );
+        return;
+      }
     }
 
     const confirmMsg =
@@ -605,8 +697,8 @@ export function useLogicBanHang() {
           saleRam: formData.saleRam,
           saleSsd: formData.saleSsd,
           upgradeNote: generatedUpgradeNote,
-          customerName: formData.customer,
-          customerPhone: formData.customerPhone,
+          customerName: formData.customer.trim(),
+          customerPhone: cleanPhone,
           productFullName: prodFullName,
           productSummary: prodSummary,
           isShipping: formData.isShipping,
@@ -616,11 +708,11 @@ export function useLogicBanHang() {
               ? formData.deliveryDate || getTodayDateString()
               : null
             : formData.saleDate?.slice(0, 10) || null,
-          shippingCarrier: formData.shippingCarrier || null,
-          trackingCode: formData.trackingCode || null,
-          shippingAddress: formData.shippingAddress || null,
-          depositAmount: parseCurrency(formData.depositAmount) || 0,
-          codAmount: parseCurrency(formData.codAmount) || (formData.isShipping && !formData.isDelivered ? Math.max(0, grandTotal - (parseCurrency(formData.depositAmount) || 0)) : 0),
+          shippingCarrier: formData.isShipping ? (formData.shippingCarrier || null) : null,
+          trackingCode: formData.isShipping ? (formData.trackingCode || null) : null,
+          shippingAddress: formData.isShipping ? (formData.shippingAddress || null) : null,
+          depositAmount: 0,
+          codAmount: 0,
           warrantyPeriod: effectiveWarrantyPeriod,
           warrantyExpiry: calculatedWarrantyExpiry,
           saleNote: formData.saleNote,
@@ -634,6 +726,8 @@ export function useLogicBanHang() {
               : formData.lastSource,
           customerType: formData.customerType,
           isStudent: isStudentBool,
+          chargerName: selectedCharger ? selectedCharger.name : null,
+          chargerSku: selectedCharger && !selectedCharger.isCustom ? selectedCharger.sku : null,
           accessories: finalAccessories,
           swapParts: swapParts
         },
@@ -641,6 +735,38 @@ export function useLogicBanHang() {
       );
 
       const invoiceCode = res?.data?.sourceReference || res?.data?.orderCode || '';
+      const orderSummaryForPrint = {
+        orderCode: invoiceCode,
+        cycleId: res?.data?.cycleId || scannedMachine.cycleId,
+        serialKey: scannedMachine.serialKey,
+        productFullName: prodFullName,
+        productSummary: prodSummary,
+        customerName: formData.customer.trim(),
+        customerPhone: cleanPhone,
+        salesperson: formData.salesperson,
+        saleDate: formData.saleDate,
+        finalPrice: grandTotal,
+        discount: (Number(discountNum) || 0) + (Number(defaultGiftDeduction) || 0),
+        grossRevenue: negotiatedGross,
+        warrantyPeriod: effectiveWarrantyPeriod,
+        warrantyExpiry: calculatedWarrantyExpiry,
+        isShipping: formData.isShipping,
+        isDelivered: formData.isShipping ? formData.isDelivered : true,
+        deliveryDate: formData.isShipping ? formData.deliveryDate : null,
+        shippingCarrier: formData.isShipping ? formData.shippingCarrier : null,
+        trackingCode: formData.isShipping ? formData.trackingCode : null,
+        shippingAddress: formData.isShipping ? formData.shippingAddress : null,
+        depositAmount: 0,
+        codAmount: 0,
+        upgradeNote: generatedUpgradeNote,
+        chargerName: selectedCharger ? selectedCharger.name : null,
+        chargerSku: selectedCharger && !selectedCharger.isCustom ? selectedCharger.sku : null,
+        accessories: finalAccessories,
+        brandName: scannedMachine.brandName || scannedMachine.brand || '',
+        defaultSalePrice: scannedMachine.salePrice || 0
+      };
+      setSaleSuccessOrder(orderSummaryForPrint);
+
       const successMsg =
         formData.isShipping && !formData.isDelivered
           ? invoiceCode
@@ -673,7 +799,13 @@ export function useLogicBanHang() {
     setIsUpgraded,
     defaultSpecs,
     availableAccessories,
+    allAccessories,
     selectedAccessories,
+    selectedCharger,
+    chargerSearchTerm,
+    setChargerSearchTerm,
+    showChargerDropdown,
+    setShowChargerDropdown,
     accSearchTerm,
     setAccSearchTerm,
     showAccDropdown,
@@ -698,6 +830,8 @@ export function useLogicBanHang() {
     swapSsdSku,
     setSwapSsdSku,
     matchedCrmCustomer,
+    saleSuccessOrder,
+    setSaleSuccessOrder,
     fetchData,
 
     // Computed
@@ -713,6 +847,9 @@ export function useLogicBanHang() {
     handleUpdateAccessory,
     handleRemoveDefaultGift,
     handleRemoveAccessory,
+    handleSelectCharger,
+    handleSelectCustomCharger,
+    handleClearCharger,
     handleOpenGiftModal,
     handleAddTempGift,
     handleUpdateTempGift,

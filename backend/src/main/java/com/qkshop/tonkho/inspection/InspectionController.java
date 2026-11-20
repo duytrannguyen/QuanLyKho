@@ -30,6 +30,7 @@ public class InspectionController {
 
     /** Lấy danh sách phiếu kiểm tra, lọc theo status */
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<List<InspectionDTO>>> getInspections(
             @RequestParam(required = false) String status) {
         List<InspectionRequest> requests = inspectionService.getActiveRequests(status);
@@ -42,6 +43,7 @@ public class InspectionController {
 
     /** Lấy tất cả có phân trang */
     @GetMapping("/all")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAuthority('INSPECTION')")
     public ResponseEntity<ApiResponse<Page<InspectionDTO>>> getAllPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

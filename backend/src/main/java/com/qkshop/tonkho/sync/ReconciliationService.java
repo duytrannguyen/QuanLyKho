@@ -37,6 +37,7 @@ public class ReconciliationService {
     private final SyncRunRepository syncRunRepo;
     private final IntakeService intakeService;
     private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
 
     @Transactional
     public DataIssue recheckIssue(String issueId) {
@@ -139,6 +140,18 @@ public class ReconciliationService {
             }
         }
 
+        BigDecimal origPrice = null;
+        if (cc != null) {
+            if (cc.getConfig() != null && cc.getConfig().getDefaultSalePrice() != null
+                    && cc.getConfig().getDefaultSalePrice().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getConfig().getDefaultSalePrice();
+            } else if (cc.getGrossRevenue() != null && cc.getGrossRevenue().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getGrossRevenue();
+            } else if (cc.getSalePriceSnapshot() != null && cc.getSalePriceSnapshot().compareTo(BigDecimal.ZERO) > 0) {
+                origPrice = cc.getSalePriceSnapshot();
+            }
+        }
+
         MachineImportRequest req = MachineImportRequest.builder()
                 .serial(serial)
                 .importType("KHÁCH ĐỔI/TRẢ")
@@ -152,6 +165,7 @@ public class ReconciliationService {
                 .ssd(ssd)
                 .screenSize(screenSize)
                 .touchscreen(touchscreen)
+                .price(origPrice)
                 .notes("Nhập lại kho từ đơn hủy/trả " + issue.getSourceReference() + (note != null && !note.isBlank() ? " | " + note : ""))
                 .build();
 
@@ -166,45 +180,41 @@ public class ReconciliationService {
             }
         }
 
-        // Cập nhật chu kỳ đóng cũ thành CUSTOMER_RETURN
+        // Cập nhật chu kỳ đóng cũ thành CUSTOMER_RETURN và đồng bộ sổ cái SalesOrder
         if (cc != null) {
             cc.setCloseType(CloseType.CUSTOMER_RETURN);
             cc.setCloseReason("Khách trả máy - duyệt nhập lại kho với chu kỳ " + newInv.getCycleId());
-            closedCycleRepo.save(cc);
-        }
-
-        // Đồng bộ sổ cái SalesOrder của đúng chu kỳ vừa trả (không xóa/ghi đè lịch sử các vòng bán trước đó)
-        try {
-            Optional<SalesOrder> targetOrderOpt = Optional.empty();
-            if (cc != null && cc.getCycleId() != null) {
-                targetOrderOpt = salesOrderRepo.findByMatchedCycleId(cc.getCycleId());
+            cc.setWarrantyExpiry(null);
+            cc.setWarrantyPeriod("Đã hủy (Đã thu lại máy)");
+            cc.setSaleNote((cc.getSaleNote() != null ? cc.getSaleNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newInv.getCycleId());
+            ClosedCycle savedCc = closedCycleRepo.save(cc);
+            if (orderDataSyncService != null) {
+                try {
+                    orderDataSyncService.syncClosedCycleToSalesOrder(savedCc);
+                } catch (Exception e) {
+                    log.warn("Không thể cập nhật SalesOrder khi duyệt trả máy {}: {}", serial, e.getMessage());
+                }
             }
-            if (targetOrderOpt.isEmpty()) {
-                targetOrderOpt = salesOrderRepo.findBySerialKeysContaining(serial).stream()
+        } else {
+            try {
+                salesOrderRepo.findBySerialKeysContaining(serial).stream()
                         .filter(s -> s.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(s.getOrderCategory()))
+                        .filter(s -> s.getTransactionId() == null || !s.getTransactionId().startsWith("PK-KEM-"))
                         .max(Comparator.comparing(
                                 (SalesOrder s) -> s.getSaleDate() != null ? s.getSaleDate() : LocalDateTime.MIN)
-                                .thenComparing(s -> s.getId() != null ? s.getId() : 0L));
+                                .thenComparing(s -> s.getId() != null ? s.getId() : 0L))
+                        .ifPresent(so -> {
+                            so.setOrderStatus("Trả hàng");
+                            so.setPaymentStatus("Đã hoàn tiền");
+                            so.setNetRevenue(BigDecimal.ZERO);
+                            so.setWarrantyExpiry(null);
+                            so.setWarrantyPeriod("Đã hủy (Đã thu máy)");
+                            so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newInv.getCycleId());
+                            salesOrderRepo.save(so);
+                        });
+            } catch (Exception e) {
+                log.warn("Không thể cập nhật SalesOrder khi duyệt trả máy {}: {}", serial, e.getMessage());
             }
-
-            targetOrderOpt.ifPresent(so -> {
-                so.setOrderStatus("Trả hàng");
-                so.setNetRevenue(BigDecimal.ZERO);
-                so.setNote((so.getNote() != null ? so.getNote() + " | " : "") + "Khách trả máy - nhập lại kho " + newInv.getCycleId());
-                salesOrderRepo.save(so);
-            });
-
-            if (cc != null && cc.getCycleId() != null) {
-                String pkKemTxnId = "PK-KEM-" + cc.getCycleId().replace("CYC-", "");
-                salesOrderRepo.findByTransactionId(pkKemTxnId).ifPresent(accSo -> {
-                    accSo.setOrderStatus("Trả hàng");
-                    accSo.setNetRevenue(BigDecimal.ZERO);
-                    accSo.setNote((accSo.getNote() != null ? accSo.getNote() + " | " : "") + "Khách trả máy kèm phụ kiện - nhập lại kho " + newInv.getCycleId());
-                    salesOrderRepo.save(accSo);
-                });
-            }
-        } catch (Exception e) {
-            log.warn("Không thể cập nhật SalesOrder khi duyệt trả máy {}: {}", serial, e.getMessage());
         }
 
         issue.setStatus(IssueStatus.RESOLVED);

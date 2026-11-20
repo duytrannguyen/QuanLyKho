@@ -6,24 +6,20 @@ services:
     image: mysql:8.0
     container_name: qkshop_db
     restart: always
-    # Trỏ đến file .env ở thư mục gốc
     env_file:
       - .env
     environment:
-      # Ánh xạ để MySQL tự cấu hình mật khẩu & tên DB theo .env
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-dongduy122}
+      MYSQL_DATABASE: ${DB_NAME:-qkshop_tonkho}
       TZ: Asia/Ho_Chi_Minh
     healthcheck:
-      # Đã bổ sung -u và -p để ping không bị từ chối truy cập (Access denied)
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
-      interval: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 25s
+      retries: 25
+      start_period: 30s
     ports:
       # Cổng MySQL chỉ mở trên localhost của server để bảo mật
-      # Dùng DB_PORT_LOCAL để tránh trùng lặp với DB_PORT (3306) của container
       - "127.0.0.1:${DB_PORT_LOCAL:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
@@ -63,12 +59,10 @@ services:
       dockerfile: Dockerfile
     container_name: qkshop_backend
     restart: always
-    # Tự động bơm TOÀN BỘ biến trong .env (DB, JWT, GSHEET...) vào Spring Boot
     env_file:
       - .env
     environment:
-      # GHI ĐÈ biến DB_HOST và DB_PORT từ file .env (vốn đang là localhost)
-      # Để backend gọi đúng vào tên service 'db' trong mạng nội bộ Docker
+      # Ghi đè biến host nội bộ trong Docker network
       DB_HOST: db
       DB_PORT: 3306
     ports:

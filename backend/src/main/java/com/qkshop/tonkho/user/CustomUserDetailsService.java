@@ -56,13 +56,24 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<SimpleGrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
 
-        if (user.getRole() == UserRole.ADMIN) {
+        boolean isRootAdmin = "admin".equalsIgnoreCase(user.getUsername()) || user.getRole() == UserRole.SUPERADMIN;
+        if (isRootAdmin) {
+            // Tài khoản gốc luôn sở hữu vai trò SUPERADMIN và toàn bộ quyền hạn hệ thống
+            authorities.add(new SimpleGrantedAuthority("ROLE_SUPERADMIN"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
             for (String perm : AppPermission.allCodes()) {
+                authorities.add(new SimpleGrantedAuthority(perm));
+            }
+        } else if (user.getRole() == UserRole.ADMIN) {
+            for (String perm : AppPermission.standardAdminCodes()) {
                 authorities.add(new SimpleGrantedAuthority(perm));
             }
         } else if (user.getPermissions() != null) {
             for (String perm : user.getPermissions()) {
-                authorities.add(new SimpleGrantedAuthority(perm));
+                // Quyền SUPERADMIN chỉ dành riêng cho tài khoản admin gốc
+                if (!"SUPERADMIN".equalsIgnoreCase(perm)) {
+                    authorities.add(new SimpleGrantedAuthority(perm));
+                }
             }
         }
 

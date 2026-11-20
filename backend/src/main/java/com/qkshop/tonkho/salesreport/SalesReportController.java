@@ -24,11 +24,13 @@ public class SalesReportController {
 
     private final SalesReportService salesReportService;
     private final SalesOrderBackfillService backfillService;
+    private final OrderDataSyncService orderDataSyncService;
 
     /**
      * Lấy dữ liệu tổng hợp Dashboard Báo Cáo Bán Hàng theo bộ lọc thời gian.
      */
     @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('REPORT_VIEW', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<SalesDashboardResponse>> getDashboard(
             @RequestParam(defaultValue = "THIS_MONTH") String preset,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -39,16 +41,38 @@ public class SalesReportController {
     }
 
     /**
+     * Xuất danh sách đơn hàng và dữ liệu doanh số ra file Excel.
+     */
+    @GetMapping("/export-excel")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('REPORT_VIEW', 'DASHBOARD_VIEW', 'EXPORT_DATA')")
+    public ResponseEntity<org.springframework.core.io.Resource> exportSalesReportExcel(
+            @RequestParam(defaultValue = "THIS_MONTH") String preset,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        log.info("[SALES_REPORT] Yêu cầu xuất Excel báo cáo bán hàng: preset={}, from={}, to={}", preset, from, to);
+        org.springframework.core.io.ByteArrayResource resource = salesReportService.generateSalesReportExcel(preset, from, to);
+        String filename = "Bao_Cao_Doanh_So_QKShop_" + (preset != null ? preset : "ky") + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(resource);
+    }
+
+    /**
      * Đồng bộ lại dữ liệu lịch sử từ bảng qk_migration_sales vào sales_orders.
      */
     @PostMapping("/rebuild")
     @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_MANAGE', 'SYSTEM_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildData() {
-        log.info("[SALES_REPORT] Yêu cầu nạp lại toàn bộ dữ liệu đơn hàng sales_orders.");
+        log.info("[SALES_REPORT] Yêu cầu nạp lại và đồng bộ toàn bộ dữ liệu đơn hàng sales_orders.");
         int count = backfillService.backfillAllSales();
+        Map<String, Object> syncSummary = orderDataSyncService.reconcileAllHistoricalData();
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("totalImported", count);
+        result.putAll(syncSummary);
         return ResponseEntity.ok(ApiResponse.okWithMessage(
-                "Đã làm mới và đồng bộ thành công " + count + " đơn hàng vào hệ thống báo cáo.",
-                Map.of("totalImported", count)
+                "Đã làm mới và đồng bộ toàn diện " + count + " đơn hàng vào hệ thống báo cáo.",
+                result
         ));
     }
 }

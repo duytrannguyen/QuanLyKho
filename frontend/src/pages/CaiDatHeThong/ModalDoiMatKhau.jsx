@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, Check, X, KeyRound } from 'lucide-react';
 import { systemApi } from '../../api';
+import { useAuth } from '../../contexts/NguCanhXacThuc';
 
 export default function ModalDoiMatKhau({ show, onClose, user, showToast }) {
+  const { isSuperAdmin } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const isTargetRoot = user?.username === 'admin' || user?.role === 'SUPERADMIN';
+
   if (!show || !user) return null;
+  if (isTargetRoot && !isSuperAdmin) {
+    showToast('Chỉ tài khoản Quản trị tối cao (Superadmin) mới có quyền đổi mật khẩu của tài khoản gốc.', 'warning');
+    onClose();
+    return null;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -494,4 +494,142 @@ public class SalesReportService {
 
         return new PeriodWindow(start, end, prevStart, prevEnd, label, prevLabel, unit);
     }
+
+    @Transactional(readOnly = true)
+    public org.springframework.core.io.ByteArrayResource generateSalesReportExcel(String preset, LocalDate customFrom, LocalDate customTo) {
+        PeriodWindow window = resolvePeriodWindow(preset, customFrom, customTo);
+        LocalDateTime currentStart = window.startDate.atStartOfDay();
+        LocalDateTime currentEnd = window.endDate.atTime(23, 59, 59, 999999999);
+
+        List<SalesOrder> orders = salesOrderRepo.findCompletedOrdersInPeriod(currentStart, currentEnd);
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Bao_Cao_Doanh_So");
+
+            // Header Style
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font font = workbook.createFont();
+            font.setBold(true);
+            font.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(font);
+            headerStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+
+            // Currency Style
+            org.apache.poi.ss.usermodel.CellStyle currencyStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.DataFormat df = workbook.createDataFormat();
+            currencyStyle.setDataFormat(df.getFormat("#,##0"));
+
+            // Bold Currency Style
+            org.apache.poi.ss.usermodel.CellStyle boldCurrencyStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font boldFont = workbook.createFont();
+            boldFont.setBold(true);
+            boldCurrencyStyle.setFont(boldFont);
+            boldCurrencyStyle.setDataFormat(df.getFormat("#,##0"));
+
+            String[] headers = {
+                    "STT", "Mã đơn hàng", "Ngày bán / Giao", "Tên khách hàng", "Số điện thoại",
+                    "Phân loại khách", "Ngành hàng", "Tên sản phẩm / Dòng máy", "Số Serial",
+                    "Cấu hình chi tiết", "Gói bảo hành", "Hạn bảo hành", "Hình thức bán",
+                    "Đơn giá niêm yết (VNĐ)", "Chiết khấu (VNĐ)", "Thực thu (VNĐ)", "Nhân viên bán", "Nguồn chốt"
+            };
+
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowIdx = 1;
+            java.math.BigDecimal totalGross = java.math.BigDecimal.ZERO;
+            java.math.BigDecimal totalDisc = java.math.BigDecimal.ZERO;
+            java.math.BigDecimal totalNet = java.math.BigDecimal.ZERO;
+
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            DateTimeFormatter dfDate = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+            for (SalesOrder o : orders) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(rowIdx - 1);
+                row.createCell(1).setCellValue(o.getTransactionId() != null ? o.getTransactionId() : "");
+                row.createCell(2).setCellValue(o.getSaleDate() != null ? o.getSaleDate().format(dtf) : "");
+                row.createCell(3).setCellValue(o.getCustomerName() != null ? o.getCustomerName() : "Khách vãng lai");
+                row.createCell(4).setCellValue(o.getCustomerPhone() != null ? o.getCustomerPhone() : "");
+                row.createCell(5).setCellValue(o.getCustomerType() != null ? o.getCustomerType() : "");
+
+                String catText = "Máy móc";
+                if ("ACCESSORY".equalsIgnoreCase(o.getOrderCategory())) catText = "Phụ kiện";
+                else if ("REPAIR".equalsIgnoreCase(o.getOrderCategory())) catText = "Dịch vụ sửa chữa";
+                row.createCell(6).setCellValue(catText);
+
+                row.createCell(7).setCellValue(o.getProductName() != null ? o.getProductName() : (o.getModelName() != null ? o.getModelName() : ""));
+                row.createCell(8).setCellValue(o.getSerialKeys() != null ? o.getSerialKeys() : "");
+                row.createCell(9).setCellValue(o.getConfigSummary() != null ? o.getConfigSummary() : "");
+                row.createCell(10).setCellValue(o.getWarrantyPeriod() != null ? o.getWarrantyPeriod() : "");
+                row.createCell(11).setCellValue(o.getWarrantyExpiry() != null ? o.getWarrantyExpiry().format(dfDate) : "");
+
+                String shipText = Boolean.TRUE.equals(o.getIsShipping())
+                        ? ("Đơn ship xa" + (Boolean.TRUE.equals(o.getIsDelivered()) ? " (Đã nhận)" : " (Chờ giao)"))
+                        : "Tại cửa hàng";
+                row.createCell(12).setCellValue(shipText);
+
+                java.math.BigDecimal gross = o.getGrossRevenue() != null ? o.getGrossRevenue() : java.math.BigDecimal.ZERO;
+                java.math.BigDecimal disc = o.getDiscount() != null ? o.getDiscount() : java.math.BigDecimal.ZERO;
+                java.math.BigDecimal net = o.getNetRevenue() != null ? o.getNetRevenue() : java.math.BigDecimal.ZERO;
+
+                totalGross = totalGross.add(gross);
+                totalDisc = totalDisc.add(disc);
+                totalNet = totalNet.add(net);
+
+                org.apache.poi.ss.usermodel.Cell c13 = row.createCell(13);
+                c13.setCellValue(gross.doubleValue());
+                c13.setCellStyle(currencyStyle);
+
+                org.apache.poi.ss.usermodel.Cell c14 = row.createCell(14);
+                c14.setCellValue(disc.doubleValue());
+                c14.setCellStyle(currencyStyle);
+
+                org.apache.poi.ss.usermodel.Cell c15 = row.createCell(15);
+                c15.setCellValue(net.doubleValue());
+                c15.setCellStyle(currencyStyle);
+
+                row.createCell(16).setCellValue(o.getSalesperson() != null ? o.getSalesperson() : "");
+                row.createCell(17).setCellValue(o.getNormalizedSource() != null ? o.getNormalizedSource() : (o.getLastSource() != null ? o.getLastSource() : ""));
+            }
+
+            // Dòng tổng cộng
+            org.apache.poi.ss.usermodel.Row totalRow = sheet.createRow(rowIdx);
+            org.apache.poi.ss.usermodel.Cell totalLabel = totalRow.createCell(0);
+            totalLabel.setCellValue("TỔNG CỘNG (" + orders.size() + " ĐƠN HÀNG)");
+            org.apache.poi.ss.usermodel.CellStyle totalLabelStyle = workbook.createCellStyle();
+            totalLabelStyle.setFont(boldFont);
+            totalLabel.setCellStyle(totalLabelStyle);
+
+            org.apache.poi.ss.usermodel.Cell tc13 = totalRow.createCell(13);
+            tc13.setCellValue(totalGross.doubleValue());
+            tc13.setCellStyle(boldCurrencyStyle);
+
+            org.apache.poi.ss.usermodel.Cell tc14 = totalRow.createCell(14);
+            tc14.setCellValue(totalDisc.doubleValue());
+            tc14.setCellStyle(boldCurrencyStyle);
+
+            org.apache.poi.ss.usermodel.Cell tc15 = totalRow.createCell(15);
+            tc15.setCellValue(totalNet.doubleValue());
+            tc15.setCellStyle(boldCurrencyStyle);
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            return new org.springframework.core.io.ByteArrayResource(out.toByteArray());
+        } catch (Exception e) {
+            log.error("[SALES_REPORT] Lỗi xuất file Excel báo cáo doanh số: ", e);
+            throw new RuntimeException("Không thể tạo file Excel báo cáo bán hàng: " + e.getMessage(), e);
+        }
+    }
 }

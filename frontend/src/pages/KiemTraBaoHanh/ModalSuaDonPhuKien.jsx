@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Edit3, Save, ShoppingBag, User, Phone, Calendar } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { tinhNgayHetHanBaoHanh } from '../../utils/dinh_dang';
+import { tinhNgayHetHanBaoHanh, normalizePhoneInput, isValidVietnamPhone } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonPhuKien({ order, onClose, onSuccess }) {
   const { showToast } = useToast();
@@ -43,11 +43,17 @@ export default function ModalSuaDonPhuKien({ order, onClose, onSuccess }) {
       return;
     }
 
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await apiBaoHanh.updateAccessoryOrder(order.id, {
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerPhone: cleanPhone,
         saleNote: saleNote.trim(),
         items: items.map(it => ({
           id: it.id,

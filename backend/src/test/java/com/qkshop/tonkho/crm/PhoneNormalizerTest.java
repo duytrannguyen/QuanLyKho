@@ -27,5 +27,7 @@ class PhoneNormalizerTest {
         assertNull(PhoneNormalizer.normalize("12345"));
         assertNull(PhoneNormalizer.normalize("19001234567890"));
         assertNull(PhoneNormalizer.normalize("1901234567"));
+        assertNull(PhoneNormalizer.normalize("09123456"));
+        assertNull(PhoneNormalizer.normalize("091234567"));
     }
 }

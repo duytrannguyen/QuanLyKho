@@ -38,7 +38,17 @@ export default function BoCucChinh() {
         setMobileOpen={setMobileOpen}
       />
       
-      <div className="flex-grow-1 d-flex flex-column bg-light" style={{ marginLeft: contentMargin, transition: 'margin-left 0.3s ease', minHeight: '100vh', width: '100%' }}>
+      <div 
+        className="flex-grow-1 d-flex flex-column bg-light" 
+        style={{ 
+          marginLeft: contentMargin, 
+          width: isMobile ? '100%' : `calc(100% - ${sidebarWidth})`,
+          maxWidth: isMobile ? '100%' : `calc(100% - ${sidebarWidth})`,
+          transition: 'margin-left 0.3s ease, width 0.3s ease, max-width 0.3s ease', 
+          minHeight: '100vh',
+          minWidth: 0
+        }}
+      >
         <PhanDau 
           collapsed={collapsed} 
           sidebarWidth={sidebarWidth} 
@@ -47,13 +57,13 @@ export default function BoCucChinh() {
           onOpenMenu={handleOpenMobileMenu}
         />
         
-        <main className="flex-grow-1 position-relative" style={{ paddingTop: '64px' }}>
+        <main className="flex-grow-1 position-relative" style={{ paddingTop: '64px', minWidth: 0 }}>
           <TaiToanCuc />
-          <div className="p-3 p-md-4 w-100" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
+          <div className="main-content-shell p-2 p-sm-3 p-md-4 w-100" style={{ minWidth: 0 }}>
             <Outlet />
           </div>
         </main>
       </div>
     </div>
-  );
+  )
 }

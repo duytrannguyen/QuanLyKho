@@ -25,11 +25,35 @@ public class ClosedCycleDTO {
     private String state;             // READY, NEEDS_INSPECTION (cho máy active)
     private LocalDateTime intakeAt;
     private LocalDateTime closedAt;
+    private LocalDateTime saleDate;
+    private BigDecimal grossRevenue;
+    private BigDecimal discount;
     private BigDecimal salePriceSnapshot;
+    private String paymentStatus;
     private String customerName;
+    private String customerPhone;
+    private String productFullName;
+    private String productSummary;
+    private String upgradeNote;
+    private String chargerName;
+    private String chargerSku;
     private String note;
+    private String sourceReference;   // Mã phiếu xuất hoặc mã tham chiếu
+    private String closeReason;        // Lý do xuất khác / hủy
+    private String closedBy;           // Người thực hiện xuất
+    private String salesperson;        // Nhân viên chốt đơn / Sale
     private String warrantyPeriod;
     private LocalDate warrantyExpiry;
+
+    // Shipping info
+    private Boolean isShipping;
+    private Boolean isDelivered;
+    private LocalDate deliveryDate;
+    private String shippingCarrier;
+    private String trackingCode;
+    private String shippingAddress;
+    private BigDecimal depositAmount;
+    private BigDecimal codAmount;
 
     // Metadata từ SerialRegistry / Catalog
     private String brandId;

@@ -12,6 +12,7 @@ import com.qkshop.tonkho.inspection.InspectionRequestStatus;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('DASHBOARD_VIEW', 'REPORT_VIEW')")
 public class DashboardController {
 
     private static final long SNAPSHOT_TTL_MS = 8_000L;

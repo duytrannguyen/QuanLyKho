@@ -14,6 +14,10 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
     List<ClosedCycle> findBySerialKeyOrderByClosedAtDesc(String serialKey);
     Optional<ClosedCycle> findTopBySerialKeyOrderByClosedAtDesc(String serialKey);
     List<ClosedCycle> findBySerialKeyInOrderByClosedAtDesc(java.util.Collection<String> serialKeys);
+    List<ClosedCycle> findByCycleIdIn(java.util.Collection<String> cycleIds);
+    List<ClosedCycle> findBySourceReferenceIn(java.util.Collection<String> sourceReferences);
+    Optional<ClosedCycle> findBySourceReference(String sourceReference);
+    List<ClosedCycle> findByCustomerPhone(String customerPhone);
     List<ClosedCycle> findByCloseType(CloseType closeType);
 
     @Query("SELECT cc FROM ClosedCycle cc " +
@@ -57,7 +61,7 @@ public interface ClosedCycleRepository extends JpaRepository<ClosedCycle, Long>,
            "LEFT JOIN FETCH cc.config c LEFT JOIN FETCH c.variant v LEFT JOIN FETCH v.platform p " +
            "LEFT JOIN FETCH p.modelLine m " +
            "LEFT JOIN FETCH m.brand b " +
-           "WHERE cc.closedAt >= :from AND cc.closedAt <= :to " +
+           "WHERE COALESCE(cc.saleDate, cc.closedAt) >= :from AND COALESCE(cc.saleDate, cc.closedAt) <= :to " +
            "  AND (:brandId IS NULL OR b.brandId = :brandId) " +
            "  AND (:segmentCode IS NULL OR m.segmentCode = :segmentCode) " +
            "  AND (:modelLineId IS NULL OR m.modelLineId = :modelLineId)")

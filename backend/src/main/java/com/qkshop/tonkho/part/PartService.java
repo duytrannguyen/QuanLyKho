@@ -362,19 +362,16 @@ public class PartService {
     public String generateNextSku(String category) {
         String catCode = normalizeCategoryCode(category);
         String prefix = "LK-" + catCode + "-";
-        int maxSeq = partRepository.findAll().stream()
-                .map(Part::getSku)
-                .filter(s -> s != null && s.toUpperCase().startsWith(prefix))
-                .mapToInt(s -> {
-                    try {
-                        String numPart = s.substring(prefix.length()).replaceAll("[^0-9]", "");
-                        return numPart.isEmpty() ? 0 : Integer.parseInt(numPart);
-                    } catch (Exception e) {
-                        return 0;
-                    }
-                })
-                .max()
-                .orElse(0);
+        String maxSku = partRepository.findMaxSkuByPrefix(prefix).orElse(null);
+        int maxSeq = 0;
+        if (maxSku != null && maxSku.toUpperCase().startsWith(prefix)) {
+            try {
+                String numPart = maxSku.substring(prefix.length()).replaceAll("[^0-9]", "");
+                if (!numPart.isEmpty()) {
+                    maxSeq = Integer.parseInt(numPart);
+                }
+            } catch (Exception ignored) {}
+        }
         return String.format("LK-%s-%04d", catCode, maxSeq + 1);
     }
 

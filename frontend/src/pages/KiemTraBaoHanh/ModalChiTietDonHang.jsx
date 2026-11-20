@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
-  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench, RotateCcw, Lock
+  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench, RotateCcw, Lock, Zap
 } from 'lucide-react';
 import { apiSuaChua } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { getCleanWarrantyType } from '../../utils/dinh_dang';
+import { getCleanWarrantyType, formatDate, formatMoney } from '../../utils/dinh_dang';
+import logoQK from '../../assets/qkshop_logo.png';
 
 export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConfirmDelivery, onReturnOrder }) {
+  const navigate = useNavigate();
   const { hasPermission, requirePermission } = useAuth();
   const { showToast } = useToast();
   const canManageShip = hasPermission('SHIP_MANAGE');
@@ -43,46 +46,25 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatDateOnly = (d) => {
-    if (!d) return '—';
-    try {
-      const date = d instanceof Date ? d : new Date(d);
-      return date.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return String(d);
-    }
-  };
-
-  const formatMoney = (val) => {
-    if (val === null || val === undefined) return '0 đ';
-    const num = Number(val);
-    if (isNaN(num)) return val + ' đ';
-    return num.toLocaleString('vi-VN') + ' đ';
-  };
-
-  // Trích xuất phụ kiện và quà tặng từ saleNote
+  // Trích xuất phụ kiện, sạc kèm máy, quà tặng và phụ kiện bán thêm từ saleNote
   const extractAccessoriesAndNote = (note) => {
-    if (!note) return { accessories: [], cleanNote: '' };
+    if (!note) return { accessories: [], giftAccessories: [], paidAccessories: [], parsedChargerName: '', paidTotal: 0, cleanNote: '' };
     let cleanNote = note;
-    const items = [];
+    const allItems = [];
+    const giftItems = [];
+    const paidItems = [];
+    let parsedChargerName = '';
+    let paidTotal = 0;
+
+    // Tìm sạc kèm theo máy
+    const chargerMarker = 'Sạc kèm theo máy: ';
+    const chargerIdx = cleanNote.indexOf(chargerMarker);
+    if (chargerIdx !== -1) {
+      const part = cleanNote.substring(chargerIdx + chargerMarker.length);
+      const splitIdx = part.indexOf(' | ');
+      parsedChargerName = (splitIdx !== -1 ? part.substring(0, splitIdx) : part).trim();
+      cleanNote = cleanNote.substring(0, chargerIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
+    }
 
     // Tìm quà tặng mặc định
     const giftMarker = 'Quà tặng mặc định: ';
@@ -93,12 +75,15 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
       const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
       content.split(',').forEach(s => {
         const t = s.trim();
-        if (t) items.push(t + ' (Quà tặng)');
+        if (t) {
+          giftItems.push(t);
+          allItems.push(t + ' (Quà tặng)');
+        }
       });
       cleanNote = cleanNote.substring(0, giftIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
     }
 
-    // Tìm phụ kiện bán kèm / bán thêm
+    // Tìm phụ kiện bán kèm / bán thêm có tính phí
     const extraMarkers = ['Phụ kiện bán thêm: ', 'Phụ kiện bán kèm: '];
     for (const marker of extraMarkers) {
       const extraIdx = cleanNote.indexOf(marker);
@@ -108,17 +93,35 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
         const content = splitIdx !== -1 ? part.substring(0, splitIdx) : part;
         content.split(',').forEach(s => {
           const t = s.trim();
-          if (t) items.push(t);
+          if (t) {
+            allItems.push(t);
+            const priceMatch = t.match(/\[([0-9.,]+)\s*đ?\]/);
+            const qtyMatch = t.match(/\(x([0-9]+)\)/i);
+            const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+            const price = priceMatch ? Number(priceMatch[1].replace(/[^0-9]/g, '')) : 0;
+            const name = t.replace(/\(x[0-9]+\)/gi, '').replace(/\[[0-9.,]+\s*đ?\]/g, '').trim();
+
+            paidItems.push({
+              name,
+              quantity: qty,
+              price,
+              total: price * qty,
+              rawText: t
+            });
+            paidTotal += (price * qty);
+          }
         });
         cleanNote = cleanNote.substring(0, extraIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
       }
     }
 
     cleanNote = cleanNote.replace(/^\|\s*|\s*\|\s*$/g, '').trim();
-    return { accessories: items, cleanNote };
+    return { accessories: allItems, giftAccessories: giftItems, paidAccessories: paidItems, parsedChargerName, paidTotal, cleanNote };
   };
 
-  const { accessories, cleanNote } = extractAccessoriesAndNote(order.saleNote);
+  const { accessories, giftAccessories, paidAccessories, parsedChargerName, paidTotal, cleanNote } = extractAccessoriesAndNote(order.saleNote);
+  const chargerName = order.chargerName || parsedChargerName || '';
+  const chargerSku = order.chargerSku || '';
   const StatusIcon = statusInfo?.icon || ShieldCheck;
 
   const extractUpgradeTotal = (note) => {
@@ -139,10 +142,12 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
   const discAmt = Number(order.discount) || 0;
   const originalAmt = Number(order.grossRevenue) || (Number(order.defaultSalePrice) > 0 ? Number(order.defaultSalePrice) : 0) || rawSalePrice;
 
-  // Nếu salePrice trong DB là giá máy gốc (chưa cộng phí nâng cấp), tự động tính đúng tổng thực thu
-  const finalAmt = (upgradeTotal > 0 && rawSalePrice <= originalAmt)
-    ? (Math.max(0, originalAmt - discAmt) + upgradeTotal)
-    : rawSalePrice;
+  // Tính đúng tổng thanh toán thực tế nếu salePrice chỉ là giá snapshot của máy
+  const finalAmt = Number(order.finalPrice) > 0 
+    ? Number(order.finalPrice)
+    : (rawSalePrice <= originalAmt && (upgradeTotal > 0 || paidTotal > 0))
+      ? (Math.max(0, originalAmt - discAmt) + upgradeTotal + paidTotal)
+      : rawSalePrice;
 
   // In phiếu bảo hành kiêm xuất kho
   const handlePrint = () => {
@@ -192,7 +197,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
       <body>
         <div class="header">
           <div>
-            <div class="logo">QKSHOP.VN</div>
+            <div class="logo"><img src="${logoQK.startsWith('data:') || logoQK.startsWith('http') ? logoQK : `${window.location.origin}${logoQK}`}" alt="QKSHOP.VN" style="height: 34px; width: auto; object-fit: contain; display: block; margin-bottom: 4px;" /></div>
             <div class="subtitle">Hệ thống Laptop & Linh Kiện Chính Hãng</div>
             <div class="subtitle">Hotline: 0939.xxx.xxx | Website: qkshop.vn</div>
           </div>
@@ -207,6 +212,12 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
           <h2>PHIẾU XUẤT KHO KIÊM BẢO HÀNH</h2>
           <p>Ngày mua hàng: ${formatDate(order.saleDate)}</p>
         </div>
+
+        ${(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? `
+        <div style="background-color: #fee2e2; border: 2px dashed #dc2626; color: #991b1b; padding: 12px; text-align: center; border-radius: 6px; margin-bottom: 18px;">
+          <div style="font-size: 15px; font-weight: 800; margin-bottom: 2px;">⚠️ ĐƠN HÀNG ĐÃ THU HỒI / TRẢ MÁY — GÓI BẢO HÀNH ĐÃ BỊ HỦY</div>
+          <div style="font-size: 11px;">Chiếc máy này đã được thu lại về kho. Toàn bộ quyền lợi bảo hành đối với đơn hàng này đã chấm dứt.</div>
+        </div>` : ''}
 
         <div class="section">
           <div class="section-title">I. Thông Tin Khách Hàng</div>
@@ -225,12 +236,22 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             </div>
             <div class="info-row">
               <span class="info-label">Gói bảo hành:</span>
-              <span class="info-val">${getCleanWarrantyType(order.warrantyPeriod)}</span>
+              <span class="info-val">${(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? '<span style="color: #dc2626; font-weight: bold;">ĐÃ HỦY (ĐÃ THU LẠI MÁY)</span>' : getCleanWarrantyType(order.warrantyPeriod)}</span>
             </div>
             <div class="info-row">
               <span class="info-label">Hình thức giao:</span>
               <span class="info-val">${order.isShipping ? `Đơn ship xa ${order.isDelivered ? `(Đã nhận: ${formatDate(order.deliveryDate)})` : '(Chờ nhận hàng)'}` : 'Mua tại cửa hàng'}</span>
             </div>
+            ${order.isShipping && order.shippingCarrier ? `
+            <div class="info-row">
+              <span class="info-label">Đơn vị vận chuyển:</span>
+              <span class="info-val">${order.shippingCarrier} ${order.trackingCode ? `(Mã VĐ: ${order.trackingCode})` : ''}</span>
+            </div>` : ''}
+            ${order.isShipping && order.shippingAddress ? `
+            <div class="info-row">
+              <span class="info-label">Địa chỉ nhận hàng:</span>
+              <span class="info-val">${order.shippingAddress}</span>
+            </div>` : ''}
           </div>
         </div>
 
@@ -262,13 +283,36 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   ${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
                 </td>
               </tr>
-              ${accessories.length > 0 ? `
+              ${chargerName ? `
               <tr>
                 <td style="text-align: center;">2</td>
-                <td colspan="3">
-                  <strong>Phụ kiện kèm theo:</strong> ${accessories.join(', ')}
+                <td>
+                  <strong style="color: #15803d;">Sạc kèm theo máy: ${String(chargerName).replace(/</g, '&lt;')}</strong>
+                  ${chargerSku ? `<br><small style="color:#64748b;">SKU: ${String(chargerSku).replace(/</g, '&lt;')}</small>` : ''}
                 </td>
-                <td style="text-align: right; color:#64748b;">Kèm máy</td>
+                <td style="font-family: monospace;">${chargerSku ? String(chargerSku).replace(/</g, '&lt;') : 'Kèm máy'}</td>
+                <td>Bảo hành đồng bộ theo máy (${getCleanWarrantyType(order.warrantyPeriod)})</td>
+                <td style="text-align: right; font-weight: 600; color: #15803d;">0 đ (Kèm máy)</td>
+              </tr>` : ''}
+              ${paidAccessories.map((pAcc, pIdx) => `
+              <tr>
+                <td style="text-align: center;">${pIdx + (chargerName ? 3 : 2)}</td>
+                <td colspan="2">
+                  <strong>${pAcc.name}</strong> <small style="color: #64748b;">(Phụ kiện bán thêm)</small>
+                </td>
+                <td style="text-align: center;">SL: ${pAcc.quantity}</td>
+                <td style="text-align: right; font-weight: 600;">
+                  ${formatMoney(pAcc.total > 0 ? pAcc.total : pAcc.price)}
+                </td>
+              </tr>
+              `).join('')}
+              ${giftAccessories.length > 0 ? `
+              <tr>
+                <td style="text-align: center;">${paidAccessories.length + (chargerName ? 3 : 2)}</td>
+                <td colspan="3">
+                  <strong>Quà tặng kèm theo:</strong> ${giftAccessories.join(', ')}
+                </td>
+                <td style="text-align: right; color:#64748b;">0 đ</td>
               </tr>` : ''}
             </tbody>
           </table>
@@ -276,6 +320,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
           <div class="total-box">
             <div style="color: #64748b; font-size: 13px;">Giá gốc / Niêm yết máy: <span style="${discAmt > 0 ? 'text-decoration: line-through;' : 'font-weight: 600; color: #0f172a;'}">${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}</span></div>
             ${upgradeTotal > 0 ? `<div style="color: #b45309; font-size: 13px; font-weight: 600;">Phí nâng cấp linh kiện: +${formatMoney(upgradeTotal)}</div>` : ''}
+            ${paidTotal > 0 ? `<div style="color: #0369a1; font-size: 13px; font-weight: 600;">Phụ kiện mua thêm: +${formatMoney(paidTotal)}</div>` : ''}
             ${discAmt > 0 ? `<div style="color: #dc2626; font-size: 13px; font-weight: 600;">Giảm giá / Ưu đãi: -${formatMoney(discAmt)}</div>` : ''}
             <div style="margin-top: 6px; border-top: 1px dashed #cbd5e1; padding-top: 6px;">Tổng thanh toán thực tế: <span class="total-price">${formatMoney(finalAmt)}</span></div>
           </div>
@@ -287,7 +332,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             <h4>Quy định bảo hành tại QKShop:</h4>
             <p>1. Sản phẩm còn nguyên tem bảo hành, số Serial phải trùng khớp với phiếu bảo hành và hệ thống.</p>
             <p>2. Không bảo hành các trường hợp máy bị rơi vỡ, cấn móp, vào nước, cháy nổ do nguồn điện không ổn định hoặc có dấu hiệu can thiệp phần cứng trái phép.</p>
-            <p>3. Thời hạn bảo hành: <strong>${getCleanWarrantyType(order.warrantyPeriod)}</strong> (Từ ngày <strong>${formatDateOnly(order.saleDate)}</strong> ${statusInfo?.endDate ? `đến ngày <strong>${formatDateOnly(statusInfo.endDate)}</strong>` : ''}).</p>
+            <p>3. Thời hạn bảo hành: <strong>${getCleanWarrantyType(order.warrantyPeriod)}</strong> (Từ ngày <strong>${formatDate(order.saleDate)}</strong> ${statusInfo?.endDate ? `đến ngày <strong>${formatDate(statusInfo.endDate)}</strong>` : ''}).</p>
           </div>
         </div>
 
@@ -382,39 +427,53 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
             {/* Top Warranty Status Banner */}
             <div className="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
               <div className={`p-3 d-flex flex-wrap justify-content-between align-items-center ${
-                statusInfo?.status === 'VALID' ? 'bg-success-subtle text-success-emphasis border-start border-4 border-success' :
-                statusInfo?.status === 'EXPIRED' ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger' :
-                statusInfo?.status === 'VOIDED' ? 'bg-dark-subtle text-dark-emphasis border-start border-4 border-dark' :
-                'bg-info-subtle text-info-emphasis border-start border-4 border-info'
+                (order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                  ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger'
+                  : statusInfo?.status === 'VALID' ? 'bg-success-subtle text-success-emphasis border-start border-4 border-success'
+                  : statusInfo?.status === 'EXPIRED' ? 'bg-danger-subtle text-danger-emphasis border-start border-4 border-danger'
+                  : statusInfo?.status === 'VOIDED' ? 'bg-dark-subtle text-dark-emphasis border-start border-4 border-dark'
+                  : 'bg-info-subtle text-info-emphasis border-start border-4 border-info'
               }`}>
                 <div className="d-flex align-items-center gap-3">
                   <div className="p-2 rounded-circle bg-white shadow-sm">
-                    <StatusIcon size={24} className={
-                      statusInfo?.status === 'VALID' ? 'text-success' :
-                      statusInfo?.status === 'EXPIRED' ? 'text-danger' :
-                      statusInfo?.status === 'VOIDED' ? 'text-dark' : 'text-info'
-                    } />
+                    {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                      <XCircle size={24} className="text-danger" />
+                    ) : (
+                      <StatusIcon size={24} className={
+                        statusInfo?.status === 'VALID' ? 'text-success' :
+                        statusInfo?.status === 'EXPIRED' ? 'text-danger' :
+                        statusInfo?.status === 'VOIDED' ? 'text-dark' : 'text-info'
+                      } />
+                    )}
                   </div>
                   <div>
                     <h6 className="fw-bold mb-0 d-flex align-items-center gap-2">
-                      {statusInfo?.text || 'Trạng thái bảo hành'}
+                      {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                        ? 'Đã hủy bảo hành (Đã thu lại máy)'
+                        : (statusInfo?.text || 'Trạng thái bảo hành')}
                       <span className="badge bg-white text-dark border px-2 py-1 small fw-normal">
-                        Gói: {getCleanWarrantyType(order.warrantyPeriod)}
+                        Gói: {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled)
+                          ? 'Đã hủy'
+                          : getCleanWarrantyType(order.warrantyPeriod)}
                       </span>
                     </h6>
                     <div className="small mt-1 opacity-75">
-                      {order.isInStock ? (
+                      {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                        <span className="fw-semibold text-danger">
+                          Máy này đã được shop thu lại về kho. Toàn bộ quyền lợi bảo hành cho khách hàng này đã chấm dứt hoàn toàn.
+                        </span>
+                      ) : order.isInStock ? (
                         statusInfo?.endDate ? (
-                          <>Hạn bảo hành hãng: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
+                          <>Hạn bảo hành hãng: <strong>{formatDate(statusInfo.endDate)}</strong></>
                         ) : (
                           <>Gói bảo hành gán cho máy: <strong>{order.warrantyPeriod || 'Chưa thiết lập'}</strong> (Sẽ kích hoạt tính từ ngày bán máy cho khách)</>
                         )
                       ) : statusInfo?.endDate ? (
-                        <>Hạn bảo hành đến ngày: <strong>{formatDateOnly(statusInfo.endDate)}</strong></>
+                        <>Hạn bảo hành đến ngày: <strong>{formatDate(statusInfo.endDate)}</strong></>
                       ) : (
                         'Thời hạn bảo hành theo thỏa thuận hoặc chưa xác định'
                       )}
-                      {!order.isInStock && statusInfo?.diffDays !== undefined && (
+                      {!order.isInStock && !(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) && statusInfo?.diffDays !== undefined && (
                         <span className="ms-2">
                           ({statusInfo.status === 'VALID' 
                             ? `Còn ${statusInfo.diffDays} ngày` 
@@ -425,7 +484,11 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   </div>
                 </div>
 
-                {order.isVoided && (
+                {(order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled) ? (
+                  <div className="badge bg-danger text-white px-3 py-2 rounded-pill mt-2 mt-md-0 fw-bold">
+                    <XCircle size={14} className="me-1 d-inline" /> Đã thu máy — Bảo hành đã hủy
+                  </div>
+                ) : order.isVoided && (
                   <div className="badge bg-danger text-white px-3 py-2 rounded-pill mt-2 mt-md-0">
                     <AlertCircle size={14} className="me-1 d-inline" /> Vòng tồn đã đóng / Đã thu hồi
                   </div>
@@ -511,6 +574,29 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                         <div className="fw-medium text-dark">{formatDate(order.saleDate)}</div>
                       </div>
 
+                      {(order.customerType || order.lastSource || order.firstSource || order.isStudent) && (
+                        <div className="d-flex justify-content-between align-items-start pb-2 border-bottom gap-2">
+                          <span className="text-muted small">Hồ sơ CRM / Nguồn:</span>
+                          <div className="d-flex flex-wrap justify-content-end gap-1">
+                            {order.customerType && (
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info-subtle">
+                                {order.customerType}
+                              </span>
+                            )}
+                            {(order.lastSource || order.firstSource) && (
+                              <span className="badge bg-light text-dark border">
+                                {order.lastSource || order.firstSource}
+                              </span>
+                            )}
+                            {order.isStudent && (
+                              <span className="badge bg-success bg-opacity-10 text-success border border-success-subtle">
+                                Ưu đãi HSSV
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Vận chuyển & Giao nhận */}
                       <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
                         <span className="text-muted small">Hình thức bán:</span>
@@ -571,10 +657,22 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                         </div>
                       )}
 
-                      {(order.shippingCarrier || order.trackingCode || order.shippingAddress || order.codAmount > 0) && (
+                      {(order.isShipping || order.shippingCarrier || order.trackingCode || order.shippingAddress || order.codAmount > 0) && (
                         <div className="p-3 rounded-3 bg-white border">
                           <div className="small fw-bold text-dark mb-2 d-flex align-items-center gap-1">
                             <Truck size={14} className="text-primary" /> Thông tin vận đơn & Giao nhận
+                          </div>
+                          {order.isShipping && (
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-muted">Hình thức đơn:</span>
+                              <span className="badge bg-primary text-white">Đơn ship xa</span>
+                            </div>
+                          )}
+                          <div className="d-flex justify-content-between small mb-1">
+                            <span className="text-muted">Trạng thái giao:</span>
+                            <span className={`fw-semibold ${order.isDelivered ? 'text-success' : 'text-warning'}`}>
+                              {order.isDelivered ? `Đã giao hàng (${formatDate(order.deliveryDate)})` : 'Đang giao / Chờ khách nhận hàng'}
+                            </span>
                           </div>
                           {order.shippingCarrier && (
                             <div className="d-flex justify-content-between small mb-1">
@@ -590,7 +688,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                           )}
                           {order.shippingAddress && (
                             <div className="d-flex justify-content-between small mb-1">
-                              <span className="text-muted">Địa chỉ:</span>
+                              <span className="text-muted">Địa chỉ nhận hàng:</span>
                               <span className="fw-medium text-dark text-end ms-2">{order.shippingAddress}</span>
                             </div>
                           )}
@@ -661,6 +759,15 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                           <span className="text-muted small">Phí nâng cấp linh kiện:</span>
                           <span className="fw-bold text-warning">
                             + {formatMoney(upgradeTotal)}
+                          </span>
+                        </div>
+                      )}
+
+                      {paidTotal > 0 && (
+                        <div className="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                          <span className="text-muted small">Phụ kiện mua thêm:</span>
+                          <span className="fw-bold text-primary">
+                            + {formatMoney(paidTotal)}
                           </span>
                         </div>
                       )}
@@ -816,6 +923,28 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                       </div>
                     )}
 
+                    {/* Sạc kèm theo máy nếu có */}
+                    {chargerName && (
+                      <div className="p-3 rounded-3 bg-success bg-opacity-10 border border-success-subtle mb-3">
+                        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                          <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                            <Zap size={16} className="text-success" />
+                            <span>Sạc kèm theo máy:</span>
+                          </div>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle small">
+                            <ShieldCheck size={12} className="me-1 d-inline" /> Bảo hành đồng bộ theo máy
+                          </span>
+                        </div>
+                        <div className="fw-semibold text-dark mt-1 d-flex flex-wrap align-items-center gap-2">
+                          <span>{chargerName}</span>
+                          {chargerSku && (
+                            <span className="badge bg-white text-secondary border font-monospace">{chargerSku}</span>
+                          )}
+                          <span className="badge bg-white text-success border border-success-subtle">0 đ (Kèm máy)</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Phụ kiện bán kèm / Tặng kèm */}
                     {accessories.length > 0 && (
                       <div className="p-3 rounded-3 bg-white border mb-3">
@@ -946,7 +1075,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               >
                 Đóng
               </button>
-              {!order.isInStock && !order.isVoided && onReturnOrder && (
+              {!order.isInStock && !order.isVoided && order.closeType !== 'CUSTOMER_RETURN' && onReturnOrder && (
                 <button
                   type="button"
                   className="btn btn-outline-danger px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm fw-semibold"
@@ -958,19 +1087,32 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   {!canReturnOrder && <Lock size={12} className="text-warning" />}
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
-                onClick={() => {
-                  if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
-                  window.location.href = `/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`;
-                }}
-                title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
-              >
-                <ShieldCheck size={16} />
-                <span>Tiếp nhận Bảo hành (RMA)</span>
-                {!canRepair && <Lock size={12} className="text-danger" />}
-              </button>
+              {order.isVoided || order.closeType === 'CUSTOMER_RETURN' || order.warrantyCancelled ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm fw-medium disabled"
+                  disabled
+                  title="Gói bảo hành đã bị hủy do máy đã được thu lại về kho. Từ chối tiếp nhận bảo hành theo đơn này."
+                >
+                  <XCircle size={16} className="text-danger" />
+                  <span>Từ chối tiếp nhận BH (Đã thu máy)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-warning px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm text-dark fw-bold"
+                  onClick={() => {
+                    if (!requirePermission('SERVICE_REPAIR', showToast, 'Tạo phiếu tiếp nhận bảo hành / sửa chữa (RMA)')) return;
+                    onClose();
+                    navigate(`/dich-vu-sua-chua?prefillSerial=${order.serialKey}&prefillCustomer=${encodeURIComponent(order.customerName || '')}&prefillPhone=${order.customerPhone || ''}&prefillModel=${encodeURIComponent(order.sourceModelText || '')}`);
+                  }}
+                  title={canRepair ? 'Tạo phiếu dịch vụ tiếp nhận bảo hành máy này' : 'Yêu cầu quyền: Dịch vụ sửa chữa & Tiếp nhận BH'}
+                >
+                  <ShieldCheck size={16} />
+                  <span>Tiếp nhận Bảo hành (RMA)</span>
+                  {!canRepair && <Lock size={12} className="text-danger" />}
+                </button>
+              )}
               <button 
                 type="button" 
                 className="btn btn-primary px-3 rounded-pill d-flex align-items-center gap-2 shadow-sm"

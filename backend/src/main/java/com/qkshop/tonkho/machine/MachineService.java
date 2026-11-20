@@ -18,6 +18,7 @@ import com.qkshop.tonkho.user.UserRepository;
 import com.qkshop.tonkho.core.StateTransitionService;
 import com.qkshop.tonkho.core.enums.CloseType;
 import com.qkshop.tonkho.catalog.CatalogService;
+import com.qkshop.tonkho.log.EventLog;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -55,6 +56,8 @@ public class MachineService {
     private final StateTransitionService stateTransitionService;
     private final CatalogService catalogService;
     private final com.qkshop.tonkho.catalog.BrandRepository brandRepository;
+    private final com.qkshop.tonkho.log.EventLogRepository eventLogRepository;
+    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepository;
     private final PlatformTransactionManager transactionManager;
     @Lazy
     private final com.qkshop.tonkho.intake.IntakeService intakeService;
@@ -129,13 +132,38 @@ public class MachineService {
                     : closedCycleRepository.findAllWithHierarchy();
         }
 
-        // Batch-fetch SerialRegistry một lần duy nhất thay vì N+1 query trên từng dòng
+        // Batch-fetch SerialRegistry & SalesOrder một lần duy nhất thay vì N+1 query trên từng dòng
         Set<String> allSerialKeys = new HashSet<>();
+        Set<String> closedCycleIds = new HashSet<>();
+        Set<String> closedSourceRefs = new HashSet<>();
         for (ActiveInventory ai : actives) {
             if (ai.getSerialKey() != null) allSerialKeys.add(ai.getSerialKey());
         }
         for (ClosedCycle cc : closeds) {
             if (cc.getSerialKey() != null) allSerialKeys.add(cc.getSerialKey());
+            if (cc.getCycleId() != null) closedCycleIds.add(cc.getCycleId());
+            if (cc.getSourceReference() != null && !cc.getSourceReference().isBlank()) {
+                closedSourceRefs.add(cc.getSourceReference());
+            }
+        }
+
+        Map<String, com.qkshop.tonkho.salesreport.SalesOrder> salesOrderByKey = new HashMap<>();
+        if (salesOrderRepository != null) {
+            if (!closedCycleIds.isEmpty()) {
+                salesOrderRepository.findMachineOrdersByMatchedCycleIdIn(closedCycleIds).forEach(so -> {
+                    if (so.getMatchedCycleId() != null) {
+                        salesOrderByKey.putIfAbsent("CYC:" + so.getMatchedCycleId(), so);
+                    }
+                });
+            }
+            if (!closedSourceRefs.isEmpty()) {
+                salesOrderRepository.findByTransactionIdIn(closedSourceRefs).forEach(so -> {
+                    if (so.getTransactionId() != null
+                            && (so.getOrderCategory() == null || "MACHINE".equalsIgnoreCase(so.getOrderCategory()))) {
+                        salesOrderByKey.putIfAbsent("TXN:" + so.getTransactionId(), so);
+                    }
+                });
+            }
         }
 
         Map<String, SerialRegistry> srMap = allSerialKeys.isEmpty()
@@ -225,6 +253,43 @@ public class MachineService {
                 }
             }
 
+            com.qkshop.tonkho.salesreport.SalesOrder linkedSo = salesOrderByKey.get("CYC:" + cc.getCycleId());
+            if (linkedSo == null && cc.getSourceReference() != null) {
+                linkedSo = salesOrderByKey.get("TXN:" + cc.getSourceReference());
+            }
+
+            String customerName = (cc.getCustomerName() != null && !cc.getCustomerName().isBlank())
+                    ? cc.getCustomerName()
+                    : (linkedSo != null ? linkedSo.getCustomerName() : null);
+            String customerPhone = (cc.getCustomerPhone() != null && !cc.getCustomerPhone().isBlank())
+                    ? cc.getCustomerPhone()
+                    : (linkedSo != null ? linkedSo.getCustomerPhone() : null);
+            LocalDateTime saleDate = cc.getSaleDate() != null ? cc.getSaleDate()
+                    : (linkedSo != null && linkedSo.getSaleDate() != null ? linkedSo.getSaleDate() : cc.getClosedAt());
+            BigDecimal netPrice = cc.getSalePriceSnapshot() != null ? cc.getSalePriceSnapshot()
+                    : (linkedSo != null ? linkedSo.getNetRevenue() : null);
+            BigDecimal grossRev = cc.getGrossRevenue() != null ? cc.getGrossRevenue()
+                    : (linkedSo != null ? linkedSo.getGrossRevenue() : null);
+            BigDecimal disc = cc.getDiscount() != null ? cc.getDiscount()
+                    : (linkedSo != null ? linkedSo.getDiscount() : null);
+            String payStatus = (cc.getPaymentStatus() != null && !cc.getPaymentStatus().isBlank())
+                    ? cc.getPaymentStatus()
+                    : (linkedSo != null ? linkedSo.getPaymentStatus() : null);
+            String prodFull = (cc.getProductFullName() != null && !cc.getProductFullName().isBlank())
+                    ? cc.getProductFullName()
+                    : (linkedSo != null ? linkedSo.getProductName() : null);
+            String prodSum = (cc.getProductSummary() != null && !cc.getProductSummary().isBlank())
+                    ? cc.getProductSummary()
+                    : (linkedSo != null ? linkedSo.getConfigSummary() : null);
+            String salesperson = (linkedSo != null && linkedSo.getSalesperson() != null && !linkedSo.getSalesperson().isBlank())
+                    ? linkedSo.getSalesperson()
+                    : cc.getClosedBy();
+            String warrantyPeriod = (cc.getWarrantyPeriod() != null && !cc.getWarrantyPeriod().isBlank())
+                    ? cc.getWarrantyPeriod()
+                    : (linkedSo != null ? linkedSo.getWarrantyPeriod() : null);
+            java.time.LocalDate warrantyExpiry = cc.getWarrantyExpiry() != null ? cc.getWarrantyExpiry()
+                    : (linkedSo != null ? linkedSo.getWarrantyExpiry() : null);
+
             combined.add(ClosedCycleDTO.builder()
                     .cycleId(cc.getCycleId())
                     .serialKey(cc.getSerialKey())
@@ -235,11 +300,33 @@ public class MachineService {
                     .closeType(cc.getCloseType() != null ? cc.getCloseType().name() : null)
                     .intakeAt(cc.getIntakeAt())
                     .closedAt(cc.getClosedAt())
-                    .salePriceSnapshot(cc.getSalePriceSnapshot())
-                    .customerName(cc.getCustomerName())
-                    .note(cc.getSaleNote())
-                    .warrantyPeriod(cc.getWarrantyPeriod())
-                    .warrantyExpiry(cc.getWarrantyExpiry())
+                    .saleDate(saleDate)
+                    .grossRevenue(grossRev)
+                    .discount(disc)
+                    .salePriceSnapshot(netPrice)
+                    .paymentStatus(payStatus)
+                    .customerName(customerName)
+                    .customerPhone(customerPhone)
+                    .productFullName(prodFull)
+                    .productSummary(prodSum)
+                    .upgradeNote(cc.getUpgradeNote())
+                    .chargerName(cc.getChargerName() != null ? cc.getChargerName() : (linkedSo != null ? linkedSo.getChargerName() : null))
+                    .chargerSku(cc.getChargerSku() != null ? cc.getChargerSku() : (linkedSo != null ? linkedSo.getChargerSku() : null))
+                    .note(cc.getSaleNote() != null ? cc.getSaleNote() : (cc.getCloseReason() != null ? cc.getCloseReason() : (linkedSo != null ? linkedSo.getNote() : null)))
+                    .sourceReference(cc.getSourceReference() != null ? cc.getSourceReference() : (linkedSo != null ? linkedSo.getTransactionId() : null))
+                    .closeReason(cc.getCloseReason())
+                    .closedBy(cc.getClosedBy())
+                    .salesperson(salesperson)
+                    .warrantyPeriod(warrantyPeriod)
+                    .warrantyExpiry(warrantyExpiry)
+                    .isShipping(cc.getIsShipping())
+                    .isDelivered(cc.getIsDelivered())
+                    .deliveryDate(cc.getDeliveryDate())
+                    .shippingCarrier(cc.getShippingCarrier())
+                    .trackingCode(cc.getTrackingCode())
+                    .shippingAddress(cc.getShippingAddress())
+                    .depositAmount(cc.getDepositAmount())
+                    .codAmount(cc.getCodAmount())
                     .brandId(brandId)
                     .brandName(brandName)
                     .segment(segName)
@@ -264,9 +351,13 @@ public class MachineService {
                     String q = query.trim().toLowerCase();
                     boolean match = (dto.getSerialKey() != null && dto.getSerialKey().toLowerCase().contains(q))
                             || (dto.getSourceModelText() != null && dto.getSourceModelText().toLowerCase().contains(q))
+                            || (dto.getProductFullName() != null && dto.getProductFullName().toLowerCase().contains(q))
                             || (dto.getConfigId() != null && dto.getConfigId().toLowerCase().contains(q))
                             || (dto.getConfigDisplayName() != null && dto.getConfigDisplayName().toLowerCase().contains(q))
-                            || (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(q));
+                            || (dto.getBrandName() != null && dto.getBrandName().toLowerCase().contains(q))
+                            || (dto.getCustomerName() != null && dto.getCustomerName().toLowerCase().contains(q))
+                            || (dto.getCustomerPhone() != null && dto.getCustomerPhone().toLowerCase().contains(q))
+                            || (dto.getSourceReference() != null && dto.getSourceReference().toLowerCase().contains(q));
                     if (!match) return false;
                 }
                 if (StringUtils.hasText(brand) && !"Tất cả".equalsIgnoreCase(brand)) {
@@ -451,9 +542,24 @@ public class MachineService {
                 case "DA_BAN" -> {
                     throw new IllegalArgumentException("Vui lòng thực hiện xuất bán máy qua màn hình Bán Hàng để ghi nhận đầy đủ hóa đơn và doanh thu.");
                 }
-                case "HUY_TRA", "CLOSED" -> {
+                case "HUY_TRA" -> {
                     stateTransitionService.transitionToClosed(ai.getCycleId(), CloseType.CANCEL, "UPDATE_API", username, updates.get("notes") != null ? updates.get("notes").toString() : "");
                     return ai; // transitionToClosed already saves and handles everything
+                }
+                case "CLOSED", "EXPORT_OTHER" -> {
+                    CloseType closeType = CloseType.OTHER;
+                    if (updates.containsKey("closeType") && updates.get("closeType") != null) {
+                        try {
+                            closeType = CloseType.valueOf(updates.get("closeType").toString().trim().toUpperCase());
+                        } catch (Exception ignored) {}
+                    }
+                    String customRef = updates.get("reference") != null ? updates.get("reference").toString().trim() : "";
+                    String ref = !customRef.isBlank()
+                            ? customRef
+                            : "XK-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now()) + "-" + (ai.getSerialKey().length() > 6 ? ai.getSerialKey().substring(ai.getSerialKey().length() - 6) : ai.getSerialKey());
+                    String reason = updates.get("notes") != null ? updates.get("notes").toString() : "";
+                    stateTransitionService.transitionToClosed(ai.getCycleId(), closeType, ref, username, reason);
+                    return ai;
                 }
             }
         }
@@ -957,5 +1063,93 @@ public class MachineService {
     private BigDecimal parseBigDecimal(String val) {
         if (val == null || val.trim().isEmpty()) return null;
         try { return new BigDecimal(val.trim()); } catch (Exception e) { return null; }
+    }
+
+    /**
+     * Nhập lại máy về kho từ luồng xuất khác / đóng chu kỳ (Hoàn tác xuất khác).
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ActiveInventory reopenExportedMachine(String serial, Map<String, Object> payload, String username) {
+        String key = SerialRegistry.normalizeSerialKey(serial);
+        // Kiểm tra xem máy có đang trong ActiveInventory không
+        if (activeInventoryRepository.findBySerialKey(key).isPresent()) {
+            throw new IllegalStateException("Máy có Serial " + serial + " hiện đang tồn tại trong kho hoạt động.");
+        }
+
+        // Tìm ClosedCycle gần nhất của serial này
+        List<ClosedCycle> closedList = closedCycleRepository.findBySerialKeyOrderByClosedAtDesc(key);
+        if (closedList.isEmpty()) {
+            throw new ResourceNotFoundException("Không tìm thấy dữ liệu xuất kho của máy có Serial: " + serial);
+        }
+        ClosedCycle latestClosed = closedList.get(0);
+
+        String targetStateStr = payload != null && payload.get("targetState") != null
+                ? payload.get("targetState").toString().trim().toUpperCase()
+                : "READY";
+        CycleState nextState = "NEEDS_INSPECTION".equalsIgnoreCase(targetStateStr)
+                ? CycleState.NEEDS_INSPECTION
+                : CycleState.READY;
+
+        String reason = payload != null && payload.get("reason") != null
+                ? payload.get("reason").toString().trim()
+                : "Nhập lại máy về kho từ luồng xuất khác";
+
+        String newCycleId = "CYC-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+
+        BigDecimal price = latestClosed.getSalePriceSnapshot();
+        if ((price == null || price.compareTo(BigDecimal.ZERO) <= 0) && latestClosed.getConfig() != null) {
+            price = latestClosed.getConfig().getDefaultSalePrice();
+        }
+
+        ActiveInventory ai = ActiveInventory.builder()
+                .cycleId(newCycleId)
+                .serialKey(key)
+                .config(latestClosed.getConfig())
+                .sourceModelText(latestClosed.getSourceModelText())
+                .intakeType(latestClosed.getIntakeType() != null ? latestClosed.getIntakeType() : com.qkshop.tonkho.intake.IntakeType.OPENING_BALANCE)
+                .intakeAt(LocalDateTime.now())
+                .state(nextState)
+                .readyAt(nextState == CycleState.READY ? LocalDateTime.now() : null)
+                .salePrice(price)
+                .note("Nhập lại kho từ máy xuất khác (" + (latestClosed.getSourceReference() != null ? latestClosed.getSourceReference() : latestClosed.getCycleId()) + "): " + reason)
+                .warrantyPeriod(latestClosed.getWarrantyPeriod())
+                .warrantyExpiry(latestClosed.getWarrantyExpiry())
+                .build();
+        ai = activeInventoryRepository.save(ai);
+
+        // Cập nhật SerialRegistry
+        serialRegistryRepository.findBySerialKey(key).ifPresentOrElse(sr -> {
+            sr.setCurrentCycleId(newCycleId);
+            sr.setCurrentState(nextState);
+            serialRegistryRepository.save(sr);
+        }, () -> {
+            SerialRegistry newSr = SerialRegistry.builder()
+                    .serialKey(key)
+                    .currentCycleId(newCycleId)
+                    .currentState(nextState)
+                    .build();
+            serialRegistryRepository.save(newSr);
+        });
+
+        // Ghi EventLog
+        EventLog event = EventLog.builder()
+                .eventId("EVT-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 8))
+                .idempotencyKey(java.util.UUID.randomUUID().toString())
+                .eventType(com.qkshop.tonkho.core.enums.EventType.INTAKE_CREATED)
+                .entityType("ACTIVE_INVENTORY")
+                .entityId(newCycleId)
+                .serialKey(key)
+                .cycleId(newCycleId)
+                .sourceType(com.qkshop.tonkho.core.enums.SourceType.WEB_APP)
+                .actor(username)
+                .notes("Hoàn tác/Nhập lại kho từ máy xuất khác: " + reason)
+                .build();
+        eventLogRepository.save(event);
+
+        // Đánh dấu vào ClosedCycle cũ
+        latestClosed.setCloseReason((latestClosed.getCloseReason() != null ? latestClosed.getCloseReason() + " | " : "") + "[ĐÃ NHẬP LẠI KHO BỞI " + username + "]: " + reason);
+        closedCycleRepository.save(latestClosed);
+
+        return ai;
     }
 }

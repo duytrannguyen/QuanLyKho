@@ -39,6 +39,7 @@ export const apiMayMoc = {
   bulkUpdatePrice: (serials, price) => axiosClient.put('/machines/bulk-price', { serials, price }),
   delete: (serial) => axiosClient.delete(`/machines/${serial}`),
   searchHistory: (params) => axiosClient.get('/machines/searchHistory', { params, silent: true }),
+  reopenExported: (serial, data) => axiosClient.post(`/machines/${serial}/reopen-exported`, data),
   downloadExcelTemplate: (data) => axiosClient.post('/machines/bulk/excel-template', data, { responseType: 'blob' }),
 };
 
@@ -106,19 +107,6 @@ export const systemApi = {
   deleteUser: (id) => axiosClient.delete(`/users/${id}`),
 };
 
-export const syncApi = {
-  run: (mode) => axiosClient.post('/sync/run', { mode }),
-  getIssues: () => axiosClient.get('/sync/issues', { silent: true }),
-  getRuns: () => axiosClient.get('/sync/runs', { silent: true }),
-  getLatestStatus: () => axiosClient.get('/sync/latest-status', { silent: true }),
-  recheckIssue: (id) => axiosClient.post(`/sync/issues/${id}/recheck`),
-  resolveIssue: (id, note) => axiosClient.post(`/sync/issues/${id}/resolve`, { note }),
-  resolveAllIssues: (issueType, note) => axiosClient.post('/sync/issues/resolve-all', { issueType, note }),
-  approveReturn: (id, note) => axiosClient.post(`/sync/issues/${id}/approve-return`, { note }),
-  getSyncSettings: () => axiosClient.get('/sync/settings', { silent: true }),
-  updateSyncSettings: (settings) => axiosClient.post('/sync/settings', settings),
-};
-
 export const notificationApi = {
   getAll: (params) => axiosClient.get('/notifications', { params, silent: true }),
   getUnreadCount: () => axiosClient.get('/notifications/unread-count', { silent: true }),
@@ -164,6 +152,7 @@ export const apiSuaChua = {
   getOrders: (params) => axiosClient.get('/repair', { params, silent: true }),
   getOrderById: (id) => axiosClient.get(`/repair/${id}`, { silent: true }),
   getOrdersBySerial: (serial) => axiosClient.get('/repair/by-serial', { params: { serial }, silent: true }),
+  checkWarrantyEligibility: (serial, phone) => axiosClient.get('/repair/check-warranty-eligibility', { params: { serial, phone }, silent: true }),
   createOrder: (payload) => axiosClient.post('/repair', payload),
   updateOrder: (id, payload) => axiosClient.put(`/repair/${id}`, payload),
   updateOrderStatus: (id, status) => axiosClient.put(`/repair/${id}/status`, { status }),
@@ -191,6 +180,7 @@ export const apiDonShip = {
 export const salesReportApi = {
   getDashboard: (params) => axiosClient.get('/sales-report/dashboard', { params, silent: true }),
   rebuild: () => axiosClient.post('/sales-report/rebuild'),
+  exportExcel: (params) => axiosClient.get('/sales-report/export-excel', { params, responseType: 'blob' }),
 };
 
 export const crmApi = {

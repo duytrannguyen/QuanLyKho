@@ -132,6 +132,18 @@ public class MachineController {
         return ResponseEntity.ok(ApiResponse.okWithMessage("Cập nhật thành công", updated));
     }
 
+    /** Nhập lại máy về kho từ luồng xuất khác (Hoàn tác xuất khác) */
+    @PostMapping("/{serial}/reopen-exported")
+    @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('MACHINE_EXPORT_OTHER', 'IMPORT_MACHINE')")
+    public ResponseEntity<ApiResponse<ActiveInventory>> reopenExportedMachine(
+            @PathVariable String serial,
+            @RequestBody(required = false) Map<String, Object> payload,
+            Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "SYSTEM";
+        ActiveInventory restored = machineService.reopenExportedMachine(serial, payload, username);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Đã nhập lại máy " + serial + " về kho thành công", restored));
+    }
+
     /** Xóa máy — ADMIN hoặc người có quyền MACHINE_DELETE */
     @DeleteMapping("/{serial}")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('MACHINE_DELETE')")

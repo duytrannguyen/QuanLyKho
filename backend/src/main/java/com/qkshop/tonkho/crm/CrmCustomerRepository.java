@@ -86,7 +86,6 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                       ( (s.orderCategory IN ('ACCESSORY', 'REPAIR'))
                         AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                         AND s.saleDate <= :sevenDaysAgo
-                        AND s.saleDate >= :fourteenDaysAgo
                       )
                   )
                   AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
@@ -145,7 +144,7 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                       OR
                       ( (s2.orderCategory IN ('ACCESSORY', 'REPAIR'))
                         AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
-                        AND s2.saleDate <= :sevenDaysAgo AND s2.saleDate >= :fourteenDaysAgo
+                        AND s2.saleDate <= :sevenDaysAgo
                       )
                   )
                   AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED'))
@@ -162,7 +161,6 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
             @Param("sixMonthsAgo") LocalDateTime sixMonthsAgo,
             @Param("twelveMonthsAgo") LocalDateTime twelveMonthsAgo,
             @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo,
-            @Param("fourteenDaysAgo") LocalDateTime fourteenDaysAgo,
             Pageable pageable);
 
     @Query("""
@@ -222,7 +220,6 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                   ( (s.orderCategory IN ('ACCESSORY', 'REPAIR'))
                     AND (s.careStatus IS NULL OR s.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
                     AND s.saleDate <= :sevenDaysAgo
-                    AND s.saleDate >= :fourteenDaysAgo
                   )
               )
               AND (s.careStatus IS NULL OR s.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
@@ -242,8 +239,7 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
     long countCareDue(
             @Param("sixMonthsAgo") LocalDateTime sixMonthsAgo,
             @Param("twelveMonthsAgo") LocalDateTime twelveMonthsAgo,
-            @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo,
-            @Param("fourteenDaysAgo") LocalDateTime fourteenDaysAgo);
+            @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo);
 
     @Query("""
         SELECT COUNT(DISTINCT c.id) FROM CrmCustomer c
@@ -296,7 +292,7 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
                   OR
                   ( (s2.orderCategory IN ('ACCESSORY', 'REPAIR'))
                     AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('HOAN_TAT_1_LAN', 'DA_BAN_LAI', 'VOIDED', 'DANG_HEN'))
-                    AND s2.saleDate <= :sevenDaysAgo AND s2.saleDate >= :fourteenDaysAgo
+                    AND s2.saleDate <= :sevenDaysAgo
                   )
               )
               AND (s2.careStatus IS NULL OR s2.careStatus NOT IN ('DA_BAN_LAI', 'VOIDED'))
@@ -308,6 +304,5 @@ public interface CrmCustomerRepository extends JpaRepository<CrmCustomer, Long> 
     long countCareCompleted(
             @Param("sixMonthsAgo") LocalDateTime sixMonthsAgo,
             @Param("twelveMonthsAgo") LocalDateTime twelveMonthsAgo,
-            @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo,
-            @Param("fourteenDaysAgo") LocalDateTime fourteenDaysAgo);
+            @Param("sevenDaysAgo") LocalDateTime sevenDaysAgo);
 }

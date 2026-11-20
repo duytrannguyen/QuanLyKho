@@ -1,31 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
-  Wrench, Plus, Search, CheckCircle, RotateCcw, User, Phone, 
-  Laptop, Trash2, Printer, ShieldCheck, Edit3, X, AlertCircle, Eye, Cpu, List, FileText
+  Wrench, Plus, Search, CheckCircle, RotateCcw, User, UserPlus, Phone, 
+  Laptop, Trash2, Printer, ShieldCheck, Edit3, X, AlertCircle, Eye, Cpu, List, FileText, XCircle
 } from 'lucide-react';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { apiSuaChua, apiLinhKien } from '../../api';
-import { formatCurrency, parseCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
+import { formatCurrency, parseCurrency, formatDate, getTodayDateString, getItemExpiryStatus, normalizePhoneInput, isValidVietnamPhone, taoThongTinKhachVangLai } from '../../utils/dinh_dang';
+import { printIntakeTicket, printPaymentInvoice } from '../../utils/inPhieuSuaChua';
 
 // ======================================================================
 // CÁC HÀM TIỆN ÍCH & COMPONENT DÙNG CHUNG (TÁCH RA ĐỂ RÚT GỌN MAIN FILE)
 // ======================================================================
-
-const getItemExpiryStatus = (expiryDate, periodText = '') => {
-  const lower = (periodText || '').toLowerCase();
-  if (lower.includes('từ chối') || lower.includes('tu choi')) return { text: 'Từ chối bảo hành', badge: 'bg-danger-subtle text-danger border border-danger-subtle', icon: AlertCircle };
-  if (lower.includes('theo bh') || lower.includes('theo bảo hành')) return { text: 'Theo BH máy (Còn hạn)', badge: 'bg-primary-subtle text-primary border border-primary-subtle', icon: ShieldCheck };
-  if (!expiryDate) return { text: periodText || 'Không bảo hành', badge: 'bg-secondary-subtle text-secondary', icon: AlertCircle };
-  
-  const now = new Date();
-  const end = new Date(expiryDate);
-  end.setHours(23, 59, 59, 999);
-  const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) return { text: `Hết hạn (${Math.abs(diffDays)} ngày trước)`, badge: 'bg-danger-subtle text-danger', icon: AlertCircle };
-  return { text: `Còn hạn (${diffDays} ngày)`, badge: 'bg-success-subtle text-success', icon: ShieldCheck };
-};
 
 const StatusBadge = ({ status }) => {
   switch (status) {
@@ -35,27 +21,6 @@ const StatusBadge = ({ status }) => {
     case 'CANCELLED': return <span className="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Hủy / Trả về</span>;
     default: return <span className="badge bg-secondary-subtle text-secondary border">{status || 'Chờ xử lý'}</span>;
   }
-};
-
-const printIntakeTicket = (order) => { 
-  const win = window.open('', '_blank', 'width=850,height=750');
-  if (!win || !order) return;
-  const servicesText = (order.items || []).map((it, idx) => `<tr><td style="text-align:center;">${idx + 1}</td><td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small style="color:#64748b;">${it.note}</small>` : ''}</td><td style="text-align:center;">${it.quantity || 1}</td><td style="text-align:right;">${it.price ? formatCurrency(it.price) + ' đ' : 'Chờ báo giá'}</td></tr>`).join('');
-  win.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu Tiếp Nhận Máy - ${order.orderCode}</title><style>* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; } body { padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; } .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; } .logo { font-size: 22px; font-weight: 800; color: #2563eb; } .title { text-align: center; margin: 15px 0; } .title h2 { font-size: 18px; font-weight: 700; text-transform: uppercase; color: #0f172a; } .title p { font-size: 11px; color: #64748b; margin-top: 2px; } .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 16px; } .row-info { display: flex; font-size: 13px; } .lbl { width: 140px; color: #64748b; font-weight: 500; } .val { flex: 1; font-weight: 600; color: #0f172a; } .table { width: 100%; border-collapse: collapse; margin-top: 10px; } .table th, .table td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 12px; } .table th { background: #f1f5f9; text-transform: uppercase; font-weight: 600; } .condition-box { background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 10px; margin-top: 12px; } .terms { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 15px; font-size: 11px; color: #475569; } .signatures { display: flex; justify-content: space-between; margin-top: 30px; text-align: center; } .sign-col { width: 220px; } .sign-title { font-weight: 600; margin-bottom: 50px; font-size: 12px; } @media print { body { padding: 15px; } }</style></head><body><div class="header"><div><div class="logo">QKSHOP.VN</div><div style="font-size: 11px; color: #64748b;">Dịch vụ Tiếp nhận Sửa Chữa & Bảo Hành Laptop</div><div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx</div></div><div style="text-align: right;"><div style="font-size: 14px; font-weight: 700; color: #2563eb;">Mã phiếu: ${order.orderCode}</div><div style="font-size: 11px; color: #64748b;">Ngày nhận: ${formatDate(order.createdDate)}</div>${order.promisedDate ? `<div style="font-size: 11px; color: #dc2626; font-weight: 600;">Hẹn trả máy: ${formatDate(order.promisedDate)}</div>` : ''}</div></div><div class="title"><h2>PHIẾU TIẾP NHẬN MÁY SỬA CHỮA / BẢO HÀNH</h2><p>(Quý khách vui lòng giữ phiếu này để đối chiếu khi nhận lại máy)</p></div><div class="grid"><div class="row-info"><span class="lbl">Khách hàng:</span><span class="val">${order.customerName || '—'}</span></div><div class="row-info"><span class="lbl">Số điện thoại:</span><span class="val font-monospace">${order.customerPhone || '—'}</span></div><div class="row-info"><span class="lbl">Dòng máy:</span><span class="val">${order.deviceModel || '—'}</span></div><div class="row-info"><span class="lbl">Số Serial:</span><span class="val font-monospace">${order.deviceSerial || '—'}</span></div><div class="row-info"><span class="lbl">KTV tiếp nhận:</span><span class="val">${order.technicianName || 'QKShop'}</span></div><div class="row-info"><span class="lbl">Trạng thái:</span><span class="val" style="color: #d97706;">${order.status === 'RECEIVED' ? 'Mới tiếp nhận máy' : (order.status || 'Chờ xử lý')}</span></div></div><div class="condition-box"><div style="font-weight: 700; color: #b45309; margin-bottom: 4px;">TÌNH TRẠNG TIẾP NHẬN & PHỤ KIỆN GỬI KÈM:</div><div><strong>• Tình trạng máy lúc nhận:</strong> ${order.intakeCondition || order.note || 'Bình thường / Chưa ghi chú'}</div><div><strong>• Phụ kiện gửi kèm:</strong> ${order.accessoriesReceived || 'Chỉ thân máy (Không có phụ kiện)'}</div></div><div style="margin-top: 14px;"><div style="font-weight: 700; font-size: 12px; text-transform: uppercase; margin-bottom: 6px;">Hạng mục dịch vụ / Linh kiện yêu cầu kiểm tra:</div><table class="table"><thead><tr><th style="width: 8%; text-align: center;">STT</th><th>Dịch vụ / Linh kiện</th><th style="width: 15%; text-align: center;">Số lượng</th><th style="width: 25%; text-align: right;">Đơn giá dự kiến</th></tr></thead><tbody>${servicesText || '<tr><td colspan="4" style="text-align:center;color:#64748b;">Kiểm tra tổng quát theo tình trạng máy</td></tr>'}</tbody></table></div><div class="terms"><strong>LƯU Ý QUAN TRỌNG:</strong><p>1. QKShop không chịu trách nhiệm về dữ liệu cá nhân trong máy. Quý khách vui lòng sao lưu trước khi bàn giao.</p><p>2. Vui lòng kiểm tra lại tình trạng máy và phụ kiện được ghi trên phiếu trước khi rời cửa hàng.</p><p>3. Khi đến nhận máy, quý khách vui lòng mang theo phiếu này hoặc số điện thoại đăng ký.</p></div><div class="signatures"><div class="sign-col"><div class="sign-title">KHÁCH HÀNG BÀN GIAO MÁY<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div></div><div class="sign-col"><div class="sign-title">KỸ THUẬT VIÊN TIẾP NHẬN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div><div style="font-weight: 600; font-size: 13px;">${order.technicianName || 'QKShop'}</div></div></div><script>window.onload = function() { setTimeout(function() { window.print(); }, 250); };</script></body></html>`);
-  win.document.close();
-};
-
-const printPaymentInvoice = (order) => { 
-  const win = window.open('', '_blank', 'width=850,height=750');
-  if (!win || !order) return;
-  const rowsHtml = (order.items || []).map((it, idx) => {
-    const pText = it.warrantyPeriod || (it.warrantyMonths > 0 ? it.warrantyMonths + ' Tháng' : 'Không BH');
-    const lower = pText.toLowerCase();
-    let badgeStyle = lower.includes('từ chối') || lower.includes('tu choi') ? 'color: #dc2626; font-weight: 700;' : (lower.includes('theo bh') || lower.includes('theo bảo hành') ? 'color: #2563eb; font-weight: 700;' : '');
-    return `<tr><td style="text-align:center;">${idx + 1}</td><td><strong>${it.serviceName || ''}</strong>${it.note ? `<br/><small style="color:#64748b;">${it.note}</small>` : ''}</td><td style="text-align:center;">${it.quantity || 1}</td><td style="text-align:right;">${formatCurrency(it.price)} đ</td><td style="text-align:center; ${badgeStyle}">${pText}</td><td style="text-align:center;">${it.warrantyExpiry || '---'}</td></tr>`;
-  }).join('');
-  win.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Hóa Đơn & Bảo Hành - ${order.orderCode}</title><style>* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; } body { padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; } .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #16a34a; padding-bottom: 12px; margin-bottom: 16px; } .logo { font-size: 22px; font-weight: 800; color: #16a34a; } .title { text-align: center; margin: 15px 0; } .title h2 { font-size: 18px; font-weight: 700; text-transform: uppercase; color: #0f172a; } .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 16px; } .row-info { display: flex; font-size: 13px; } .lbl { width: 140px; color: #64748b; font-weight: 500; } .val { flex: 1; font-weight: 600; color: #0f172a; } .table { width: 100%; border-collapse: collapse; margin-top: 10px; } .table th, .table td { border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 12px; } .table th { background: #f1f5f9; text-transform: uppercase; font-weight: 600; } .total-box { margin-top: 14px; text-align: right; } .total-price { font-size: 18px; font-weight: 800; color: #16a34a; } .terms { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-top: 15px; font-size: 11px; color: #475569; } .signatures { display: flex; justify-content: space-between; margin-top: 30px; text-align: center; } .sign-col { width: 220px; } .sign-title { font-weight: 600; margin-bottom: 50px; font-size: 12px; } @media print { body { padding: 15px; } }</style></head><body><div class="header"><div><div class="logo">QKSHOP.VN</div><div style="font-size: 11px; color: #64748b;">Hóa Đơn Dịch Vụ Sửa Chữa & Bảo Hành</div><div style="font-size: 11px; color: #64748b;">Hotline: 0939.xxx.xxx</div></div><div style="text-align: right;"><div style="font-size: 14px; font-weight: 700; color: #16a34a;">Hóa đơn: ${order.orderCode}</div><div style="font-size: 11px; color: #64748b;">Ngày thanh toán: ${formatDate(order.createdDate)}</div></div></div><div class="title"><h2>PHIẾU THANH TOÁN & BẢO HÀNH DỊCH VỤ</h2></div><div class="grid"><div class="row-info"><span class="lbl">Khách hàng:</span><span class="val">${order.customerName || '—'}</span></div><div class="row-info"><span class="lbl">Số điện thoại:</span><span class="val font-monospace">${order.customerPhone || '—'}</span></div><div class="row-info"><span class="lbl">Dòng máy:</span><span class="val">${order.deviceModel || '—'}</span></div><div class="row-info"><span class="lbl">Số Serial:</span><span class="val font-monospace">${order.deviceSerial || '—'}</span></div><div class="row-info"><span class="lbl">KTV thực hiện:</span><span class="val">${order.technicianName || 'QKShop'}</span></div><div class="row-info"><span class="lbl">Trạng thái:</span><span class="val" style="color: #16a34a;">Đã hoàn tất & Giao khách</span></div></div><table class="table"><thead><tr><th style="width: 6%; text-align: center;">STT</th><th>Dịch vụ / Linh kiện</th><th style="width: 10%; text-align: center;">Số lượng</th><th style="width: 20%; text-align: right;">Đơn giá</th><th style="width: 18%; text-align: center;">Gói bảo hành</th><th style="width: 18%; text-align: center;">Hạn bảo hành</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="total-box"><div style="font-size: 14px; color: #64748b;">Tổng tiền thanh toán: <span class="total-price">${formatCurrency(order.totalAmount)} đ</span></div></div><div class="terms"><strong>ĐIỀU KHOẢN BẢO HÀNH:</strong><p>1. Các linh kiện thay thế được bảo hành theo thời hạn ghi trên phiếu, tem niêm phong phải còn nguyên vẹn.</p><p>2. Không bảo hành các hư hỏng do rơi vỡ, vào nước, chập cháy nguồn điện, hoặc can thiệp phần cứng trái phép.</p></div><div class="signatures"><div class="sign-col"><div class="sign-title">KHÁCH HÀNG THANH TOÁN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div></div><div class="sign-col"><div class="sign-title">KỸ THUẬT VIÊN / THU NGÂN<br/><small style="font-weight:normal;color:#94a3b8;">(Ký và ghi rõ họ tên)</small></div><div style="font-weight: 600; font-size: 13px;">${order.technicianName || 'QKShop'}</div></div></div><script>window.onload = function() { setTimeout(function() { window.print(); }, 250); };</script></body></html>`);
-  win.document.close();
 };
 
 // ======================================================================
@@ -299,6 +264,9 @@ export default function TrangSuaChua() {
 
   const [services, setServices] = useState([{ serviceName: '', sku: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
 
+  const [warrantyEligibility, setWarrantyEligibility] = useState(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+
   const [availableParts, setAvailableParts] = useState([]);
   const [showPartPickerModal, setShowPartPickerModal] = useState(false);
 
@@ -315,6 +283,32 @@ export default function TrangSuaChua() {
     if (params.get('prefillPhone') || params.get('phone')) setCustomerPhone(params.get('prefillPhone') || params.get('phone'));
     if (params.get('prefillModel') || params.get('device')) setDeviceModel(params.get('prefillModel') || params.get('device'));
   }, [location.state, location.search]);
+
+  useEffect(() => {
+    if (!deviceSerial || !deviceSerial.trim()) {
+      setWarrantyEligibility(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      checkSerialEligibility(deviceSerial.trim(), customerPhone);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [deviceSerial]);
+
+  const checkSerialEligibility = async (serial, phone) => {
+    if (!serial) return;
+    setIsCheckingEligibility(true);
+    try {
+      const res = await apiSuaChua.checkWarrantyEligibility(serial, phone);
+      const data = res.data?.data || res.data || null;
+      setWarrantyEligibility(data);
+    } catch (e) {
+      console.warn('Lỗi kiểm tra tính hợp lệ bảo hành:', e);
+      setWarrantyEligibility(null);
+    } finally {
+      setIsCheckingEligibility(false);
+    }
+  };
 
   const fetchAvailableParts = async () => {
     try { const res = await apiLinhKien.getAvailable(); setAvailableParts(res.data?.data || res.data || []); } 
@@ -355,7 +349,7 @@ export default function TrangSuaChua() {
     setEditingOrderId(null); setEditingOrderCode(''); setCustomerName(''); setCustomerPhone('');
     setDeviceModel(''); setDeviceSerial(''); setIntakeCondition(''); setAccessoriesReceived('');
     setPromisedDate(''); setOrderStatus('RECEIVED'); setTechnicianName(''); setCreatedDate(getTodayDateString());
-    setNote(''); setServices([{ serviceName: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
+    setNote(''); setWarrantyEligibility(null); setServices([{ serviceName: '', price: '', quantity: 1, warrantyPeriod: '1 Tháng', note: '' }]);
   };
 
   const handleEditOrder = (order) => {
@@ -379,6 +373,10 @@ export default function TrangSuaChua() {
 
   const handleSaveOrder = async () => {
     if (!customerName.trim() || !customerPhone.trim()) return showToast('Vui lòng nhập Tên khách hàng và Số điện thoại', 'danger');
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      return showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+    }
     if (!deviceModel.trim()) return showToast('Vui lòng nhập Tên máy', 'danger');
 
     const validServices = services.filter(s => (s.serviceName || '').trim().length > 0);
@@ -392,12 +390,25 @@ export default function TrangSuaChua() {
       if ((wPeriod.toLowerCase().includes('từ chối') || wPeriod.toLowerCase().includes('tu choi')) && !sNote) return showToast(`Dòng ${i + 1}: Từ chối bảo hành bắt buộc nhập ghi chú`, 'danger');
     }
 
+    // Nếu máy đã thu lại về kho: Tuyệt đối từ chối tiếp nhận bảo hành miễn phí (0đ hoặc theo BH máy)
+    if (warrantyEligibility?.isReturned) {
+      for (let i = 0; i < validServices.length; i++) {
+        const s = validServices[i];
+        const sPrice = parseFloat(s.price) || 0;
+        const wPeriod = (s.warrantyPeriod || '').toLowerCase();
+        const sName = (s.serviceName || '').toLowerCase();
+        if (sPrice <= 0 || wPeriod.includes('theo bh') || wPeriod.includes('bảo hành') || sName.includes('bảo hành') || sName.includes('rma')) {
+          return showToast(`Dòng ${i + 1}: Máy này đã được thu lại về kho, gói bảo hành cũ đã BỊ HỦY. Chỉ nhận sửa chữa dịch vụ tính phí (nhập đơn giá > 0đ)!`, 'danger');
+        }
+      }
+    }
+
     if (!await confirm(`Xác nhận ${editingOrderId ? 'cập nhật' : 'lưu mới'} đơn dịch vụ cho ${customerName}?`)) return;
 
     setIsLoading(true);
     try {
       const payload = {
-        customerName: customerName.trim(), customerPhone: customerPhone.trim(), deviceModel: deviceModel.trim(),
+        customerName: customerName.trim(), customerPhone: cleanPhone, deviceModel: deviceModel.trim(),
         deviceSerial: deviceSerial ? deviceSerial.trim() : null, intakeCondition: intakeCondition ? intakeCondition.trim() : null,
         accessoriesReceived: accessoriesReceived ? accessoriesReceived.trim() : null, promisedDate: promisedDate || null,
         status: orderStatus || 'RECEIVED', technicianName: technicianName.trim(), createdDate, note: note.trim(),
@@ -476,12 +487,31 @@ export default function TrangSuaChua() {
               <div className="card-body p-4">
                 {editingOrderId && <div className="alert alert-warning border-warning-subtle bg-warning-subtle text-warning-emphasis rounded-3 mb-4 py-2 small d-flex align-items-center justify-content-between"><span>Đang chỉnh sửa hóa đơn <strong>{editingOrderCode}</strong>.</span><button className="btn btn-xs btn-outline-dark ms-2" onClick={resetForm}>Tạo mới</button></div>}
 
-                <h6 className="fw-bold mb-3 text-dark border-bottom pb-2">Thông tin Khách hàng & Thiết bị</h6>
+                <div className="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                  <h6 className="fw-bold m-0 text-dark">Thông tin Khách hàng & Thiết bị</h6>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary py-1 px-3 rounded-pill fw-semibold d-flex align-items-center"
+                    onClick={() => {
+                      const walkIn = taoThongTinKhachVangLai();
+                      setCustomerName(walkIn.customerName);
+                      setCustomerPhone(walkIn.customerPhone);
+                    }}
+                  >
+                    <UserPlus size={14} className="me-1" /> + Khách vãng lai
+                  </button>
+                </div>
                 <div className="row g-3 mb-4">
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Tên khách hàng *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><User size={16}/></span><input className="form-control border-start-0 ps-0" value={customerName} onChange={e => setCustomerName(e.target.value)} /></div></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Số điện thoại *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><Phone size={16}/></span><input className="form-control border-start-0 ps-0" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} /></div></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Tên máy *</label><div className="input-group"><span className="input-group-text bg-light text-muted border-end-0"><Laptop size={16}/></span><input className="form-control border-start-0 ps-0" value={deviceModel} onChange={e => setDeviceModel(e.target.value)} /></div></div>
-                  <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Số Serial máy</label><input className="form-control font-monospace" value={deviceSerial} onChange={e => setDeviceSerial(e.target.value)} /></div>
+                  <div className="col-md-6 col-lg-3">
+                    <label className="form-label text-muted fw-semibold small d-flex justify-content-between align-items-center">
+                      <span>Số Serial máy</span>
+                      {isCheckingEligibility && <span className="spinner-border spinner-border-sm text-primary" style={{ width: '12px', height: '12px' }}></span>}
+                    </label>
+                    <input className="form-control font-monospace" placeholder="Nhập serial máy..." value={deviceSerial} onChange={e => setDeviceSerial(e.target.value)} />
+                  </div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Tình trạng lúc nhận</label><input className="form-control" value={intakeCondition} onChange={e => setIntakeCondition(e.target.value)} /></div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Phụ kiện kèm theo</label><input className="form-control" value={accessoriesReceived} onChange={e => setAccessoriesReceived(e.target.value)} /></div>
                   <div className="col-md-4"><label className="form-label text-muted fw-semibold small">Ghi chú chung</label><input className="form-control" value={note} onChange={e => setNote(e.target.value)} /></div>
@@ -494,6 +524,32 @@ export default function TrangSuaChua() {
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Kỹ thuật viên</label><input className="form-control" value={technicianName} onChange={e => setTechnicianName(e.target.value)} /></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Ngày tạo đơn</label><input type="date" className="form-control" value={createdDate} onChange={e => setCreatedDate(e.target.value)} /></div>
                   <div className="col-md-6 col-lg-3"><label className="form-label text-muted fw-semibold small">Ngày hẹn giao máy</label><input type="date" className="form-control" value={promisedDate} onChange={e => setPromisedDate(e.target.value)} /></div>
+
+                  {/* Banner Cảnh Báo Nếu Máy Đã Thu Lại (Hủy Bảo Hành Khách Cũ) */}
+                  {warrantyEligibility?.isReturned && (
+                    <div className="col-12">
+                      <div className="alert alert-danger border border-danger border-opacity-50 d-flex align-items-start gap-3 p-3 rounded-3 shadow-sm mb-0">
+                        <XCircle className="text-danger flex-shrink-0 mt-1" size={24} />
+                        <div className="flex-grow-1">
+                          <div className="fw-bold text-danger fs-6 d-flex align-items-center gap-2 flex-wrap">
+                            <span>TỪ CHỐI TIẾP NHẬN BẢO HÀNH MIỄN PHÍ</span>
+                            <span className="badge bg-danger text-white">MÁY ĐÃ ĐƯỢC THU LẠI VỀ KHO</span>
+                          </div>
+                          <div className="small text-danger-emphasis mt-1">
+                            {warrantyEligibility.reason || 'Máy này đã được shop thu lại về kho. Toàn bộ chính sách và quyền lợi bảo hành cho khách hàng trước đó đã BỊ HỦY HOÀN TOÀN.'}
+                          </div>
+                          {warrantyEligibility.previousCustomerName && (
+                            <div className="small text-muted mt-1">
+                              Khách hàng từng mua máy: <strong>{warrantyEligibility.previousCustomerName}</strong> ({warrantyEligibility.previousCustomerPhone || 'Không rõ SĐT'})
+                            </div>
+                          )}
+                          <div className="small fw-semibold text-danger mt-1">
+                            👉 Cửa hàng CHỈ TIẾP NHẬN sửa chữa dịch vụ tính phí. Không áp dụng bảo hành miễn phí (giá 0đ hoặc Theo BH máy) cho serial này!
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="d-flex justify-content-between align-items-center mt-4 mb-3 border-bottom pb-2">
@@ -508,13 +564,13 @@ export default function TrangSuaChua() {
                   <table className="table table-hover align-middle mb-0">
                     <thead className="table-light text-dark small text-uppercase">
                       <tr>
-                        <th className="ps-3 py-3 text-center" style={{ width: '50px' }}>STT</th>
-                        <th className="py-3" style={{ minWidth: '250px' }}>Tên dịch vụ / Linh kiện *</th>
-                        <th className="py-3 text-center" style={{ width: '80px' }}>SL</th>
-                        <th className="py-3 text-end" style={{ minWidth: '150px' }}>Đơn giá</th>
-                        <th className="py-3 text-center" style={{ minWidth: '160px' }}>Bảo hành *</th>
-                        <th className="py-3" style={{ minWidth: '240px' }}>Ghi chú</th>
-                        <th className="pe-3 py-3 text-center" style={{ width: '50px' }}></th>
+                        <th className="ps-3 py-3 text-center" style={{ width: '5%' }}>STT</th>
+                        <th className="py-3" style={{ width: '28%' }}>Tên dịch vụ / Linh kiện *</th>
+                        <th className="py-3 text-center" style={{ width: '9%' }}>SL</th>
+                        <th className="py-3 text-end" style={{ width: '18%' }}>Đơn giá</th>
+                        <th className="py-3 text-center" style={{ width: '16%' }}>Bảo hành *</th>
+                        <th className="py-3" style={{ width: '19%' }}>Ghi chú</th>
+                        <th className="pe-3 py-3 text-center" style={{ width: '5%' }}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -593,7 +649,7 @@ export default function TrangSuaChua() {
               <div className="table-responsive bg-white">
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light text-secondary small text-uppercase">
-                    <tr><th className="ps-4 py-3 text-center" style={{ width: '60px' }}>STT</th><th className="py-3">Mã Đơn / Ngày</th><th className="py-3">Khách Hàng & SĐT</th><th className="py-3" style={{ minWidth: '180px' }}>Thiết bị</th><th className="py-3 text-center">Trạng thái</th><th className="py-3 text-end">Tổng tiền</th><th className="pe-4 py-3 text-center">Thao tác</th></tr>
+                    <tr><th className="ps-4 py-3 text-center" style={{ width: '6%' }}>STT</th><th className="py-3" style={{ width: '15%' }}>Mã Đơn / Ngày</th><th className="py-3" style={{ width: '19%' }}>Khách Hàng & SĐT</th><th className="py-3" style={{ width: '21%' }}>Thiết bị</th><th className="py-3 text-center" style={{ width: '12%' }}>Trạng thái</th><th className="py-3 text-end" style={{ width: '13%' }}>Tổng tiền</th><th className="pe-4 py-3 text-center" style={{ width: '14%' }}>Thao tác</th></tr>
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (

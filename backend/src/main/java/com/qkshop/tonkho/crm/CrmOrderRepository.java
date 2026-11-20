@@ -97,6 +97,10 @@ public interface CrmOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query(value = "UPDATE sales_orders SET crm_customer_id = :customerId WHERE id IN (:ids)", nativeQuery = true)
     int assignCustomer(@Param("customerId") Long customerId, @Param("ids") Collection<Long> ids);
 
+    @Modifying(flushAutomatically = true)
+    @Query(value = "UPDATE sales_orders SET crm_customer_id = :customerId WHERE id = :orderId", nativeQuery = true)
+    int assignCustomerWithoutClear(@Param("customerId") Long customerId, @Param("orderId") Long orderId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "UPDATE sales_orders SET crm_customer_id = NULL WHERE id IN (:ids)", nativeQuery = true)
     int clearCustomer(@Param("ids") Collection<Long> ids);

@@ -212,6 +212,14 @@ public class SalesOrder {
     @Column(name = "matched_cycle_id", length = 50)
     private String matchedCycleId;
 
+    /** Tên loại sạc kèm theo máy (nếu có) */
+    @Column(name = "charger_name", length = 255)
+    private String chargerName;
+
+    /** Mã SKU sạc trong kho phụ kiện (null nếu nhập sạc ngoài kho) */
+    @Column(name = "charger_sku", length = 100)
+    private String chargerSku;
+
     /** Nguồn dữ liệu: DATASALE, GSHEET, WEB_APP */
     @Column(name = "origin", length = 50)
     private String origin;

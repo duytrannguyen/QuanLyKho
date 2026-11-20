@@ -9,12 +9,14 @@ import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
+import com.qkshop.tonkho.salesreport.OrderDataSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,6 +33,7 @@ public class DataMaintenanceService {
     private final PlatformRepository platformRepo;
     private final VariantV2Repository variantRepo;
     private final CatalogService catalogService;
+    private final OrderDataSyncService orderDataSyncService;
 
     private static final Pattern CLEAN_PATTERN = Pattern.compile("(?i) (core|ryzen|ram|ssd|intel|amd|/|- \\d{4})");
 
@@ -91,7 +94,8 @@ public class DataMaintenanceService {
         }
 
         catalogService.fixAllDisplayNames();
-        log.info("Chuẩn hóa dữ liệu thành công!");
+        Map<String, Object> syncSummary = orderDataSyncService.reconcileAllHistoricalData();
+        log.info("Chuẩn hóa và đồng bộ dữ liệu thành công: {}", syncSummary);
         return "Chuẩn hóa dữ liệu thành công!";
     }
 

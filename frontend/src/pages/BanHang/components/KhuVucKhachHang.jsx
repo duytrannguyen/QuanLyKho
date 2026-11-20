@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, UserPlus } from 'lucide-react';
+import { taoThongTinKhachVangLai } from '../../../utils/dinh_dang';
 
 export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrmCustomer }) {
   return (
@@ -13,9 +14,11 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           className="btn btn-sm btn-light text-primary py-0 px-2 rounded-pill fw-medium border shadow-none"
           style={{ fontSize: '0.72rem', height: '24px' }}
           onClick={() => {
-            const timestamp = Date.now().toString().slice(-6);
-            handleFormChange('customer', `Khách vãng lai ${timestamp}`);
-            handleFormChange('customerPhone', `0999${timestamp}`);
+            const walkIn = taoThongTinKhachVangLai();
+            handleFormChange('customer', walkIn.customerName);
+            handleFormChange('customerPhone', walkIn.customerPhone);
+            handleFormChange('firstSource', 'Trực tiếp / Vãng lai');
+            handleFormChange('lastSource', 'Trực tiếp / Vãng lai');
           }}
         >
           <UserPlus size={11} className="me-1" /> + Khách vãng lai
@@ -69,8 +72,8 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           )}
         </div>
 
-        {/* Hàng 2: Nguồn, Kênh chốt, Phân loại, HS/SV (4 cột đều trên desktop) */}
-        <div className="col-6 col-md-3">
+        {/* Hàng 2: Nguồn, Kênh chốt, Phân loại, HS/SV (2x2 trên laptop, 4 cột trên màn lớn) */}
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Nơi biết Shop
           </label>
@@ -89,7 +92,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Kênh chốt đơn <span className="text-danger">*</span>
           </label>
@@ -108,7 +111,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             Phân loại khách
           </label>
@@ -123,7 +126,7 @@ export default function KhuVucKhachHang({ formData, handleFormChange, matchedCrm
           </select>
         </div>
 
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-xxl-3">
           <label className="form-label text-secondary fw-semibold mb-0.5" style={{ fontSize: '0.75rem' }}>
             HS / Sinh viên?
           </label>

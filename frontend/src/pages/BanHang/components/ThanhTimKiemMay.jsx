@@ -2,90 +2,180 @@ import React from 'react';
 import { Search, RotateCcw, Monitor, X, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../../../utils/dinh_dang';
 
+export const SearchSection = ({ searchTerm, setSearchTerm, onSearch, isLoading, hasMachine, onResetSearch, scannedMachine }) => {
+  if (hasMachine) {
+    return (
+      <div className="card shadow-sm mb-4 border-success border-opacity-50 rounded-4 bg-success-subtle bg-opacity-10">
+        <div className="card-body p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+          
+          {/* Thông tin máy đã chọn */}
+          <div className="d-flex align-items-start gap-3">
+            <div className="bg-success text-white rounded-circle p-2 d-flex align-items-center justify-content-center shadow-sm">
+              <CheckCircle size={24} />
+            </div>
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <span className="badge bg-success">MÁY ĐANG XUẤT BÁN</span>
+                {scannedMachine?.salePrice && (
+                  <span className="fw-bold text-primary">
+                    {formatCurrency(scannedMachine.salePrice)}đ
+                  </span>
+                )}
+              </div>
+              <h5 className="fw-bold text-dark mb-1">
+                {scannedMachine?.sourceModelText || scannedMachine?.platformDisplayName || 'Thiết bị không rõ tên'}
+              </h5>
+              {scannedMachine?.serialKey && (
+                <span className="badge bg-white text-dark border font-monospace px-2 py-1">
+                  SN: {scannedMachine.serialKey}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Nút hành động */}
+          <div>
+            <button
+              type="button"
+              className="btn btn-outline-secondary rounded-pill px-4 shadow-sm d-flex align-items-center fw-medium"
+              onClick={onResetSearch}
+            >
+              <RotateCcw size={16} className="me-2" /> Đổi máy khác
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card shadow-sm mb-4 border-0 rounded-4 bg-white">
+      <div className="card-body p-4">
+        <label className="fw-bold text-dark mb-3 d-flex align-items-center fs-6">
+          <Search size={18} className="me-2 text-primary" /> 
+          Tìm kiếm & Quét mã vạch máy xuất bán
+        </label>
+        
+        <form onSubmit={onSearch}>
+          <div className="input-group input-group-lg shadow-sm rounded-3 overflow-hidden border">
+            <span className="input-group-text bg-white border-0 text-muted px-3">
+              <Search size={20} />
+            </span>
+            <input
+              type="text"
+              className="form-control border-0 px-2 shadow-none fs-6"
+              placeholder="Quét mã vạch Serial hoặc nhập tên máy..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={isLoading}
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="btn btn-primary px-4 fw-bold"
+              disabled={isLoading || !searchTerm.trim()}
+            >
+              {isLoading ? <span className="spinner-border spinner-border-sm me-2" /> : null}
+              {isLoading ? 'Đang tìm...' : 'TÌM KIẾM'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+
 export const MachineCandidatesTable = ({ candidates, onSelectCandidate, onClear }) => (
-  <div className="card shadow-sm mb-3 border-0 rounded-3 overflow-hidden">
-    <div className="card-header bg-white border-bottom py-2 px-3 d-flex justify-content-between align-items-center">
+  <div className="card shadow-sm mb-4 border-0 rounded-4 overflow-hidden">
+    
+    {/* Card Header */}
+    <div className="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
       <div>
-        <h6 className="card-title fw-bold m-0 text-primary d-flex align-items-center" style={{ fontSize: '0.85rem' }}>
-          <Monitor className="me-1.5" size={16} />
+        <h6 className="card-title fw-bold m-0 text-primary d-flex align-items-center fs-6 mb-1">
+          <Monitor className="me-2" size={18} />
           Tìm thấy {candidates.length} máy trong kho
         </h6>
-        <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-          Vui lòng chọn 1 máy cụ thể bên dưới để xuất bán.
-        </small>
+        <span className="text-muted small">
+          Vui lòng chọn 1 máy cụ thể bên dưới để tiến hành xuất bán.
+        </span>
       </div>
       {onClear && (
         <button
           type="button"
-          className="btn btn-sm btn-light text-secondary rounded-circle p-1 hover-bg-light"
+          className="btn btn-light text-secondary rounded-circle p-2 d-flex align-items-center justify-content-center transition-all"
           onClick={onClear}
-          title="Đóng"
+          title="Đóng bảng"
         >
-          <X size={15} />
+          <X size={18} />
         </button>
       )}
     </div>
+
+    {/* Table */}
     <div className="table-responsive">
-      <table className="table table-sm table-hover align-middle mb-0" style={{ fontSize: '0.82rem' }}>
+      <table className="table table-hover align-middle mb-0">
         <thead className="table-light">
           <tr>
-            <th className="ps-3 py-1.5 text-secondary text-uppercase" style={{ fontSize: '0.7rem' }}>Tên dòng máy</th>
-            <th className="py-1.5 text-secondary text-uppercase" style={{ fontSize: '0.7rem' }}>Số Serial</th>
-            <th className="py-1.5 text-secondary text-uppercase" style={{ fontSize: '0.7rem' }}>Cấu hình</th>
-            <th className="py-1.5 text-secondary text-end text-uppercase" style={{ fontSize: '0.7rem' }}>Giá niêm yết</th>
-            <th className="py-1.5 text-center text-secondary text-uppercase" style={{ fontSize: '0.7rem' }}>Trạng thái</th>
-            <th className="py-1.5 text-end pe-3 text-secondary text-uppercase" style={{ fontSize: '0.7rem' }}>Hành động</th>
+            <th className="ps-4 py-3 text-secondary small fw-medium text-uppercase">Tên & Dòng máy</th>
+            <th className="py-3 text-secondary small fw-medium text-uppercase">Số Serial</th>
+            <th className="py-3 text-secondary small fw-medium text-uppercase">Cấu hình chi tiết</th>
+            <th className="py-3 text-secondary small fw-medium text-uppercase text-end">Giá niêm yết</th>
+            <th className="py-3 text-secondary small fw-medium text-uppercase text-center">Trạng thái</th>
+            <th className="pe-4 py-3 text-secondary small fw-medium text-uppercase text-end">Thao tác</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="border-top-0">
           {candidates.map((m) => {
             const isReady = m.state === 'READY';
             return (
-              <tr key={m.id || m.serialKey} style={{ cursor: 'pointer' }} onClick={() => onSelectCandidate(m)}>
-                <td className="ps-3 py-1.5">
-                  <div className="fw-bold text-dark">{m.sourceModelText || 'Không rõ dòng máy'}</div>
-                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>Mã chu kỳ: {m.cycleId || '—'}</small>
+              <tr 
+                key={m.id || m.serialKey} 
+                style={{ cursor: 'pointer' }} 
+                onClick={() => onSelectCandidate(m)}
+                className="transition-all"
+              >
+                <td className="ps-4 py-3">
+                  <div className="fw-bold text-dark mb-1">{m.sourceModelText || 'Không rõ dòng máy'}</div>
+                  <div className="text-muted small">Mã chu kỳ: <span className="fw-medium">{m.cycleId || '—'}</span></div>
                 </td>
-                <td className="py-1.5">
-                  <span className="badge bg-light text-dark font-monospace border px-1.5 py-0.5">{m.serialKey}</span>
+                
+                <td className="py-3">
+                  <span className="badge bg-light text-dark font-monospace border px-2 py-1 fs-6">
+                    {m.serialKey}
+                  </span>
                 </td>
-                <td className="py-1.5">
-                  <div className="d-flex flex-wrap gap-1">
-                    {m.cpuCode && <span className="badge badge-soft-primary" style={{ fontSize: '0.7rem' }}>{m.cpuCode}</span>}
-                    {m.ram && (
-                      <span className="badge bg-info bg-opacity-10 text-info border border-info-subtle" style={{ fontSize: '0.7rem' }}>
-                        RAM {m.ram}
-                      </span>
-                    )}
-                    {m.ssd && (
-                      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle" style={{ fontSize: '0.7rem' }}>
-                        SSD {m.ssd}
-                      </span>
-                    )}
+                
+                <td className="py-3">
+                  <div className="d-flex flex-wrap gap-2">
+                    {m.cpuCode && <span className="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle px-2 py-1">{m.cpuCode}</span>}
+                    {m.ram && <span className="badge bg-info bg-opacity-10 text-info border border-info-subtle px-2 py-1">RAM {m.ram}</span>}
+                    {m.ssd && <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary-subtle px-2 py-1">SSD {m.ssd}</span>}
                   </div>
                 </td>
-                <td className="text-end py-1.5">
-                  <div className="fw-bold text-primary">
-                    {m.salePrice ? formatCurrency(m.salePrice) + 'đ' : '—'}
+                
+                <td className="text-end py-3">
+                  <div className="fw-bold text-primary fs-6">
+                    {m.salePrice ? `${formatCurrency(m.salePrice)}đ` : '—'}
                   </div>
                 </td>
-                <td className="text-center py-1.5">
+                
+                <td className="text-center py-3">
                   <span
-                    className={`badge rounded-pill px-2 py-0.5 fw-medium ${
+                    className={`badge rounded-pill px-3 py-1 fw-medium ${
                       isReady
                         ? 'bg-success bg-opacity-10 text-success border border-success-subtle'
                         : 'bg-warning bg-opacity-10 text-warning border border-warning-subtle'
                     }`}
-                    style={{ fontSize: '0.7rem' }}
                   >
                     {isReady ? 'SẴN SÀNG' : m.state || 'KIỂM TRA'}
                   </span>
                 </td>
-                <td className="text-end pe-3 py-1.5">
+                
+                <td className="text-end pe-4 py-3">
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm px-2.5 py-0.5 rounded-pill fw-medium shadow-sm"
-                    style={{ fontSize: '0.75rem' }}
+                    className="btn btn-primary px-4 rounded-pill fw-medium shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectCandidate(m);
@@ -102,80 +192,3 @@ export const MachineCandidatesTable = ({ candidates, onSelectCandidate, onClear 
     </div>
   </div>
 );
-
-export const SearchSection = ({ searchTerm, setSearchTerm, onSearch, isLoading, hasMachine, onResetSearch, scannedMachine }) => {
-  if (hasMachine) {
-    return (
-      <div className="card shadow-sm mb-2.5 border-0 rounded-3 bg-white">
-        <div className="card-body py-1.5 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span
-              className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5 fw-bold d-flex align-items-center gap-1"
-              style={{ fontSize: '0.72rem' }}
-            >
-              <CheckCircle size={13} /> MÁY ĐANG XUẤT BÁN
-            </span>
-            <span className="fw-bold text-dark" style={{ fontSize: '0.85rem' }}>
-              {scannedMachine?.sourceModelText || scannedMachine?.platformDisplayName || 'Thiết bị'}
-            </span>
-            {scannedMachine?.serialKey && (
-              <span className="badge bg-light text-primary border font-monospace" style={{ fontSize: '0.75rem' }}>
-                SN: {scannedMachine.serialKey}
-              </span>
-            )}
-            {scannedMachine?.salePrice && (
-              <span className="text-muted small">
-                (Niêm yết: <strong className="text-dark">{formatCurrency(scannedMachine.salePrice)}đ</strong>)
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            className="btn btn-outline-secondary btn-sm fw-medium rounded-pill px-2.5 py-0.5 shadow-sm d-flex align-items-center"
-            onClick={onResetSearch}
-            style={{ fontSize: '0.75rem' }}
-          >
-            <RotateCcw size={12} className="me-1 text-primary" /> Đổi máy khác
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card shadow-sm mb-3 border-0 rounded-3 overflow-hidden">
-      <div className="card-body py-2.5 px-3 bg-white">
-        <div className="d-flex justify-content-between align-items-center mb-1.5">
-          <h6 className="fw-bold text-dark mb-0 d-flex align-items-center" style={{ fontSize: '0.85rem' }}>
-            <Search size={15} className="me-1.5 text-primary" /> Tìm kiếm máy xuất bán
-          </h6>
-        </div>
-        <form onSubmit={onSearch}>
-          <div className="input-group border rounded-3 overflow-hidden shadow-none bg-light">
-            <span className="input-group-text bg-transparent border-0 text-primary ps-2.5 py-1">
-              <Search size={16} />
-            </span>
-            <input
-              type="text"
-              className="form-control border-0 bg-transparent px-2 py-1 shadow-none fw-medium"
-              placeholder="Quét mã vạch Serial hoặc nhập tên máy..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={isLoading}
-              autoFocus
-              style={{ fontSize: '0.88rem' }}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary px-3 py-1 fw-bold text-uppercase"
-              disabled={isLoading || !searchTerm.trim()}
-              style={{ fontSize: '0.78rem' }}
-            >
-              {isLoading ? <span className="spinner-border spinner-border-sm" /> : 'Tìm kiếm'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};

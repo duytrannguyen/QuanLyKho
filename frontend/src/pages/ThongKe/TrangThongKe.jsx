@@ -189,7 +189,7 @@ export default function TrangThongKe() {
 
       <div className="row g-3">
         {/* Left Sidebar (Filters) */}
-        <div className="col-12 col-lg-2">
+        <div className="col-12 col-lg-3 col-xxl-2">
           <div className="card border-0 rounded-4 p-3 h-100 shadow-sm bg-white">
             
             <FilterGrid 
@@ -259,7 +259,7 @@ export default function TrangThongKe() {
         </div>
         
         {/* Main Content Area */}
-        <div className="col-12 col-lg-10 position-relative">
+        <div className="col-12 col-lg-9 col-xxl-10 position-relative">
 
           {/* Lớp phủ Loading nếu đang gọi API */}
           {isLoading && (
@@ -362,7 +362,7 @@ export default function TrangThongKe() {
                         <PieChart>
                           <Pie
                             data={pieDataState}
-                            cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" stroke="none"
+                            cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" stroke="none"
                           >
                             {pieDataState.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -449,7 +449,7 @@ export default function TrangThongKe() {
                 <div className="card-body p-3 d-flex flex-column">
                   <h6 className="fw-bold mb-1 text-center text-dark">Tốc độ luân chuyển Top 5</h6>
                   <p className="text-muted small mb-3 text-center" style={{ fontSize: '11px' }}>Tỷ lệ = Xuất / Nhập (Quy đổi 100% nếu có Xuất nhưng Nhập = 0).</p>
-                  <div className="w-100 flex-grow-1 overflow-auto custom-scrollbar" style={{ maxHeight: '200px', padding: '0 5px' }}>
+                  <div className="w-100 flex-grow-1" style={{ padding: '0 5px' }}>
                     {turnoverData && turnoverData.slice(0, 5).map(item => (
                       <div key={item.name} className="mb-3">
                         <div className="d-flex justify-content-between align-items-center mb-1">

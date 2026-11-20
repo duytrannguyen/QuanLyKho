@@ -220,6 +220,7 @@ public class AccessoryController {
     }
 
     @PostMapping("/migrate-skus")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> migrateSkus() {
         accessoryService.migrateSkus();
         return ResponseEntity.ok(ApiResponse.okWithMessage("Migrate SKU thành công", "Migrate SKU thành công"));

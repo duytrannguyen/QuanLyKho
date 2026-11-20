@@ -648,7 +648,7 @@ export default function TrangNhapLinhKien() {
               <span className="badge bg-primary rounded-pill">{recentlyImported.length}</span>
             </div>
             
-            <div className="card-body p-0 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            <div className="card-body p-0">
               {recentlyImported.length === 0 ? (
                 <div className="h-100 d-flex flex-column align-items-center justify-content-center py-5 text-muted px-4 text-center">
                   <PackagePlus size={48} className="text-light-subtle mb-3 opacity-50" />

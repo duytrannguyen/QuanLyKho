@@ -16,6 +16,7 @@ public class RepairController {
     private final RepairOrderService repairOrderService;
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SERVICE_VIEW', 'SERVICE_REPAIR')")
     public ResponseEntity<ApiResponse<List<RepairOrder>>> getOrders(
             @RequestParam(required = false) String keyword) {
         List<RepairOrder> orders = repairOrderService.getAllOrders(keyword);
@@ -23,6 +24,7 @@ public class RepairController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SERVICE_VIEW', 'SERVICE_REPAIR')")
     public ResponseEntity<ApiResponse<RepairOrder>> getOrderById(@PathVariable Long id) {
         RepairOrder order = repairOrderService.getOrderById(id);
         return ResponseEntity.ok(ApiResponse.okWithMessage("Chi tiết đơn dịch vụ sửa chữa", order));
@@ -62,6 +64,14 @@ public class RepairController {
         }
         List<RepairOrder> orders = repairOrderService.getOrdersBySerial(serial.trim());
         return ResponseEntity.ok(ApiResponse.okWithMessage("Lịch sử sửa chữa theo serial", orders));
+    }
+
+    @GetMapping("/check-warranty-eligibility")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkWarrantyEligibility(
+            @RequestParam(required = false, defaultValue = "") String serial,
+            @RequestParam(required = false, defaultValue = "") String phone) {
+        Map<String, Object> result = repairOrderService.checkWarrantyEligibility(serial, phone);
+        return ResponseEntity.ok(ApiResponse.okWithMessage("Kiểm tra tính hợp lệ bảo hành máy", result));
     }
 
     @GetMapping("/services")

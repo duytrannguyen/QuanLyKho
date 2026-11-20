@@ -96,11 +96,21 @@ public class StateTransitionService {
             }
         }
 
+        // Xác định loại EventType chính xác theo CloseType
+        EventType eventType = switch (closeType) {
+            case SALE -> EventType.CYCLE_CLOSED_SOLD;
+            case OTHER -> EventType.CYCLE_CLOSED_OTHER;
+            case GIFT -> EventType.CYCLE_CLOSED_GIFT;
+            case INTERNAL -> EventType.CYCLE_CLOSED_INTERNAL;
+            case SUPPLIER_RETURN -> EventType.CYCLE_CLOSED_SUPPLIER_RETURN;
+            default -> EventType.CYCLE_CLOSED_RETURNED;
+        };
+
         // Tạo EventLog trước để lấy eventId
         EventLog event = EventLog.builder()
                 .eventId("EVT-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8))
                 .idempotencyKey(UUID.randomUUID().toString())
-                .eventType(closeType == CloseType.SALE ? EventType.CYCLE_CLOSED_SOLD : EventType.CYCLE_CLOSED_RETURNED)
+                .eventType(eventType)
                 .entityType("CLOSED_CYCLE")
                 .entityId(cycleId)
                 .serialKey(inventory.getSerialKey())
@@ -132,6 +142,7 @@ public class StateTransitionService {
                 .closeEventId(event.getEventId())
                 .closeReason(notes)
                 .pausedDays(finalPausedDays)
+                .closedBy(actor)
                 .build();
 
         closedCycle = closedCycleRepo.save(closedCycle);

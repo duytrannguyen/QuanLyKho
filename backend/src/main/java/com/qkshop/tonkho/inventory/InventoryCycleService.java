@@ -38,7 +38,7 @@ public class InventoryCycleService {
     private final CommandLedgerRepository commandLedgerRepo;
     private final AccessoryService accessoryService;
     private final com.qkshop.tonkho.part.PartService partService;
-    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     /**
@@ -72,9 +72,7 @@ public class InventoryCycleService {
 
         for (ActiveInventory ai : allActive) {
             SalesConfig config = ai.getConfig();
-            if (config == null) continue;
-
-            VariantV2 variant = config.getVariant();
+            VariantV2 variant = config != null ? config.getVariant() : null;
 
             // Filter by text query
             if (StringUtils.hasText(query)) {
@@ -82,16 +80,26 @@ public class InventoryCycleService {
                 boolean match = ai.getSerialKey().toLowerCase().contains(q)
                         || (variant != null && variant.getVariantName() != null && variant.getVariantName().toLowerCase().contains(q))
                         || (ai.getSourceModelText() != null && ai.getSourceModelText().toLowerCase().contains(q))
-                        || (config.getDisplayName() != null && config.getDisplayName().toLowerCase().contains(q))
-                        || (config.getConfigId() != null && config.getConfigId().toLowerCase().contains(q))
+                        || (config != null && config.getDisplayName() != null && config.getDisplayName().toLowerCase().contains(q))
+                        || (config != null && config.getConfigId() != null && config.getConfigId().toLowerCase().contains(q))
                         || (variant != null && variant.getPlatform() != null && variant.getPlatform().getPlatformCode() != null && variant.getPlatform().getPlatformCode().toLowerCase().contains(q))
                         || (variant != null && variant.getPlatform() != null && variant.getPlatform().getDisplayName() != null && variant.getPlatform().getDisplayName().toLowerCase().contains(q))
                         || (variant != null && variant.getCpuCode() != null && variant.getCpuCode().toLowerCase().contains(q));
                 if (!match) continue;
             }
 
-            String key = config.getConfigId() != null ? config.getConfigId() : String.valueOf(config.getId());
-            configMap.putIfAbsent(key, config);
+            String key = (config != null && config.getConfigId() != null)
+                    ? config.getConfigId()
+                    : (config != null ? String.valueOf(config.getId()) : "CHUA_CAU_HINH");
+            SalesConfig groupConfig = config != null
+                    ? config
+                    : SalesConfig.builder()
+                            .configId("CHUA_CAU_HINH")
+                            .displayName("Máy chưa gắn cấu hình")
+                            .ramCode("-")
+                            .ssdCode("-")
+                            .build();
+            configMap.putIfAbsent(key, groupConfig);
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(ai);
         }
 
@@ -165,6 +173,26 @@ public class InventoryCycleService {
         throw new IllegalArgumentException("Không tìm thấy máy trong kho với từ khóa/serial: " + keyword);
     }
 
+    public ActiveInventory lookupSaleCandidateForUpdate(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            throw new IllegalArgumentException("Từ khóa tìm kiếm serial máy không được để trống");
+        }
+        String clean = keyword.trim();
+        String upper = clean.toUpperCase();
+
+        Optional<ActiveInventory> aiOpt = activeInventoryRepo.findBySerialKeyOrCycleIdForUpdate(upper);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        aiOpt = activeInventoryRepo.findBySerialKeyOrCycleIdForUpdate(clean);
+        if (aiOpt.isPresent()) {
+            return aiOpt.get();
+        }
+
+        return lookupSaleCandidate(keyword);
+    }
+
     public List<ActiveInventory> searchSaleCandidates(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return List.of();
@@ -202,14 +230,15 @@ public class InventoryCycleService {
             throw new IllegalArgumentException("Request " + requestId + " đã được xử lý (Idempotent).");
         }
 
-        ActiveInventory ai = lookupSaleCandidate(serialKey);
+        ActiveInventory ai = lookupSaleCandidateForUpdate(serialKey);
         if (ai.getState() != CycleState.READY) {
-            throw new IllegalStateException("Máy không ở trạng thái Sẵn sàng bán (READY). Trạng thái hiện tại: " + ai.getState());
+            throw new IllegalStateException("Máy " + serialKey + " không ở trạng thái Sẵn sàng bán (READY) hoặc vừa được bán bởi nhân viên khác. Trạng thái hiện tại: " + ai.getState());
         }
 
         BigDecimal originalListedPrice = ai.getSalePrice();
-        ai.setSalePrice(finalPrice);
-        activeInventoryRepo.save(ai);
+        if ((originalListedPrice == null || originalListedPrice.compareTo(BigDecimal.ZERO) <= 0) && ai.getConfig() != null) {
+            originalListedPrice = ai.getConfig().getDefaultSalePrice();
+        }
 
         LocalDateTime sDate = LocalDateTime.now();
         if (saleDetails != null && saleDetails.containsKey("saleDate") && saleDetails.get("saleDate") != null) {
@@ -387,21 +416,38 @@ public class InventoryCycleService {
                 }
             }
 
-            // Deduct accessories & upgrade parts
+            // Deduct accessories, bundled charger & upgrade parts
             List<Map<String, Object>> accessories = (List<Map<String, Object>>) saleDetails.get("accessories");
             BigDecimal totalPaidAccessoriesAmount = BigDecimal.ZERO;
 
-            if (accessories != null && !accessories.isEmpty()) {
-                List<Map<String, Object>> generalAccessories = new java.util.ArrayList<>();
-                List<String> giftItems = new java.util.ArrayList<>();
-                List<String> paidItems = new java.util.ArrayList<>();
-                List<String> upgradeItems = new java.util.ArrayList<>();
+            String chargerName = saleDetails.get("chargerName") != null ? saleDetails.get("chargerName").toString().trim() : null;
+            String chargerSku = saleDetails.get("chargerSku") != null ? saleDetails.get("chargerSku").toString().trim() : null;
+            if (chargerName != null && chargerName.isEmpty()) chargerName = null;
+            if (chargerSku != null && chargerSku.isEmpty()) chargerSku = null;
 
+            List<Map<String, Object>> generalAccessories = new java.util.ArrayList<>();
+            List<String> giftItems = new java.util.ArrayList<>();
+            List<String> paidItems = new java.util.ArrayList<>();
+            List<String> upgradeItems = new java.util.ArrayList<>();
+
+            if (accessories != null && !accessories.isEmpty()) {
                 for (Map<String, Object> a : accessories) {
+                    boolean isChargerItem = Boolean.TRUE.equals(a.get("isCharger")) || "true".equalsIgnoreCase(String.valueOf(a.get("isCharger")));
                     boolean isGift = Boolean.TRUE.equals(a.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(a.get("isGift")));
                     boolean isUpgrade = Boolean.TRUE.equals(a.get("isUpgrade")) || "true".equalsIgnoreCase(String.valueOf(a.get("isUpgrade")));
-                    String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
                     String sku = (String) a.get("sku");
+
+                    if (isChargerItem) {
+                        if (chargerSku == null && sku != null && !sku.trim().isEmpty()) {
+                            chargerSku = sku.trim();
+                        }
+                        if (chargerName == null && a.get("name") != null && !a.get("name").toString().trim().isEmpty()) {
+                            chargerName = a.get("name").toString().trim();
+                        }
+                        continue;
+                    }
+
+                    String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
                     int qty = a.get("quantity") != null ? Integer.parseInt(a.get("quantity").toString()) : 1;
                     BigDecimal price = BigDecimal.ZERO;
                     Object p = a.get("price");
@@ -426,47 +472,114 @@ public class InventoryCycleService {
                     } else {
                         // Phụ kiện mua thêm có tính phí - đồng nhất logic lấy giá với AccessoryService.deductAccessories
                         BigDecimal resolvedPrice = accessoryService.resolvePaidAccessoryPrice(a, null);
-                        a.put("price", resolvedPrice);
+                        Map<String, Object> mutableAcc = new java.util.HashMap<>(a);
+                        mutableAcc.put("price", resolvedPrice);
                         BigDecimal itemTotal = resolvedPrice.multiply(BigDecimal.valueOf(qty));
                         totalPaidAccessoriesAmount = totalPaidAccessoriesAmount.add(itemTotal);
                         String priceStr = resolvedPrice.compareTo(BigDecimal.ZERO) > 0 ? " [" + resolvedPrice + "đ]" : "";
                         paidItems.add(nameWithQty + priceStr);
-                        generalAccessories.add(a);
+                        generalAccessories.add(mutableAcc);
                     }
                 }
+            }
 
-                if (!generalAccessories.isEmpty()) {
-                    accessoryService.deductAccessories(
-                            generalAccessories,
-                            closed.getCustomerName(),
-                            closed.getCustomerPhone(),
-                            closed.getCycleId(),
-                            salesperson,
-                            closed.getSaleDate(),
-                            isShipping,
-                            isDelivered,
-                            delDate,
-                            wp
-                    );
+            if (chargerSku != null) {
+                if (chargerName == null) {
+                    chargerName = accessoryService.findBySku(chargerSku)
+                            .map(com.qkshop.tonkho.accessory.Accessory::getName)
+                            .orElse(chargerSku);
                 }
+                Map<String, Object> chargerItem = new java.util.HashMap<>();
+                chargerItem.put("sku", chargerSku);
+                chargerItem.put("name", chargerName);
+                chargerItem.put("quantity", 1);
+                chargerItem.put("isGift", true);
+                chargerItem.put("isCharger", true);
+                chargerItem.put("price", BigDecimal.ZERO);
+                generalAccessories.add(chargerItem);
+            }
 
-                StringBuilder accNote = new StringBuilder();
-                if (!upgradeItems.isEmpty()) {
-                    accNote.append("Linh kiện nâng cấp: ").append(String.join(", ", upgradeItems));
-                }
-                if (!giftItems.isEmpty()) {
-                    if (accNote.length() > 0) accNote.append(" | ");
-                    accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
-                }
-                if (!paidItems.isEmpty()) {
-                    if (accNote.length() > 0) accNote.append(" | ");
-                    accNote.append("Phụ kiện bán thêm: ").append(String.join(", ", paidItems));
-                }
+            closed.setChargerName(chargerName);
+            closed.setChargerSku(chargerSku);
 
+            if (!generalAccessories.isEmpty()) {
+                accessoryService.deductAccessories(
+                        generalAccessories,
+                        closed.getCustomerName(),
+                        closed.getCustomerPhone(),
+                        closed.getCycleId(),
+                        salesperson,
+                        closed.getSaleDate(),
+                        isShipping,
+                        isDelivered,
+                        delDate,
+                        wp,
+                        closed.getWarrantyExpiry()
+                );
+            }
+
+            StringBuilder accNote = new StringBuilder();
+            if (chargerName != null) {
+                accNote.append("Sạc kèm theo máy: ").append(chargerName);
+                if (chargerSku == null) {
+                    accNote.append(" (Ngoài kho)");
+                }
+            }
+            if (!upgradeItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Linh kiện nâng cấp: ").append(String.join(", ", upgradeItems));
+            }
+            if (!giftItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
+            }
+            if (!paidItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Phụ kiện bán thêm: ").append(String.join(", ", paidItems));
+            }
+
+            if (!accNote.isEmpty()) {
                 String currentNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
                 String newNote = currentNote.isEmpty() ? accNote.toString()
                                                        : currentNote + " | " + accNote.toString();
                 closed.setSaleNote(newNote);
+            }
+
+            // Thu hồi linh kiện zin tháo máy (swapParts: RAM, SSD zin của khách để lại khi nâng cấp)
+            Object swapPartsObj = saleDetails.get("swapParts");
+            if (swapPartsObj instanceof List<?> swapList && !swapList.isEmpty()) {
+                List<String> swappedItems = new java.util.ArrayList<>();
+                for (Object itemObj : swapList) {
+                    if (itemObj instanceof Map<?, ?> itemMap) {
+                        String sku = (String) itemMap.get("sku");
+                        int qty = 1;
+                        if (itemMap.get("quantity") != null) {
+                            try {
+                                qty = Integer.parseInt(itemMap.get("quantity").toString());
+                            } catch (Exception ignored) {}
+                        }
+                        String reason = (String) itemMap.get("reason");
+                        if (sku != null && !sku.trim().isEmpty()) {
+                            boolean swapped = partService.swapInPart(
+                                    sku.trim(),
+                                    qty,
+                                    closed.getCycleId(),
+                                    closed.getCustomerName(),
+                                    closed.getCustomerPhone(),
+                                    salesperson,
+                                    reason != null ? reason : ("Thu hồi linh kiện tháo máy nâng cấp chu kỳ " + closed.getCycleId())
+                            );
+                            if (swapped) {
+                                swappedItems.add(sku.trim() + " (x" + qty + ")");
+                            }
+                        }
+                    }
+                }
+                if (!swappedItems.isEmpty()) {
+                    String swapNote = "Thu hồi linh kiện swap: " + String.join(", ", swappedItems);
+                    String curNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
+                    closed.setSaleNote(curNote.isEmpty() ? swapNote : curNote + " | " + swapNote);
+                }
             }
 
             BigDecimal machineNetRevenue = finalPrice.subtract(totalPaidAccessoriesAmount);
@@ -478,98 +591,19 @@ public class InventoryCycleService {
             closed = closedCycleRepo.save(closed);
 
             try {
-                final String finalTxnId = (closed.getSourceReference() != null && !closed.getSourceReference().isBlank())
-                        ? closed.getSourceReference()
-                        : txnId;
-
-                String firstSrc = (String) saleDetails.get("firstSource");
-                String lastSrc = (String) saleDetails.get("lastSource");
-                if (lastSrc == null || lastSrc.isBlank()) {
-                    lastSrc = (String) saleDetails.get("source");
-                }
-                String custType = (String) saleDetails.get("customerType");
-                Boolean isStudent = null;
-                Object stuObj = saleDetails.get("isStudent");
-                if (stuObj != null) {
-                    if (stuObj instanceof Boolean b) isStudent = b;
-                    else {
-                        String s = stuObj.toString().trim();
-                        isStudent = "true".equalsIgnoreCase(s) || "1".equals(s) || "có".equalsIgnoreCase(s) || "co".equalsIgnoreCase(s) || s.toLowerCase().contains("sinh viên");
-                    }
-                }
-
-                String brand = null;
-                String segment = null;
-                String series = null;
-                String modelName = ai.getSourceModelText();
-                if (ai.getConfig() != null && ai.getConfig().getVariant() != null) {
-                    var v = ai.getConfig().getVariant();
-                    if (v.getPlatform() != null && v.getPlatform().getModelLine() != null) {
-                        var ml = v.getPlatform().getModelLine();
-                        if (ml.getBrand() != null) brand = ml.getBrand().getBrandName();
-                        if (ml.getSegmentCode() != null) segment = ml.getSegmentCode().name();
-                        if (ml.getModelLineName() != null) modelName = ml.getModelLineName();
-                    }
-                }
-                if (series == null) {
-                    series = com.qkshop.tonkho.salesreport.SourceNormalizer.extractSeries(closed.getProductFullName(), modelName);
-                }
-
-                String normSource = com.qkshop.tonkho.salesreport.SourceNormalizer.normalizeSource(firstSrc, lastSrc);
-                String inboxType = com.qkshop.tonkho.salesreport.SourceNormalizer.determineInboxType(normSource);
-
-                LocalDateTime actualSaleDate = closed.getSaleDate() != null ? closed.getSaleDate() : sDate;
-
-                com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(finalTxnId)
-                        .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
-                                .transactionId(finalTxnId)
-                                .build());
-
-                so.setSaleDate(actualSaleDate);
-                so.setMonthDate(actualSaleDate.toLocalDate().withDayOfMonth(1));
-                so.setCustomerName(closed.getCustomerName());
-                so.setCustomerPhone(closed.getCustomerPhone());
-                so.setCustomerType(custType != null ? custType : "Khách mua lần đầu");
-                so.setFirstSource(firstSrc);
-                so.setLastSource(lastSrc);
-                so.setNormalizedSource(normSource);
-                so.setInboxType(inboxType);
-                so.setIsStudent(isStudent != null ? isStudent : false);
-                so.setIsShipping(closed.getIsShipping());
-                so.setIsDelivered(closed.getIsDelivered());
-                so.setDeliveryDate(closed.getDeliveryDate());
-                so.setShippingCarrier(closed.getShippingCarrier());
-                so.setTrackingCode(closed.getTrackingCode());
-                so.setShippingAddress(closed.getShippingAddress());
-                so.setDepositAmount(closed.getDepositAmount());
-                so.setCodAmount(closed.getCodAmount());
-                if (Boolean.TRUE.equals(closed.getIsShipping()) && !Boolean.TRUE.equals(closed.getIsDelivered())) {
-                    so.setOrderStatus("Chờ giao hàng");
-                } else {
-                    so.setOrderStatus("Hoàn tất");
-                }
-                so.setPaymentStatus(closed.getPaymentStatus() != null ? closed.getPaymentStatus() : "Đã thanh toán");
-                so.setProductName(closed.getProductFullName() != null ? closed.getProductFullName() : ai.getSourceModelText());
-                so.setBrand(brand);
-                so.setSeries(series);
-                so.setSegment(segment);
-                so.setModelName(modelName);
-                so.setConfigSummary(closed.getProductSummary());
-                so.setWarrantyPeriod(closed.getWarrantyPeriod());
-                so.setWarrantyExpiry(closed.getWarrantyExpiry());
-                so.setGrossRevenue(closed.getGrossRevenue() != null ? closed.getGrossRevenue() : machineNetRevenue);
-                so.setDiscount(closed.getDiscount() != null ? closed.getDiscount() : BigDecimal.ZERO);
-                so.setNetRevenue(machineNetRevenue);
-                so.setNote(closed.getSaleNote());
-                so.setSerialKeys(serialKey);
-                so.setSalesperson(salesperson);
-                so.setMatchedCycleId(closed.getCycleId());
-                so.setOrigin("WEB_APP");
-                so.setOrderCategory("MACHINE");
-
-                salesOrderRepo.save(so);
+                Map<String, Object> extraMeta = new HashMap<>(saleDetails);
+                extraMeta.put("salesperson", salesperson);
+                orderDataSyncService.syncClosedCycleToSalesOrder(closed, extraMeta, true);
             } catch (Exception e) {
                 log.warn("Không thể lưu SalesOrder từ submitSale: {}", e.getMessage());
+            }
+        } else {
+            closed = closedCycleRepo.save(closed);
+            try {
+                Map<String, Object> extraMeta = salesperson != null ? Map.of("salesperson", salesperson) : null;
+                orderDataSyncService.syncClosedCycleToSalesOrder(closed, extraMeta, false);
+            } catch (Exception e) {
+                log.warn("Không thể lưu SalesOrder mặc định từ submitSale: {}", e.getMessage());
             }
         }
 

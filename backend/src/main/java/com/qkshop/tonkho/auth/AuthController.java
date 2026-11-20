@@ -51,6 +51,13 @@ public class AuthController {
                     .body(ApiResponse.error("ACCOUNT_LOCKED", "Tài khoản này đã bị khóa. Vui lòng liên hệ với quản trị viên hệ thống."));
         }
 
+        // Đảm bảo tài khoản admin gốc luôn được gán vai trò SUPERADMIN trong CSDL
+        boolean isRootAdmin = "admin".equalsIgnoreCase(user.getUsername()) || user.getRole() == UserRole.SUPERADMIN;
+        if (isRootAdmin && user.getRole() != UserRole.SUPERADMIN) {
+            user.setRole(UserRole.SUPERADMIN);
+            user = userRepository.save(user);
+        }
+
         // 2. Xác thực credentials qua AuthenticationManager với username thực của user
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(user.getUsername(), request.getPassword())
@@ -62,16 +69,21 @@ public class AuthController {
         String token = jwtTokenProvider.generateToken(user.getUsername(), user.getRole().name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getUsername());
 
-        Set<String> permissions = (user.getRole() == UserRole.ADMIN) 
-                ? AppPermission.allCodes() 
-                : (user.getPermissions() != null ? user.getPermissions() : Collections.emptySet());
+        Set<String> permissions;
+        if (isRootAdmin || user.getRole() == UserRole.SUPERADMIN) {
+            permissions = AppPermission.allCodes();
+        } else if (user.getRole() == UserRole.ADMIN) {
+            permissions = AppPermission.standardAdminCodes();
+        } else {
+            permissions = (user.getPermissions() != null ? user.getPermissions() : Collections.emptySet());
+        }
 
         LoginResponse response = LoginResponse.builder()
                 .token(token)
                 .refreshToken(refreshToken)
                 .username(user.getUsername())
                 .fullName(user.getFullName())
-                .role(user.getRole().getDisplayName())
+                .role(user.getRole().name())
                 .avatarUrl(user.getAvatarUrl())
                 .permissions(permissions)
                 .expiresInMs(jwtTokenProvider.getExpirationMs())
@@ -101,6 +113,12 @@ public class AuthController {
                     .body(ApiResponse.error("ACCOUNT_LOCKED", "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ với quản trị viên."));
         }
 
+        boolean isRootAdmin = "admin".equalsIgnoreCase(user.getUsername()) || user.getRole() == UserRole.SUPERADMIN;
+        if (isRootAdmin && user.getRole() != UserRole.SUPERADMIN) {
+            user.setRole(UserRole.SUPERADMIN);
+            user = userRepository.save(user);
+        }
+
         // Cấp mới Access Token và Refresh Token mới
         String newToken = jwtTokenProvider.generateToken(user.getUsername(), user.getRole().name());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(user.getUsername());
@@ -128,14 +146,25 @@ public class AuthController {
                     .body(ApiResponse.error("ACCOUNT_LOCKED", "Tài khoản của bạn đã bị khóa."));
         }
 
-        Set<String> permissions = (user.getRole() == UserRole.ADMIN) 
-                ? AppPermission.allCodes() 
-                : (user.getPermissions() != null ? user.getPermissions() : Collections.emptySet());
+        boolean isRootAdmin = "admin".equalsIgnoreCase(user.getUsername()) || user.getRole() == UserRole.SUPERADMIN;
+        if (isRootAdmin && user.getRole() != UserRole.SUPERADMIN) {
+            user.setRole(UserRole.SUPERADMIN);
+            user = userRepository.save(user);
+        }
+
+        Set<String> permissions;
+        if (isRootAdmin || user.getRole() == UserRole.SUPERADMIN) {
+            permissions = AppPermission.allCodes();
+        } else if (user.getRole() == UserRole.ADMIN) {
+            permissions = AppPermission.standardAdminCodes();
+        } else {
+            permissions = (user.getPermissions() != null ? user.getPermissions() : Collections.emptySet());
+        }
 
         LoginResponse response = LoginResponse.builder()
                 .username(user.getUsername())
                 .fullName(user.getFullName())
-                .role(user.getRole().getDisplayName())
+                .role(user.getRole().name())
                 .avatarUrl(user.getAvatarUrl())
                 .permissions(permissions)
                 .expiresInMs(jwtTokenProvider.getExpirationMs())

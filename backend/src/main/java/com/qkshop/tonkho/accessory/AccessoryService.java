@@ -19,7 +19,7 @@ public class AccessoryService {
     private final AccessoryHistoryRepository accessoryHistoryRepository;
     private final AccessoryOrderRepository accessoryOrderRepository;
     private final AccessoryOrderItemRepository accessoryOrderItemRepository;
-    private final com.qkshop.tonkho.salesreport.SalesOrderRepository salesOrderRepo;
+    private final com.qkshop.tonkho.salesreport.OrderDataSyncService orderDataSyncService;
     private final com.qkshop.tonkho.core.service.InvoiceCodeService invoiceCodeService;
 
     public List<Accessory> getAllAccessories(String keyword, String category, String stockFilter) {
@@ -63,21 +63,38 @@ public class AccessoryService {
     public String generateNextSku(String category) {
         String cleanCat = normalizeCategoryCode(category);
         String prefix = "PK-" + cleanCat + "-";
-        int maxSuffix = accessoryRepository.findAll().stream()
-                .map(Accessory::getSku)
-                .filter(s -> s != null && s.startsWith(prefix))
-                .mapToInt(s -> {
-                    try {
-                        String numPart = s.substring(prefix.length()).trim();
-                        if (numPart.matches("\\d{1,6}")) {
-                            return Integer.parseInt(numPart);
-                        }
-                    } catch (Exception ignored) {}
-                    return 0;
-                })
-                .max()
-                .orElse(0);
+        String maxSku = accessoryRepository.findMaxSkuByPrefix(prefix).orElse(null);
+        int maxSuffix = 0;
+        if (maxSku != null && maxSku.startsWith(prefix)) {
+            try {
+                String numPart = maxSku.substring(prefix.length()).trim().replaceAll("[^0-9]", "");
+                if (!numPart.isEmpty()) {
+                    maxSuffix = Integer.parseInt(numPart);
+                }
+            } catch (Exception ignored) {}
+        }
         return String.format("%s%04d", prefix, maxSuffix + 1);
+    }
+
+    private int extractWarrantyMonths(String period) {
+        if (period == null || period.isBlank()) return 0;
+        String lower = period.trim().toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("không bh") || lower.contains("không bảo hành") || lower.contains("khong bh")) {
+            return 0;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(lower);
+        if (m.find()) {
+            try {
+                int val = Integer.parseInt(m.group(1));
+                if (lower.contains("năm") || lower.contains("nam") || lower.contains("year")) {
+                    return val * 12;
+                }
+                if (lower.contains("tháng") || lower.contains("thang") || lower.contains("month") || lower.endsWith("t")) {
+                    return val;
+                }
+            } catch (Exception ignored) {}
+        }
+        return 0;
     }
 
     private String normalizeCategoryCode(String category) {
@@ -178,6 +195,11 @@ public class AccessoryService {
             customerPhone == null || customerPhone.trim().isEmpty()) {
             throw new IllegalArgumentException("Vui lòng nhập Tên khách hàng và Số điện thoại");
         }
+        String normalizedPhone = com.qkshop.tonkho.crm.PhoneNormalizer.normalize(customerPhone);
+        if (normalizedPhone == null) {
+            throw new IllegalArgumentException("Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)");
+        }
+        customerPhone = normalizedPhone;
 
         String salesperson = (String) payload.get("salesperson");
         String saleNote = (String) payload.get("saleNote");
@@ -330,65 +352,12 @@ public class AccessoryService {
     }
 
     private void syncAccessoryOrderToSalesOrder(AccessoryOrder order) {
-        if (salesOrderRepo == null) return;
+        if (orderDataSyncService == null) return;
         try {
-            LocalDateTime sDate = order.getSaleDate() != null ? order.getSaleDate() : LocalDateTime.now();
-            String txnId = order.getOrderCode();
-
-            String itemsSummary = (order.getItems() != null && !order.getItems().isEmpty())
-                    ? order.getItems().stream()
-                            .map(it -> it.getAccessoryName() + " (x" + it.getQuantity() + ")")
-                            .collect(java.util.stream.Collectors.joining(", "))
-                    : "Phụ kiện";
-
-            com.qkshop.tonkho.salesreport.SalesOrder so = salesOrderRepo.findByTransactionId(txnId)
-                    .orElseGet(() -> com.qkshop.tonkho.salesreport.SalesOrder.builder()
-                            .transactionId(txnId)
-                            .build());
-
-            so.setSaleDate(sDate);
-            so.setMonthDate(sDate.toLocalDate().withDayOfMonth(1));
-            so.setCustomerName(order.getCustomerName());
-            so.setCustomerPhone(order.getCustomerPhone());
-            so.setCustomerType("Khách mua phụ kiện");
-            so.setFirstSource("Cửa hàng");
-            so.setLastSource("Cửa hàng");
-            so.setNormalizedSource("Mua tại cửa hàng");
-            so.setInboxType("Đơn mua thẳng");
-            so.setIsStudent(false);
-            if (Boolean.TRUE.equals(order.getIsShipping()) && !Boolean.TRUE.equals(order.getIsDelivered())) {
-                so.setOrderStatus("Chờ giao hàng");
-                so.setIsShipping(true);
-                so.setIsDelivered(false);
-                so.setDeliveryDate(null);
-            } else {
-                so.setOrderStatus("Hoàn tất");
-                so.setIsShipping(order.getIsShipping());
-                so.setIsDelivered(order.getIsDelivered());
-                so.setDeliveryDate(order.getDeliveryDate());
-            }
-            so.setPaymentStatus("Đã thanh toán");
-            so.setProductName("Phụ kiện: " + itemsSummary);
-            so.setBrand("PHỤ KIỆN");
-            so.setSeries("Phụ kiện");
-            so.setSegment("PHU_KIEN");
-            so.setModelName("Phụ kiện");
-            so.setConfigSummary(itemsSummary);
-            so.setGrossRevenue(order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO);
-            so.setDiscount(order.getDiscount() != null ? order.getDiscount() : BigDecimal.ZERO);
-            so.setNetRevenue(order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO);
-            so.setNote(order.getSaleNote());
-            so.setSalesperson(order.getSalesperson());
-            so.setOrigin("WEB_APP");
-            so.setOrderCategory("ACCESSORY");
-            if (txnId.startsWith("PK-KEM-")) {
-                String rawCycle = txnId.substring("PK-KEM-".length());
-                so.setMatchedCycleId(rawCycle.startsWith("CYC-") ? rawCycle : "CYC-" + rawCycle);
-            }
-
-            salesOrderRepo.save(so);
+            orderDataSyncService.syncAccessoryOrderToSalesOrder(order, null, true);
         } catch (Exception e) {
-            org.slf4j.LoggerFactory.getLogger(AccessoryService.class).warn("Không thể đồng bộ SalesOrder từ AccessoryOrder: {}", e.getMessage());
+            org.slf4j.LoggerFactory.getLogger(AccessoryService.class)
+                    .warn("Không thể đồng bộ SalesOrder từ AccessoryOrder {}: {}", order.getOrderCode(), e.getMessage());
         }
     }
 
@@ -424,6 +393,11 @@ public class AccessoryService {
         return (accessory != null && accessory.getPrice() != null) ? accessory.getPrice() : BigDecimal.ZERO;
     }
 
+    public java.util.Optional<Accessory> findBySku(String sku) {
+        if (sku == null || sku.trim().isEmpty()) return java.util.Optional.empty();
+        return accessoryRepository.findBySku(sku.trim());
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone) {
         deductAccessories(accessoriesToDeduct, customerName, customerPhone, null, null, null);
@@ -431,12 +405,19 @@ public class AccessoryService {
 
     @Transactional(rollbackFor = Exception.class)
     public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone, String cycleId, String salesperson, LocalDateTime saleDate) {
-        deductAccessories(accessoriesToDeduct, customerName, customerPhone, cycleId, salesperson, saleDate, false, true, null, null);
+        deductAccessories(accessoriesToDeduct, customerName, customerPhone, cycleId, salesperson, saleDate, false, true, null, null, null);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone, String cycleId, String salesperson, LocalDateTime saleDate,
                                   Boolean isShipping, Boolean isDelivered, LocalDate deliveryDate, String machineWarrantyPeriod) {
+        deductAccessories(accessoriesToDeduct, customerName, customerPhone, cycleId, salesperson, saleDate,
+                isShipping, isDelivered, deliveryDate, machineWarrantyPeriod, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deductAccessories(List<Map<String, Object>> accessoriesToDeduct, String customerName, String customerPhone, String cycleId, String salesperson, LocalDateTime saleDate,
+                                  Boolean isShipping, Boolean isDelivered, LocalDate deliveryDate, String machineWarrantyPeriod, LocalDate machineWarrantyExpiry) {
         if (accessoriesToDeduct == null || accessoriesToDeduct.isEmpty()) return;
 
         LocalDateTime actualSaleDate = saleDate != null ? saleDate : LocalDateTime.now();
@@ -467,9 +448,9 @@ public class AccessoryService {
         for (Map<String, Object> req : accessoriesToDeduct) {
             String sku = (String) req.get("sku");
             Integer quantity = parseInteger(req.get("quantity"), 1);
-            if (quantity <= 0) continue;
+            if (sku == null || sku.trim().isEmpty() || quantity <= 0) continue;
 
-            Accessory accessory = accessoryRepository.findBySku(sku)
+            Accessory accessory = accessoryRepository.findBySku(sku.trim())
                     .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phụ kiện: " + sku));
 
             if (accessory.getQuantity() < quantity) {
@@ -479,8 +460,9 @@ public class AccessoryService {
             accessory.setQuantity(accessory.getQuantity() - quantity);
             accessoryRepository.save(accessory);
 
-            // Phân biệt 2 loại: Quà tặng mặc định (0đ) vs Phụ kiện bán kèm ngoài mặc định (Có tính phí)
-            boolean isGift = Boolean.TRUE.equals(req.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(req.get("isGift")));
+            // Phân biệt 3 loại: Sạc kèm máy (0đ, BH theo máy), Quà tặng mặc định (0đ), Phụ kiện bán kèm ngoài mặc định (Có tính phí)
+            boolean isCharger = Boolean.TRUE.equals(req.get("isCharger")) || "true".equalsIgnoreCase(String.valueOf(req.get("isCharger")));
+            boolean isGift = isCharger || Boolean.TRUE.equals(req.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(req.get("isGift")));
             BigDecimal price = isGift ? BigDecimal.ZERO : resolvePaidAccessoryPrice(req, accessory);
 
             // Ghi lại lịch sử bán
@@ -490,7 +472,9 @@ public class AccessoryService {
             history.setQuantity(quantity);
             history.setPrice(price);
             history.setAction("SELL");
-            if (isGift) {
+            if (isCharger) {
+                history.setNote("Sạc kèm theo máy" + (cycleId != null ? " (" + cycleId + ")" : ""));
+            } else if (isGift) {
                 history.setNote("Quà tặng mặc định kèm máy" + (cycleId != null ? " (" + cycleId + ")" : ""));
             } else {
                 history.setNote("Phụ kiện bán kèm ngoài mặc định" + (cycleId != null ? " (" + cycleId + ")" : ""));
@@ -500,10 +484,35 @@ public class AccessoryService {
             accessoryHistoryRepository.save(history);
 
             if (machineAccOrder != null) {
-                int warrantyMonths = accessory.getDefaultWarrantyMonths() != null ? accessory.getDefaultWarrantyMonths() : 0;
-                String warrantyPeriod = warrantyMonths > 0 ? warrantyMonths + " Tháng" : "Không BH";
-                LocalDate baseDate = deliveryDate != null ? deliveryDate : actualSaleDate.toLocalDate();
-                LocalDate warrantyExpiry = (warrantyMonths > 0 && !pendingShipping) ? baseDate.plusMonths(warrantyMonths) : null;
+                int warrantyMonths;
+                String warrantyPeriod;
+                LocalDate warrantyExpiry;
+                String itemNote;
+
+                if (isCharger) {
+                    boolean hasMachineWp = machineWarrantyPeriod != null && !machineWarrantyPeriod.isBlank();
+                    warrantyPeriod = hasMachineWp ? machineWarrantyPeriod.trim() : "Bảo hành theo máy";
+                    warrantyMonths = extractWarrantyMonths(warrantyPeriod);
+                    boolean isCompanyWarranty = warrantyPeriod.toLowerCase(java.util.Locale.ROOT).contains("hãng");
+                    LocalDate baseDate = deliveryDate != null ? deliveryDate : actualSaleDate.toLocalDate();
+                    if (pendingShipping && !isCompanyWarranty) {
+                        warrantyExpiry = null;
+                    } else if (machineWarrantyExpiry != null) {
+                        warrantyExpiry = machineWarrantyExpiry;
+                    } else {
+                        warrantyExpiry = com.qkshop.tonkho.salesreport.SourceNormalizer.calculateWarrantyExpiry(baseDate, warrantyPeriod);
+                    }
+                    itemNote = "[Sạc kèm theo máy - 0đ] Bảo hành đồng bộ theo máy"
+                            + (hasMachineWp ? " (" + warrantyPeriod + ")" : "")
+                            + (cycleId != null ? " • " + cycleId : "");
+                } else {
+                    warrantyMonths = accessory.getDefaultWarrantyMonths() != null ? accessory.getDefaultWarrantyMonths() : 0;
+                    warrantyPeriod = warrantyMonths > 0 ? warrantyMonths + " Tháng" : "Không BH";
+                    LocalDate baseDate = deliveryDate != null ? deliveryDate : actualSaleDate.toLocalDate();
+                    warrantyExpiry = (warrantyMonths > 0 && !pendingShipping) ? baseDate.plusMonths(warrantyMonths) : null;
+                    itemNote = isGift ? "[Quà mặc định - 0đ] Kèm máy " + (cycleId != null ? cycleId : "")
+                                      : "[Bán ngoài mặc định] Kèm máy " + (cycleId != null ? cycleId : "");
+                }
 
                 AccessoryOrderItem item = AccessoryOrderItem.builder()
                         .accessoryId(accessory.getId())
@@ -515,8 +524,7 @@ public class AccessoryService {
                         .warrantyPeriod(warrantyPeriod)
                         .warrantyExpiry(warrantyExpiry)
                         .serialNumber((String) req.get("serialNumber"))
-                        .note(isGift ? "[Quà mặc định - 0đ] Kèm máy " + (cycleId != null ? cycleId : "")
-                                     : "[Bán ngoài mặc định] Kèm máy " + (cycleId != null ? cycleId : ""))
+                        .note(itemNote)
                         .build();
 
                 machineAccOrder.addItem(item);

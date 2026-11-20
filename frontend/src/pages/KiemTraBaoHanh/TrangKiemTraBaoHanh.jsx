@@ -7,12 +7,18 @@ import ModalChiTietDonHang from './ModalChiTietDonHang';
 import ModalSuaDonMay from './ModalSuaDonMay';
 import ModalSuaDonPhuKien from './ModalSuaDonPhuKien';
 import ModalSuaDonSuaChua from './ModalSuaDonSuaChua';
-import { getCleanWarrantyType, formatCurrency, formatDate, getTodayDateString } from '../../utils/dinh_dang';
+import ModalXacNhanGiaoHang from './ModalXacNhanGiaoHang';
+import ModalChiTietSuaChua from './ModalChiTietSuaChua';
+import ModalChiTietPhuKien from './ModalChiTietPhuKien';
+import ModalHoanTraMay from './ModalHoanTraMay';
+import { getCleanWarrantyType, formatCurrency, formatDate, getTodayDateString, getItemExpiryStatus, parseCurrency } from '../../utils/dinh_dang';
 
 export default function TrangKiemTraBaoHanh() {
   const { showToast, confirm } = useToast();
   const { hasPermission, requirePermission } = useAuth();
   const canEditOrder = hasPermission('ORDER_EDIT');
+  const canRepairService = hasPermission('SERVICE_REPAIR');
+  const canEditRepairOrder = canEditOrder || canRepairService;
   const canManageShip = hasPermission('SHIP_MANAGE');
   const canReturnOrder = hasPermission('ORDER_RETURN');
   const [keyword, setKeyword] = useState('');
@@ -43,6 +49,16 @@ export default function TrangKiemTraBaoHanh() {
   const [confirmDeliveryDate, setConfirmDeliveryDate] = useState(getTodayDateString());
   const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
 
+  // Modal hoàn trả / đổi trả máy về kho
+  const [returningOrder, setReturningOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState('Khách đổi trả / Hoàn trả máy về kho');
+  const [returnState, setReturnState] = useState('READY');
+  const [restoreCharger, setRestoreCharger] = useState(true);
+  const [restoreAccessories, setRestoreAccessories] = useState(true);
+  const [restoreUpgradeParts, setRestoreUpgradeParts] = useState(true);
+  const [returnSalePrice, setReturnSalePrice] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
   const handleOpenConfirmDelivery = (order) => {
     if (!requirePermission('SHIP_MANAGE', showToast, 'Xác nhận khách nhận hàng đơn ship xa')) return;
     setConfirmingDeliveryOrder(order);
@@ -60,23 +76,52 @@ export default function TrangKiemTraBaoHanh() {
   };
 
   const handleOpenEditRepairOrder = (order) => {
-    if (!requirePermission('ORDER_EDIT', showToast, 'Chỉnh sửa phiếu dịch vụ sửa chữa')) return;
+    if (!hasPermission('ORDER_EDIT') && !hasPermission('SERVICE_REPAIR')) {
+      showToast('Bạn không có quyền chỉnh sửa phiếu dịch vụ sửa chữa (Cần quyền ORDER_EDIT hoặc SERVICE_REPAIR)', 'danger');
+      return;
+    }
     setEditingRepairOrder(order);
   };
 
-  const handleReturnOrder = async (order) => {
+  const handleOpenReturnOrder = (order) => {
     if (!requirePermission('ORDER_RETURN', showToast, 'Hoàn trả / Thu hồi máy vào kho')) return;
-    const isConfirmed = await confirm(`Bạn có chắc chắn muốn hoàn trả / thu hồi máy ${order.serialKey} về lại kho sẵn sàng bán?`);
-    if (!isConfirmed) return;
+    setReturningOrder(order);
+    setReturnReason('Khách hoàn trả / Đổi trả máy từ màn hình Tra cứu bảo hành');
+    setReturnState('READY');
+    setRestoreCharger(true);
+    setRestoreAccessories(true);
+    setRestoreUpgradeParts(true);
+
+    // Tự động xác định giá gốc niêm yết của máy (ưu tiên grossRevenue lúc xuất bán, fallback defaultSalePrice)
+    const origPrice = Number(order.grossRevenue) > 0
+      ? Number(order.grossRevenue)
+      : (Number(order.defaultSalePrice) > 0 ? Number(order.defaultSalePrice) : Number(order.salePrice));
+    setReturnSalePrice(origPrice > 0 ? String(origPrice) : '');
+  };
+
+  const handleReturnSubmit = async (e) => {
+    e?.preventDefault();
+    if (!returningOrder) return;
+
+    setIsSubmittingReturn(true);
     try {
-      await apiBaoHanh.returnOrder(order.cycleId, {
-        reason: 'Khách hoàn trả / Đổi trả máy từ màn hình Tra cứu bảo hành'
+      const parsedPrice = parseCurrency(returnSalePrice);
+      await apiBaoHanh.returnOrder(returningOrder.cycleId, {
+        reason: returnReason,
+        returnState,
+        restoreCharger,
+        restoreAccessories,
+        restoreUpgradeParts,
+        salePrice: parsedPrice > 0 ? parsedPrice : null
       });
-      showToast(`Đã hoàn trả máy ${order.serialKey} về kho thành công!`, 'success');
+      showToast(`Đã hoàn trả máy ${returningOrder.serialKey} về kho với giá gốc niêm yết!`, 'success');
+      setReturningOrder(null);
       setSelectedOrder(null);
       handleSearch();
     } catch (err) {
       showToast(err.userMessage || err.message || 'Lỗi khi hoàn trả máy về kho', 'danger');
+    } finally {
+      setIsSubmittingReturn(false);
     }
   };
 
@@ -178,7 +223,18 @@ export default function TrangKiemTraBaoHanh() {
     setSelectedOrder(null);
   };
 
-  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock, isShipping, isDelivered, deliveryDate, closeType) => {
+  const getWarrantyStatus = (saleDate, warrantyPeriod, isVoided, warrantyExpiry, isInStock, isShipping, isDelivered, deliveryDate, closeType, warrantyCancelled) => {
+    // Đơn hàng đã thu lại hoặc đã vô hiệu hóa vòng bán
+    if (isVoided || closeType === 'CUSTOMER_RETURN' || warrantyCancelled) {
+      return {
+        status: 'VOIDED',
+        text: 'Đã hủy BH (Đã thu máy)',
+        badge: 'bg-danger bg-opacity-10 text-danger border border-danger border-opacity-50 fw-bold',
+        icon: XCircle,
+        endDate: null
+      };
+    }
+
     if (isInStock) {
       const now = new Date();
       let end = warrantyExpiry ? new Date(warrantyExpiry) : null;
@@ -211,22 +267,6 @@ export default function TrangKiemTraBaoHanh() {
         badge: 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25',
         icon: ShieldCheck,
         endDate: null
-      };
-    }
-
-    // Đơn hàng đã thu lại hoặc đã vô hiệu hóa vòng bán
-    if (isVoided || closeType === 'CUSTOMER_RETURN') {
-      let end = null;
-      if (warrantyExpiry) {
-        end = new Date(warrantyExpiry);
-        end.setHours(23, 59, 59, 999);
-      }
-      return {
-        status: 'VOIDED',
-        text: 'Đã thu lại (Vô hiệu)',
-        badge: 'bg-dark bg-opacity-10 text-dark border border-dark border-opacity-25',
-        icon: XCircle,
-        endDate: end
       };
     }
 
@@ -336,34 +376,6 @@ export default function TrangKiemTraBaoHanh() {
       badge: 'bg-info bg-opacity-10 text-info border border-info border-opacity-25',
       icon: FileText,
       endDate: null
-    };
-  };
-
-  const getItemExpiryStatus = (expiryDate) => {
-    if (!expiryDate) {
-      return {
-        text: 'Không bảo hành',
-        badge: 'bg-secondary bg-opacity-10 text-secondary',
-        icon: AlertCircle
-      };
-    }
-    const now = new Date();
-    const end = new Date(expiryDate);
-    end.setHours(23, 59, 59, 999);
-    const diffTime = end.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return {
-        text: `Hết hạn (${Math.abs(diffDays)} ngày trước)`,
-        badge: 'bg-danger bg-opacity-10 text-danger',
-        icon: AlertCircle
-      };
-    }
-    return {
-      text: `Còn hạn (${diffDays} ngày)`,
-      badge: 'bg-success bg-opacity-10 text-success',
-      icon: ShieldCheck
     };
   };
 
@@ -565,26 +577,27 @@ export default function TrangKiemTraBaoHanh() {
                       <table className="table table-hover align-middle mb-0 bg-white">
                         <thead className="table-light text-secondary small text-uppercase fw-semibold">
                           <tr>
-                            <th className="px-4 py-3" style={{ width: '24%' }}>Máy & Cấu hình</th>
-                            <th className="py-3" style={{ width: '13%' }}>Số Serial</th>
-                            <th className="py-3" style={{ width: '14%' }}>Khách hàng</th>
-                            <th className="py-3" style={{ width: '13%' }}>Giá & Ngày bán</th>
-                            <th className="py-3 text-center" style={{ width: '11%' }}>Gói bảo hành</th>
-                            <th className="py-3" style={{ width: '12%' }}>Ngày hết hạn</th>
-                            <th className="py-3 text-center" style={{ width: '11%' }}>Trạng thái</th>
-                            <th className="py-3 text-end px-4" style={{ width: '11%' }}>Thao tác</th>
+                            <th className="ps-3 py-3" style={{ width: '22%' }}>Máy & Cấu hình</th>
+                            <th className="py-3" style={{ width: '11%' }}>Số Serial</th>
+                            <th className="py-3" style={{ width: '13%' }}>Khách hàng</th>
+                            <th className="py-3" style={{ width: '11%' }}>Giá & Ngày bán</th>
+                            <th className="py-3 text-center" style={{ width: '10%' }}>Gói bảo hành</th>
+                            <th className="py-3" style={{ width: '10%' }}>Ngày hết hạn</th>
+                            <th className="py-3 text-center" style={{ width: '10%' }}>Trạng thái</th>
+                            <th className="py-3 text-end pe-3" style={{ width: '13%' }}>Thao tác</th>
                           </tr>
                         </thead>
                         <tbody>
                           {machines.map((item, index) => {
-                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock, item.isShipping, item.isDelivered, item.deliveryDate, item.closeType);
+                            const statusInfo = getWarrantyStatus(item.saleDate, item.warrantyPeriod, item.isVoided, item.warrantyExpiry, item.isInStock, item.isShipping, item.isDelivered, item.deliveryDate, item.closeType, item.warrantyCancelled);
                             const StatusIcon = statusInfo.icon;
+                            const isReturnedMachine = item.isVoided || item.closeType === 'CUSTOMER_RETURN' || item.warrantyCancelled;
                             return (
                               <tr key={item.cycleId || index} onClick={() => setSelectedOrder(item)} style={{ cursor: 'pointer' }} title="Bấm để xem chi tiết đơn hàng">
-                                <td className="px-4 py-3">
+                                <td className="ps-3 py-3">
                                   <div className="fw-bold text-dark">{item.sourceModelText || 'Không rõ dòng máy'}</div>
                                   {item.configInfo && (
-                                    <div className="small text-muted mt-1 text-truncate" style={{ maxWidth: '280px' }}>{item.configInfo}</div>
+                                    <div className="small text-muted mt-1 line-clamp-2" title={item.configInfo}>{item.configInfo}</div>
                                   )}
                                 </td>
                                 <td className="py-3">
@@ -593,8 +606,8 @@ export default function TrangKiemTraBaoHanh() {
                                 <td className="py-3">
                                   <div className="fw-semibold text-dark d-flex align-items-center gap-1 flex-wrap">
                                     <span>{item.customerName || 'Khách lẻ'}</span>
-                                    {(item.isVoided || item.closeType === 'CUSTOMER_RETURN') && (
-                                      <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style={{ fontSize: '10px' }}>
+                                    {isReturnedMachine && (
+                                      <span className="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold" style={{ fontSize: '10px' }}>
                                         Đã thu máy
                                       </span>
                                     )}
@@ -611,10 +624,18 @@ export default function TrangKiemTraBaoHanh() {
                                   <div className="small text-secondary">{item.saleDate ? new Date(item.saleDate).toLocaleDateString('vi-VN') : '—'}</div>
                                 </td>
                                 <td className="py-3 text-center">
-                                  <span className="badge bg-light text-dark border px-2 py-1 fw-semibold">{getCleanWarrantyType(item.warrantyPeriod)}</span>
+                                  {isReturnedMachine ? (
+                                    <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 fw-bold">
+                                      Đã hủy gói BH
+                                    </span>
+                                  ) : (
+                                    <span className="badge bg-light text-dark border px-2 py-1 fw-semibold">{getCleanWarrantyType(item.warrantyPeriod)}</span>
+                                  )}
                                 </td>
                                 <td className="py-3">
-                                  {item.isInStock ? (
+                                  {isReturnedMachine ? (
+                                    <span className="text-danger small fw-medium">Đã hủy (Đã thu máy)</span>
+                                  ) : item.isInStock ? (
                                     statusInfo.endDate ? (
                                       <div>
                                         <div className="fw-medium text-dark">{statusInfo.endDate.toLocaleDateString('vi-VN')}</div>
@@ -659,13 +680,13 @@ export default function TrangKiemTraBaoHanh() {
                                     </div>
                                   )}
                                 </td>
-                                <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
+                                <td className="py-3 text-end pe-3" onClick={(e) => e.stopPropagation()}>
                                   {!item.isInStock ? (
-                                    <div className="d-inline-flex align-items-center gap-1 justify-content-end">
+                                    <div className="d-inline-flex align-items-center gap-1 justify-content-end flex-nowrap">
                                       {item.isShipping && !item.isDelivered && (
                                         <button
                                           type="button"
-                                          className="btn btn-sm btn-success py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm"
+                                          className="btn btn-sm btn-success py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-white shadow-sm text-nowrap"
                                           onClick={() => handleOpenConfirmDelivery(item)}
                                           title={canManageShip ? 'Xác nhận khách đã nhận hàng & Kích hoạt bảo hành' : 'Yêu cầu quyền: Quản lý đơn ship'}
                                         >
@@ -676,7 +697,7 @@ export default function TrangKiemTraBaoHanh() {
                                       )}
                                       <button
                                         type="button"
-                                        className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
+                                        className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-nowrap"
                                         onClick={() => handleOpenEditMachineOrder(item)}
                                         title={canEditOrder ? 'Chỉnh sửa thông tin đơn máy này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                                       >
@@ -707,12 +728,12 @@ export default function TrangKiemTraBaoHanh() {
                       <table className="table table-hover align-middle mb-0 bg-white">
                         <thead className="table-light text-secondary small text-uppercase fw-semibold">
                           <tr>
-                            <th className="px-4 py-3" style={{ width: '170px' }}>Mã đơn & Ngày bán</th>
-                            <th className="py-3" style={{ width: '220px' }}>Khách hàng & SĐT</th>
-                            <th className="py-3">Danh sách phụ kiện</th>
-                            <th className="py-3 text-end" style={{ width: '140px' }}>Tổng thanh toán</th>
-                            <th className="py-3 text-center" style={{ width: '150px' }}>Trạng thái BH</th>
-                            <th className="py-3 text-end px-4" style={{ width: '110px' }}>Thao tác</th>
+                            <th className="ps-3 py-3" style={{ width: '14%' }}>Mã đơn & Ngày bán</th>
+                            <th className="py-3" style={{ width: '18%' }}>Khách hàng & SĐT</th>
+                            <th className="py-3" style={{ width: '32%' }}>Danh sách phụ kiện</th>
+                            <th className="py-3 text-end" style={{ width: '12%' }}>Tổng thanh toán</th>
+                            <th className="py-3 text-center" style={{ width: '11%' }}>Trạng thái BH</th>
+                            <th className="py-3 text-end pe-3" style={{ width: '13%' }}>Thao tác</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -734,7 +755,7 @@ export default function TrangKiemTraBaoHanh() {
                                 onClick={() => setSelectedAccessoryOrder(ord)}
                                 title="Nhấp để xem chi tiết đầy đủ đơn bán phụ kiện"
                               >
-                                <td className="px-4 py-3">
+                                <td className="ps-3 py-3">
                                   <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-1">
                                     {ord.orderCode || 'Lẻ'}
                                   </span>
@@ -785,11 +806,11 @@ export default function TrangKiemTraBaoHanh() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
-                                  <div className="d-flex justify-content-end gap-1">
+                                <td className="py-3 text-end pe-3" onClick={(e) => e.stopPropagation()}>
+                                  <div className="d-inline-flex justify-content-end gap-1 flex-nowrap">
                                     <button
                                       type="button"
-                                      className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
+                                      className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-nowrap"
                                       onClick={() => handleOpenEditAccessoryOrder(ord)}
                                       title={canEditOrder ? 'Chỉnh sửa hóa đơn phụ kiện này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
                                     >
@@ -799,7 +820,7 @@ export default function TrangKiemTraBaoHanh() {
                                     </button>
                                     <button
                                       type="button"
-                                      className="btn btn-sm btn-light border py-1 px-2 fw-medium"
+                                      className="btn btn-sm btn-light border py-1 px-2 fw-medium text-nowrap"
                                       onClick={() => setSelectedAccessoryOrder(ord)}
                                     >
                                       Chi tiết
@@ -825,12 +846,12 @@ export default function TrangKiemTraBaoHanh() {
                       <table className="table table-hover align-middle mb-0 bg-white">
                         <thead className="table-light text-secondary small text-uppercase fw-semibold">
                           <tr>
-                            <th className="px-4 py-3" style={{ width: '170px' }}>Mã phiếu & Ngày làm</th>
-                            <th className="py-3" style={{ width: '220px' }}>Thiết bị & Khách hàng</th>
-                            <th className="py-3">Các dịch vụ & Linh kiện</th>
-                            <th className="py-3 text-end" style={{ width: '140px' }}>Tổng hóa đơn</th>
-                            <th className="py-3 text-center" style={{ width: '150px' }}>Trạng thái BH</th>
-                            <th className="py-3 text-end px-4" style={{ width: '110px' }}>Thao tác</th>
+                            <th className="ps-3 py-3" style={{ width: '14%' }}>Mã phiếu & Ngày làm</th>
+                            <th className="py-3" style={{ width: '18%' }}>Thiết bị & Khách hàng</th>
+                            <th className="py-3" style={{ width: '32%' }}>Các dịch vụ & Linh kiện</th>
+                            <th className="py-3 text-end" style={{ width: '12%' }}>Tổng hóa đơn</th>
+                            <th className="py-3 text-center" style={{ width: '11%' }}>Trạng thái BH</th>
+                            <th className="py-3 text-end pe-3" style={{ width: '13%' }}>Thao tác</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -852,7 +873,7 @@ export default function TrangKiemTraBaoHanh() {
                                 onClick={() => setSelectedRepairOrder(ord)}
                                 title="Nhấp để xem chi tiết đầy đủ của phiếu sửa chữa"
                               >
-                                <td className="px-4 py-3">
+                                <td className="ps-3 py-3">
                                   <span className="badge bg-warning bg-opacity-20 text-warning-emphasis fw-bold px-2 py-1">
                                     {ord.orderCode}
                                   </span>
@@ -906,21 +927,21 @@ export default function TrangKiemTraBaoHanh() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-3 text-end px-4" onClick={(e) => e.stopPropagation()}>
-                                  <div className="d-flex justify-content-end gap-1">
+                                <td className="py-3 text-end pe-3" onClick={(e) => e.stopPropagation()}>
+                                  <div className="d-inline-flex justify-content-end gap-1 flex-nowrap">
                                     <button
                                       type="button"
-                                      className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1"
+                                      className="btn btn-sm btn-outline-primary py-1 px-2 fw-medium d-inline-flex align-items-center gap-1 text-nowrap"
                                       onClick={() => handleOpenEditRepairOrder(ord)}
-                                      title={canEditOrder ? 'Chỉnh sửa phiếu dịch vụ này' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
+                                      title={canEditRepairOrder ? 'Chỉnh sửa phiếu dịch vụ này' : 'Yêu cầu quyền: Sửa đơn (ORDER_EDIT) hoặc Sửa chữa (SERVICE_REPAIR)'}
                                     >
                                       <Edit3 size={13} />
                                       <span>Sửa</span>
-                                      {!canEditOrder && <Lock size={11} className="text-warning" />}
+                                      {!canEditRepairOrder && <Lock size={11} className="text-warning" />}
                                     </button>
                                     <button
                                       type="button"
-                                      className="btn btn-sm btn-light border py-1 px-2 fw-medium"
+                                      className="btn btn-sm btn-light border py-1 px-2 fw-medium text-nowrap"
                                       onClick={() => setSelectedRepairOrder(ord)}
                                     >
                                       Chi tiết
@@ -956,335 +977,68 @@ export default function TrangKiemTraBaoHanh() {
             selectedOrder.isShipping,
             selectedOrder.isDelivered,
             selectedOrder.deliveryDate,
-            selectedOrder.closeType
+            selectedOrder.closeType,
+            selectedOrder.warrantyCancelled
           )}
           onConfirmDelivery={handleOpenConfirmDelivery}
-          onReturnOrder={handleReturnOrder}
+          onReturnOrder={handleOpenReturnOrder}
           onClose={() => setSelectedOrder(null)}
+        />
+      )}
+
+      {/* Modal Xác Nhận Hoàn Hàng / Thu Hồi Máy Về Kho */}
+      {returningOrder && (
+        <ModalHoanTraMay
+          order={returningOrder}
+          returnReason={returnReason}
+          setReturnReason={setReturnReason}
+          returnState={returnState}
+          setReturnState={setReturnState}
+          restoreCharger={restoreCharger}
+          setRestoreCharger={setRestoreCharger}
+          restoreAccessories={restoreAccessories}
+          setRestoreAccessories={setRestoreAccessories}
+          restoreUpgradeParts={restoreUpgradeParts}
+          setRestoreUpgradeParts={setRestoreUpgradeParts}
+          returnSalePrice={returnSalePrice}
+          setReturnSalePrice={setReturnSalePrice}
+          isSubmitting={isSubmittingReturn}
+          idPrefix="returnBh"
+          onSubmit={handleReturnSubmit}
+          onClose={() => setReturningOrder(null)}
         />
       )}
 
       {/* Modal Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành */}
       {confirmingDeliveryOrder && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1070 }} tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content shadow border-0 rounded-4">
-              <div className="modal-header bg-success text-white py-3">
-                <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
-                  <Truck size={20} />
-                  Xác Nhận Khách Đã Nhận Hàng
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => setConfirmingDeliveryOrder(null)}
-                  disabled={isConfirmingDelivery}
-                />
-              </div>
-              <form onSubmit={handleConfirmDeliverySubmit}>
-                <div className="modal-body p-4">
-                  <div className="p-3 bg-light rounded-3 border mb-3">
-                    <div className="fw-bold text-dark mb-1">
-                      {confirmingDeliveryOrder.sourceModelText || 'Máy tính'}
-                    </div>
-                    <div className="small text-muted font-monospace mb-1">
-                      Serial: <strong className="text-primary">{confirmingDeliveryOrder.serialKey}</strong>
-                    </div>
-                    <div className="small text-muted">
-                      Khách hàng: <strong className="text-dark">{confirmingDeliveryOrder.customerName || 'Khách lẻ'}</strong> - {confirmingDeliveryOrder.customerPhone || '—'}
-                    </div>
-                    <div className="small text-muted mt-1">
-                      Gói bảo hành: <span className="badge bg-primary ms-1">{confirmingDeliveryOrder.warrantyPeriod || 'Theo máy'}</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-dark mb-1 d-flex align-items-center gap-1">
-                      <Calendar size={15} className="text-success" />
-                      Ngày khách nhận hàng thực tế <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="form-control border-success fw-medium"
-                      value={confirmDeliveryDate}
-                      onChange={(e) => setConfirmDeliveryDate(e.target.value)}
-                      required
-                    />
-                    <div className="form-text small text-muted">
-                      Thời gian bảo hành của máy sẽ bắt đầu được tính từ mốc ngày này.
-                    </div>
-                  </div>
-
-                  <div className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-0 rounded-3">
-                    <Info size={16} className="text-info flex-shrink-0" />
-                    <span>Sau khi xác nhận, đơn sẽ hoàn tất và kích hoạt hạn bảo hành tương ứng với gói của máy.</span>
-                  </div>
-                </div>
-
-                <div className="modal-footer bg-light d-flex justify-content-end gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-secondary px-4 rounded-pill"
-                    onClick={() => setConfirmingDeliveryOrder(null)}
-                    disabled={isConfirmingDelivery}
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-success px-4 rounded-pill fw-bold d-flex align-items-center gap-2 text-white"
-                    disabled={isConfirmingDelivery}
-                  >
-                    {isConfirmingDelivery ? (
-                      <span className="spinner-border spinner-border-sm" />
-                    ) : (
-                      <CheckCircle2 size={16} />
-                    )}
-                    <span>Xác nhận & Kích hoạt BH</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ModalXacNhanGiaoHang
+          order={confirmingDeliveryOrder}
+          confirmDeliveryDate={confirmDeliveryDate}
+          setConfirmDeliveryDate={setConfirmDeliveryDate}
+          isConfirmingDelivery={isConfirmingDelivery}
+          onSubmit={handleConfirmDeliverySubmit}
+          onClose={() => setConfirmingDeliveryOrder(null)}
+        />
       )}
 
       {/* Modal Chi Tiết Hóa Đơn Dịch Vụ Sửa Chữa */}
       {selectedRepairOrder && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }} tabIndex="-1">
-          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div className="modal-content shadow border-0 rounded-4">
-              <div className="modal-header bg-primary text-white py-3">
-                <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
-                  <Wrench size={20} />
-                  Chi Tiết Phiếu Dịch Vụ Sửa Chữa #{selectedRepairOrder.orderCode}
-                </h5>
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light text-primary fw-bold d-inline-flex align-items-center gap-1 rounded-pill px-3 shadow-sm"
-                    onClick={() => handleOpenEditRepairOrder(selectedRepairOrder)}
-                    title={canEditOrder ? 'Sửa phiếu dịch vụ' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
-                  >
-                    <Edit3 size={14} />
-                    <span>Sửa phiếu</span>
-                    {!canEditOrder && <Lock size={12} className="text-warning" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setSelectedRepairOrder(null)}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-body p-4">
-                {/* Thông tin chung của phiếu */}
-                <div className="p-3 bg-light rounded-3 border mb-3">
-                  <div className="row g-2">
-                    <div className="col-sm-6"><strong>Mã hóa đơn:</strong> <span className="badge bg-warning bg-opacity-20 text-warning-emphasis fw-bold ms-1">{selectedRepairOrder.orderCode}</span></div>
-                    <div className="col-sm-6"><strong>Ngày thực hiện:</strong> {formatDate(selectedRepairOrder.createdDate)}</div>
-                    <div className="col-sm-6"><strong>Khách hàng:</strong> <span className="fw-semibold text-dark">{selectedRepairOrder.customerName}</span></div>
-                    <div className="col-sm-6"><strong>Số điện thoại:</strong> <span className="text-dark fw-bold">{selectedRepairOrder.customerPhone}</span></div>
-                    <div className="col-sm-6"><strong>Thiết bị sửa chữa:</strong> <span className="text-primary fw-bold">{selectedRepairOrder.deviceModel}</span></div>
-                    <div className="col-sm-6"><strong>Kỹ thuật viên:</strong> {selectedRepairOrder.technicianName || '—'}</div>
-                    {selectedRepairOrder.note && (
-                      <div className="col-12 mt-1"><strong>Ghi chú đơn:</strong> <span className="text-muted">{selectedRepairOrder.note}</span></div>
-                    )}
-                    <div className="col-12 mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-                      <strong className="fs-6">Tổng tiền thanh toán:</strong>
-                      <span className="text-danger fw-bold fs-5">{formatCurrency(selectedRepairOrder.totalAmount)} đ</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Danh sách các dịch vụ & linh kiện */}
-                <h6 className="fw-bold mb-2 text-dark">Danh sách dịch vụ & Linh kiện bảo hành:</h6>
-                <div className="table-responsive border rounded">
-                  <table className="table table-sm align-middle mb-0">
-                    <thead className="table-light small">
-                      <tr>
-                        <th className="ps-3 py-2">Dịch vụ / Linh kiện</th>
-                        <th className="py-2 text-center" style={{ width: '70px' }}>SL</th>
-                        <th className="py-2 text-end" style={{ width: '130px' }}>Đơn giá</th>
-                        <th className="py-2 text-center" style={{ width: '110px' }}>Bảo hành</th>
-                        <th className="py-2 text-center" style={{ width: '120px' }}>Hạn BH</th>
-                        <th className="pe-3 py-2 text-end" style={{ width: '140px' }}>Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedRepairOrder.items?.map((it, idx) => {
-                        const itExp = getItemExpiryStatus(it.warrantyExpiry);
-                        const ItExpIcon = itExp.icon;
-
-                        return (
-                          <tr key={idx}>
-                            <td className="ps-3 py-2">
-                              <strong>{it.serviceName}</strong>
-                              {it.note && <div className="small text-muted">Ghi chú: {it.note}</div>}
-                            </td>
-                            <td className="text-center">{it.quantity}</td>
-                            <td className="text-end fw-medium">{formatCurrency(it.price)} đ</td>
-                            <td className="text-center">
-                              {it.warrantyPeriod ? (
-                                <span className="badge bg-light text-dark border">{it.warrantyPeriod}</span>
-                              ) : it.warrantyMonths > 0 ? (
-                                <span className="badge bg-light text-dark border">{it.warrantyMonths} Tháng</span>
-                              ) : (
-                                <span className="badge bg-secondary bg-opacity-10 text-secondary">Không BH</span>
-                              )}
-                            </td>
-                            <td className="text-center fw-bold text-dark">{it.warrantyExpiry || '—'}</td>
-                            <td className="pe-3 text-end">
-                              <span className={`badge rounded-pill px-2 py-1 small ${itExp.badge}`}>
-                                <ItExpIcon size={12} className="me-1 mb-1 d-inline" />
-                                {itExp.text}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-
-                  </table>
-                </div>
-              </div>
-
-              <div className="modal-footer bg-light d-flex justify-content-end">
-                <button type="button" className="btn btn-secondary px-4" onClick={() => setSelectedRepairOrder(null)}>
-                  Đóng
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ModalChiTietSuaChua
+          order={selectedRepairOrder}
+          canEditOrder={canEditRepairOrder}
+          onEdit={handleOpenEditRepairOrder}
+          onClose={() => setSelectedRepairOrder(null)}
+        />
       )}
 
       {/* Modal Chi Tiết Hóa Đơn Bán Phụ Kiện */}
       {selectedAccessoryOrder && (
-        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }} tabIndex="-1">
-          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div className="modal-content shadow border-0 rounded-4">
-              <div className="modal-header bg-primary text-white py-3">
-                <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
-                  <ShoppingBag size={20} />
-                  Chi Tiết Hóa Đơn Phụ Kiện #{selectedAccessoryOrder.orderCode || 'Lẻ'}
-                </h5>
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light text-primary fw-bold d-inline-flex align-items-center gap-1 rounded-pill px-3 shadow-sm"
-                    onClick={() => handleOpenEditAccessoryOrder(selectedAccessoryOrder)}
-                    title={canEditOrder ? 'Sửa hóa đơn phụ kiện' : 'Yêu cầu quyền: Sửa thông tin đơn bán'}
-                  >
-                    <Edit3 size={14} />
-                    <span>Sửa hóa đơn</span>
-                    {!canEditOrder && <Lock size={12} className="text-warning" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setSelectedAccessoryOrder(null)}
-                  />
-                </div>
-              </div>
-
-
-              <div className="modal-body p-4">
-                {/* Thông tin đơn bán */}
-                <div className="p-3 bg-light rounded-3 border mb-3">
-                  <div className="row g-2">
-                    <div className="col-sm-6">
-                      <strong>Mã hóa đơn:</strong>{' '}
-                      <span className="badge bg-primary text-white fw-bold ms-1 px-2 py-1">
-                        {selectedAccessoryOrder.orderCode || 'Lẻ'}
-                      </span>
-                    </div>
-                    <div className="col-sm-6"><strong>Ngày bán:</strong> {formatDate(selectedAccessoryOrder.saleDate)}</div>
-                    <div className="col-sm-6"><strong>Khách hàng:</strong> <span className="fw-semibold text-dark">{selectedAccessoryOrder.customerName || 'Khách vãng lai'}</span></div>
-                    <div className="col-sm-6"><strong>Số điện thoại:</strong> <span className="text-dark fw-bold">{selectedAccessoryOrder.customerPhone || '—'}</span></div>
-                    <div className="col-sm-6"><strong>Nhân viên bán:</strong> {selectedAccessoryOrder.salesperson || '—'}</div>
-                    {selectedAccessoryOrder.saleNote && (
-                      <div className="col-12 mt-1"><strong>Ghi chú đơn:</strong> <span className="text-muted">{selectedAccessoryOrder.saleNote}</span></div>
-                    )}
-                    <div className="col-12 mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
-                      <div>
-                        {selectedAccessoryOrder.discount > 0 && (
-                          <span className="text-muted small me-2">
-                            (Giảm giá: -{formatCurrency(selectedAccessoryOrder.discount)} đ)
-                          </span>
-                        )}
-                        <strong className="fs-6">Tổng tiền thanh toán:</strong>
-                      </div>
-                      <span className="text-primary fw-bold fs-5">
-                        {formatCurrency(selectedAccessoryOrder.finalAmount ?? selectedAccessoryOrder.totalAmount ?? 0)} đ
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Danh sách phụ kiện */}
-                <h6 className="fw-bold mb-2 text-dark">Danh sách phụ kiện & Bảo hành:</h6>
-                <div className="table-responsive border rounded">
-                  <table className="table table-sm align-middle mb-0">
-                    <thead className="table-light small">
-                      <tr>
-                        <th className="ps-3 py-2">Tên phụ kiện</th>
-                        <th className="py-2 text-center" style={{ width: '70px' }}>SL</th>
-                        <th className="py-2 text-end" style={{ width: '130px' }}>Đơn giá</th>
-                        <th className="py-2 text-center" style={{ width: '110px' }}>Bảo hành</th>
-                        <th className="py-2 text-center" style={{ width: '120px' }}>Hạn BH</th>
-                        <th className="pe-3 py-2 text-end" style={{ width: '140px' }}>Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedAccessoryOrder.items?.map((it, idx) => {
-                        const itExp = getItemExpiryStatus(it.warrantyExpiry);
-                        const ItExpIcon = itExp.icon;
-
-                        return (
-                          <tr key={idx}>
-                            <td className="ps-3 py-2">
-                              <strong>{it.accessoryName}</strong>
-                              <div className="small text-muted">
-                                {it.sku} {it.serialNumber && `• Tem/Serial: ${it.serialNumber}`}
-                                {it.note && ` • Ghi chú: ${it.note}`}
-                              </div>
-                            </td>
-                            <td className="text-center">{it.quantity}</td>
-                            <td className="text-end fw-medium">{formatCurrency(it.price)} đ</td>
-                            <td className="text-center">
-                              {it.warrantyPeriod ? (
-                                <span className="badge bg-light text-dark border">{it.warrantyPeriod}</span>
-                              ) : it.warrantyMonths > 0 ? (
-                                <span className="badge bg-light text-dark border">{it.warrantyMonths} Tháng</span>
-                              ) : (
-                                <span className="badge bg-secondary bg-opacity-10 text-secondary">0 Tháng</span>
-                              )}
-                            </td>
-                            <td className="text-center fw-bold text-dark">{it.warrantyExpiry || '—'}</td>
-                            <td className="pe-3 text-end">
-                              <span className={`badge rounded-pill px-2 py-1 small ${itExp.badge}`}>
-                                <ItExpIcon size={12} className="me-1 mb-1 d-inline" />
-                                {itExp.text}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="modal-footer bg-light d-flex justify-content-end">
-                <button type="button" className="btn btn-secondary px-4" onClick={() => setSelectedAccessoryOrder(null)}>
-                  Đóng
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ModalChiTietPhuKien
+          order={selectedAccessoryOrder}
+          canEditOrder={canEditOrder}
+          onEdit={handleOpenEditAccessoryOrder}
+          onClose={() => setSelectedAccessoryOrder(null)}
+        />
       )}
 
       {/* Modal Chỉnh Sửa Đơn Máy */}

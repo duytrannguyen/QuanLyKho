@@ -28,4 +28,9 @@ public interface AccessoryOrderRepository extends JpaRepository<AccessoryOrder, 
 
     @Query("SELECT o FROM AccessoryOrder o JOIN FETCH o.items WHERE LOWER(o.customerPhone) = LOWER(:phone) ORDER BY o.saleDate DESC")
     List<AccessoryOrder> findByCustomerPhoneWithItems(@Param("phone") String phone);
+
+    @Query("SELECT DISTINCT o FROM AccessoryOrder o LEFT JOIN FETCH o.items WHERE o.orderCode IN :orderCodes")
+    List<AccessoryOrder> findByOrderCodeInWithItems(@Param("orderCodes") java.util.Collection<String> orderCodes);
+
+    List<AccessoryOrder> findByCustomerPhone(String customerPhone);
 }

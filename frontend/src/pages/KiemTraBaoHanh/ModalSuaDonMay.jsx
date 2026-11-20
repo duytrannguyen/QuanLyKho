@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Edit3, Save, AlertCircle, Calendar, User, Phone, Laptop, FileText, Truck, Clock, CheckCircle } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { tinhNgayHetHanBaoHanh, getTodayDateString } from '../../utils/dinh_dang';
+import { tinhNgayHetHanBaoHanh, getTodayDateString, normalizePhoneInput, isValidVietnamPhone } from '../../utils/dinh_dang';
 
 export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
   const { showToast } = useToast();
@@ -85,6 +85,12 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
       return;
     }
 
+    const cleanPhone = normalizePhoneInput(customerPhone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
+      return;
+    }
+
     if (isShipping && isDelivered && !deliveryDate) {
       showToast('Vui lòng chọn ngày khách nhận hàng', 'warning');
       return;
@@ -94,7 +100,7 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
     try {
       await apiBaoHanh.updateMachineOrder(order.cycleId, {
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerPhone: cleanPhone,
         isShipping,
         isDelivered: isShipping ? isDelivered : true,
         deliveryDate: isShipping ? (isDelivered ? (deliveryDate || null) : null) : null,
@@ -189,54 +195,47 @@ export default function ModalSuaDonMay({ order, onClose, onSuccess }) {
                     {isShipping && (
                       <div className="mt-3 pt-3 border-top">
                         <div className="row g-2 mb-3">
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold text-secondary mb-0.5">Đơn vị vận chuyển</label>
+                          <div className="col-md-6">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">
+                              Đơn vị vận chuyển (Tự nhập hoặc chọn gợi ý)
+                            </label>
                             <input
                               type="text"
-                              className="form-control form-control-sm"
-                              placeholder="VD: GHTK, Viettel Post..."
+                              list="shippingCarriersListModal"
+                              className="form-control form-control-sm fw-medium"
+                              placeholder="VD: GHTK, Viettel Post, Xe khách, Chành xe..."
                               value={shippingCarrier}
                               onChange={(e) => setShippingCarrier(e.target.value)}
                             />
+                            <datalist id="shippingCarriersListModal">
+                              <option value="Giao Hàng Tiết Kiệm (GHTK)" />
+                              <option value="Viettel Post" />
+                              <option value="Giao Hàng Nhanh (GHN)" />
+                              <option value="J&T Express" />
+                              <option value="Ahamove" />
+                              <option value="GrabExpress" />
+                              <option value="Xe khách / Chành xe" />
+                              <option value="Tự giao hàng" />
+                            </datalist>
                           </div>
-                          <div className="col-md-4">
+                          <div className="col-md-6">
                             <label className="form-label small fw-semibold text-secondary mb-0.5">Mã vận đơn</label>
                             <input
                               type="text"
-                              className="form-control form-control-sm"
-                              placeholder="Mã tracking"
+                              className="form-control form-control-sm font-monospace"
+                              placeholder="VD: S123456789VN (Nếu có)"
                               value={trackingCode}
                               onChange={(e) => setTrackingCode(e.target.value)}
                             />
                           </div>
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold text-secondary mb-0.5">Tiền cọc trước (VNĐ)</label>
-                            <input
-                              type="number"
-                              className="form-control form-control-sm"
-                              placeholder="0"
-                              value={depositAmount}
-                              onChange={(e) => setDepositAmount(e.target.value)}
-                            />
-                          </div>
-                          <div className="col-md-8">
-                            <label className="form-label small fw-semibold text-secondary mb-0.5">Địa chỉ giao hàng</label>
+                          <div className="col-12">
+                            <label className="form-label small fw-semibold text-secondary mb-0.5">Địa chỉ nhận hàng (Giao hàng)</label>
                             <input
                               type="text"
                               className="form-control form-control-sm"
-                              placeholder="Địa chỉ cụ thể"
+                              placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP..."
                               value={shippingAddress}
                               onChange={(e) => setShippingAddress(e.target.value)}
-                            />
-                          </div>
-                          <div className="col-md-4">
-                            <label className="form-label small fw-semibold text-secondary mb-0.5">Thu hộ COD (VNĐ)</label>
-                            <input
-                              type="number"
-                              className="form-control form-control-sm"
-                              placeholder="Số tiền COD"
-                              value={codAmount}
-                              onChange={(e) => setCodAmount(e.target.value)}
                             />
                           </div>
                         </div>

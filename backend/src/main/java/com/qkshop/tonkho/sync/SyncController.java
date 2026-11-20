@@ -29,9 +29,7 @@ public class SyncController {
     @PostMapping("/run")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<SyncRun>> runSync(@RequestBody(required = false) Map<String, String> payload) {
-        String mode = (payload != null && payload.containsKey("mode")) ? payload.get("mode") : "MANUAL";
-        SyncRun run = salesSyncService.syncSalesWindow(LocalDateTime.now().minusDays(30), LocalDateTime.now(), mode);
-        return ResponseEntity.ok(ApiResponse.ok(run));
+        throw new IllegalStateException("Chức năng đồng bộ Google Sheet đã được tắt theo cấu hình hệ thống.");
     }
 
     @GetMapping("/issues")
@@ -54,18 +52,11 @@ public class SyncController {
                 com.qkshop.tonkho.issue.IssueStatus.OPEN,
                 com.qkshop.tonkho.issue.IssueStatus.IN_REVIEW,
                 com.qkshop.tonkho.issue.IssueStatus.FIXED_WAIT_RESCAN));
-        boolean enabled = Boolean.parseBoolean(systemConfigService.getConfig("GSHEET_SYNC_ENABLED", String.valueOf(googleSheetProperties.isEnabled())));
-        int intervalMinutes = 15;
-        try {
-            intervalMinutes = Integer.parseInt(systemConfigService.getConfig("GSHEET_SYNC_INTERVAL_MINUTES", "15"));
-        } catch (Exception ignored) {}
-        String notifyMode = systemConfigService.getConfig("GSHEET_SYNC_NOTIFY_MODE", "CHANGES");
-
         res.put("latestRun", latest);
         res.put("openIssuesCount", openIssues);
-        res.put("enabled", enabled);
-        res.put("intervalMinutes", intervalMinutes);
-        res.put("notifyMode", notifyMode);
+        res.put("enabled", false);
+        res.put("intervalMinutes", 0);
+        res.put("notifyMode", "DISABLED");
         return ResponseEntity.ok(ApiResponse.ok(res));
     }
 
@@ -110,11 +101,11 @@ public class SyncController {
     @PreAuthorize("hasRole('ADMIN') or hasAnyAuthority('SYNC_VIEW', 'SYNC_MANAGE', 'DASHBOARD_VIEW')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getSyncSettings() {
         Map<String, Object> settings = new java.util.HashMap<>();
-        settings.put("enabled", Boolean.parseBoolean(systemConfigService.getConfig("GSHEET_SYNC_ENABLED", String.valueOf(googleSheetProperties.isEnabled()))));
-        settings.put("intervalMinutes", Integer.parseInt(systemConfigService.getConfig("GSHEET_SYNC_INTERVAL_MINUTES", "15")));
-        settings.put("doneMarker", systemConfigService.getConfig("GSHEET_DONE_MARKER", googleSheetProperties.getDoneMarker()));
-        settings.put("spreadsheetId", systemConfigService.getConfig("GSHEET_SPREADSHEET_ID", googleSheetProperties.getSpreadsheetId() != null ? googleSheetProperties.getSpreadsheetId() : ""));
-        settings.put("notifyMode", systemConfigService.getConfig("GSHEET_SYNC_NOTIFY_MODE", "CHANGES"));
+        settings.put("enabled", false);
+        settings.put("intervalMinutes", 0);
+        settings.put("doneMarker", "");
+        settings.put("spreadsheetId", "");
+        settings.put("notifyMode", "DISABLED");
         return ResponseEntity.ok(ApiResponse.ok(settings));
     }
 
@@ -122,21 +113,6 @@ public class SyncController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYNC_MANAGE')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateSyncSettings(
             @RequestBody Map<String, Object> payload) {
-        if (payload.containsKey("enabled")) {
-            systemConfigService.upsertConfig("GSHEET_SYNC_ENABLED", String.valueOf(payload.get("enabled")), "Bật/Tắt đồng bộ Google Sheet tự động");
-        }
-        if (payload.containsKey("intervalMinutes")) {
-            systemConfigService.upsertConfig("GSHEET_SYNC_INTERVAL_MINUTES", String.valueOf(payload.get("intervalMinutes")), "Tần suất đồng bộ Google Sheet (phút)");
-        }
-        if (payload.containsKey("doneMarker")) {
-            systemConfigService.upsertConfig("GSHEET_DONE_MARKER", String.valueOf(payload.get("doneMarker")), "Ký hiệu đánh dấu đã xuất kho trên Sheet");
-        }
-        if (payload.containsKey("spreadsheetId")) {
-            systemConfigService.upsertConfig("GSHEET_SPREADSHEET_ID", String.valueOf(payload.get("spreadsheetId")), "Google Spreadsheet ID");
-        }
-        if (payload.containsKey("notifyMode")) {
-            systemConfigService.upsertConfig("GSHEET_SYNC_NOTIFY_MODE", String.valueOf(payload.get("notifyMode")), "Chế độ thông báo sau khi đồng bộ");
-        }
-        return ResponseEntity.ok(ApiResponse.okWithMessage("Đã lưu cấu hình đồng bộ thành công!", payload));
+        throw new IllegalStateException("Chức năng đồng bộ Google Sheet đã được tắt theo cấu hình hệ thống.");
     }
 }

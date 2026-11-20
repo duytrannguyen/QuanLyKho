@@ -1,6 +1,7 @@
 package com.qkshop.tonkho.user;
 
 public enum UserRole {
+    SUPERADMIN("Quản trị tối cao"),
     ADMIN("Admin"),
     MANAGER("Quản lý"),
     STAFF("Nhân viên");

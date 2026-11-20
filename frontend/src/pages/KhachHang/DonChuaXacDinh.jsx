@@ -7,9 +7,11 @@ import {
 import { crmApi } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
-import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
+import { dinhDangTien, formatDate, normalizePhoneInput, isValidVietnamPhone, taoThongTinKhachVangLai } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
 import ModalChiTietHoaDonCRM from './ModalChiTietHoaDonCRM';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 /**
  * Danh sách đơn chưa xác định khách (thiếu hoặc sai SĐT) kèm form gán thủ công.
@@ -70,9 +72,9 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
   const handleAssign = async (orderId) => {
     if (!requirePermission('CRM_MANAGE', showToast, 'Gán đơn hàng chưa xác định vào hồ sơ khách')) return;
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('0')) {
-      showToast('Vui lòng nhập số điện thoại hợp lệ gồm 10 chữ số (bắt đầu bằng 0)', 'error');
+    const cleanPhone = normalizePhoneInput(phone);
+    if (!isValidVietnamPhone(cleanPhone)) {
+      showToast('Số điện thoại không hợp lệ (Vui lòng nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09)', 'danger');
       return;
     }
     try {
@@ -210,14 +212,14 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
           <table className="table table-hover table-borderless align-middle mb-0">
             <thead className="table-light border-bottom">
               <tr>
-                <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '60px' }}>STT</th>
-                <th className="py-3 text-secondary fw-semibold">Mã đơn & Ngày</th>
-                <th className="py-3 text-secondary fw-semibold text-center">Danh mục</th>
-                <th className="py-3 text-secondary fw-semibold">Tên & SĐT tạm trên đơn</th>
-                <th className="py-3 text-secondary fw-semibold" style={{ minWidth: 220 }}>Sản phẩm</th>
-                <th className="py-3 text-secondary fw-semibold text-center">Trạng thái</th>
-                <th className="py-3 text-secondary fw-semibold text-end">Thành tiền</th>
-                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '280px' }}>Thao tác</th>
+                <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '13%' }}>Mã đơn & Ngày</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Danh mục</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '16%' }}>Tên & SĐT tạm trên đơn</th>
+                <th className="py-3 text-secondary fw-semibold" style={{ width: '20%' }}>Sản phẩm</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Trạng thái</th>
+                <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '11%' }}>Thành tiền</th>
+                <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '17%' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody className="border-top-0">
@@ -290,8 +292,25 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
                     <td className="text-center px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
                         <div className="d-flex flex-column gap-2 bg-white p-3 rounded-4 border shadow-sm">
-                          <div className="text-start small fw-bold text-dark mb-1">
-                            Gán SĐT định danh khách hàng:
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="text-start small fw-bold text-dark">
+                              Gán SĐT định danh:
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-light text-primary border rounded-pill py-0 px-2 fw-medium"
+                              style={{ fontSize: '0.7rem' }}
+                              onClick={() => {
+                                const walkIn = taoThongTinKhachVangLai();
+                                setPhone(walkIn.customerPhone);
+                                if (!name.trim() || name.trim().toLowerCase() === 'khách lẻ') {
+                                  setName(walkIn.customerName);
+                                }
+                              }}
+                              title="Tạo nhanh SĐT 10 số chuẩn cho khách vãng lai"
+                            >
+                              + Khách vãng lai
+                            </button>
                           </div>
                           <div className="input-group input-group-sm">
                             <span className="input-group-text bg-light text-secondary"><Phone size={14} /></span>
@@ -383,14 +402,7 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
               {/* Trạng thái Loading */}
               {loading && (
-                <tr>
-                  <td colSpan={canManage ? 8 : 7} className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Đang tải...</span>
-                    </div>
-                    <p className="text-muted mt-2 mb-0 small">Đang quét danh sách hóa đơn chưa xác định khách...</p>
-                  </td>
-                </tr>
+                <BangLoading colSpan={canManage ? 8 : 7} message="Đang quét danh sách hóa đơn chưa xác định khách..." />
               )}
             </tbody>
           </table>
@@ -398,29 +410,16 @@ export default function DonChuaXacDinh({ canManage, onChanged }) {
 
         {/* Phân trang Footer */}
         {totalPages > 1 && (
-          <div className="bg-light p-3 border-top d-flex justify-content-between align-items-center px-4 flex-wrap gap-2">
-            <span className="text-secondary small fw-medium">
-              Hiển thị {displayedOrders.length} / Tổng {totalElements} đơn chưa gán
-            </span>
-            <nav aria-label="Page navigation">
-              <ul className="pagination pagination-sm mb-0 shadow-sm">
-                <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => load(page - 1)}>
-                    Trước
-                  </button>
-                </li>
-                <li className="page-item disabled">
-                  <span className="page-link bg-white text-dark fw-medium px-4">
-                    Trang {page + 1} / {totalPages}
-                  </span>
-                </li>
-                <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
-                  <button className="page-link px-3" onClick={() => load(page + 1)}>
-                    Sau
-                  </button>
-                </li>
-              </ul>
-            </nav>
+          <div className="bg-light p-3 border-top px-4">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              onPageChange={load}
+              itemName="đơn chưa gán"
+              showPageNumbers={false}
+            />
           </div>
         )}
       </div>

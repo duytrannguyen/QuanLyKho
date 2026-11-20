@@ -155,7 +155,11 @@ public class AnalyticsService {
                     BigDecimal p = h.getPrice() != null ? h.getPrice() : BigDecimal.ZERO;
                     soldValue = soldValue.add(p.multiply(BigDecimal.valueOf(h.getQuantity())));
                 } else if ("RETURN".equalsIgnoreCase(h.getAction()) || "CANCEL".equalsIgnoreCase(h.getAction())) {
-                    // Không tính xuất kho đối với hoàn hàng / hủy xuất
+                    int qty = Math.abs(h.getQuantity());
+                    soldCount -= qty;
+                    realSoldCount -= qty;
+                    BigDecimal p = h.getPrice() != null ? h.getPrice() : BigDecimal.ZERO;
+                    soldValue = soldValue.subtract(p.multiply(BigDecimal.valueOf(qty)));
                 } else {
                     soldCount += h.getQuantity();
                     otherExportCount += h.getQuantity();
@@ -196,7 +200,13 @@ public class AnalyticsService {
                     realSoldCount += qty;
                     BigDecimal p = ph.getPrice() != null ? ph.getPrice() : BigDecimal.ZERO;
                     soldValue = soldValue.add(p.multiply(BigDecimal.valueOf(qty)));
-                } else if ("RETURN".equalsIgnoreCase(ph.getAction()) || "DELETE".equalsIgnoreCase(ph.getAction())) {
+                } else if ("RETURN".equalsIgnoreCase(ph.getAction())) {
+                    int qty = Math.abs(ph.getQuantity());
+                    soldCount -= qty;
+                    realSoldCount -= qty;
+                    BigDecimal p = ph.getPrice() != null ? ph.getPrice() : BigDecimal.ZERO;
+                    soldValue = soldValue.subtract(p.multiply(BigDecimal.valueOf(qty)));
+                } else if ("DELETE".equalsIgnoreCase(ph.getAction())) {
                     // Không tính là xuất bán
                 } else {
                     int qty = Math.abs(ph.getQuantity());
@@ -204,6 +214,12 @@ public class AnalyticsService {
                     otherExportCount += qty;
                 }
             }
+        }
+
+        soldCount = Math.max(0L, soldCount);
+        realSoldCount = Math.max(0L, realSoldCount);
+        if (soldValue.compareTo(BigDecimal.ZERO) < 0) {
+            soldValue = BigDecimal.ZERO;
         }
 
         Map<String, Object> summary = new HashMap<>();
@@ -248,8 +264,9 @@ public class AnalyticsService {
                 }
             });
             exported.forEach(m -> {
-                if (m.getCloseType() == CloseType.SALE && m.getClosedAt() != null) {
-                    LocalDate d = m.getClosedAt().toLocalDate();
+                LocalDateTime exportTime = m.getSaleDate() != null ? m.getSaleDate() : m.getClosedAt();
+                if (m.getCloseType() == CloseType.SALE && exportTime != null) {
+                    LocalDate d = exportTime.toLocalDate();
                     exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + 1);
                 }
             });
@@ -276,6 +293,8 @@ public class AnalyticsService {
                     importByDay.put(d, importByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
                 } else if ("SELL".equalsIgnoreCase(h.getAction())) {
                     exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
+                } else if ("RETURN".equalsIgnoreCase(h.getAction()) || "CANCEL".equalsIgnoreCase(h.getAction())) {
+                    exportByDay.put(d, exportByDay.getOrDefault(d, 0L) - Math.abs(h.getQuantity()));
                 }
             }
 
@@ -301,6 +320,8 @@ public class AnalyticsService {
                         importByDay.put(d, importByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
                     } else if ("SELL".equalsIgnoreCase(h.getAction()) || "UPGRADE_USE".equalsIgnoreCase(h.getAction()) || "REPAIR_USE".equalsIgnoreCase(h.getAction())) {
                         exportByDay.put(d, exportByDay.getOrDefault(d, 0L) + Math.abs(h.getQuantity()));
+                    } else if ("RETURN".equalsIgnoreCase(h.getAction())) {
+                        exportByDay.put(d, exportByDay.getOrDefault(d, 0L) - Math.abs(h.getQuantity()));
                     }
                 }
             });
@@ -316,7 +337,8 @@ public class AnalyticsService {
 
         while (!processDate.isBefore(fromDate.toLocalDate())) {
             long nhap = importByDay.getOrDefault(processDate, 0L);
-            long xuat = exportByDay.getOrDefault(processDate, 0L);
+            long rawXuat = exportByDay.getOrDefault(processDate, 0L);
+            long xuat = Math.max(0L, rawXuat);
 
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("date", processDate.toString().substring(5)); // MM-DD
@@ -325,7 +347,7 @@ public class AnalyticsService {
             point.put("ton", runningInventory);
 
             dailyData.put(processDate, point);
-            runningInventory = runningInventory - nhap + xuat;
+            runningInventory = runningInventory - nhap + rawXuat;
             processDate = processDate.minusDays(1);
         }
 

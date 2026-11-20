@@ -14,6 +14,8 @@ import { dinhDangTien, formatDate } from '../../utils/dinh_dang';
 import { getCustomerTier } from './HoaDonKhachHang';
 import DonChuaXacDinh from './DonChuaXacDinh';
 import ModalChinhSuaKhachHang from './ModalChinhSuaKhachHang';
+import PhanTrang from '../../components/common/PhanTrang';
+import BangLoading from '../../components/common/BangLoading';
 
 const SORT_OPTIONS = [
   { value: 'lastOrderAt:desc', label: 'Mua gần đây nhất' },
@@ -302,7 +304,7 @@ export default function TrangKhachHang() {
           <div className="card-header bg-white border-bottom p-3 px-4">
 
             {/* TẦNG 1: PHỄU TIẾN TRÌNH CSKH (PIPELINE TABS) - Thay thế hoàn toàn dropdown trùng lặp */}
-            <div className="d-flex align-items-center gap-2 overflow-x-auto pb-2 pb-md-0 mb-3 border-bottom border-light flex-wrap">
+            <div className="d-flex align-items-center gap-2 pb-2 pb-md-0 mb-3 border-bottom border-light flex-wrap">
               <span className="text-secondary small fw-bold text-uppercase d-none d-md-inline-block me-1" style={{ fontSize: '0.72rem', letterSpacing: '0.5px' }}>
                 Phễu chăm sóc:
               </span>
@@ -492,15 +494,15 @@ export default function TrangKhachHang() {
             <table className="table table-hover table-borderless align-middle mb-0">
               <thead className="table-light border-bottom">
                 <tr>
-                  <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '50px' }}>STT</th>
-                  <th className="py-3 text-secondary fw-semibold">Khách hàng</th>
-                  <th className="py-3 text-secondary fw-semibold">Số điện thoại & Liên hệ</th>
-                  <th className="py-3 text-secondary fw-semibold text-center">Phân hạng</th>
-                  <th className="py-3 text-secondary fw-semibold text-center" style={{ minWidth: '160px' }}>Trạng thái CSKH</th>
-                  <th className="py-3 text-secondary fw-semibold text-center">Tổng đơn</th>
-                  <th className="py-3 text-secondary fw-semibold text-end">Tổng chi tiêu</th>
-                  <th className="py-3 text-secondary fw-semibold text-end">Giao dịch gần nhất</th>
-                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '180px' }}>Thao tác</th>
+                  <th className="py-3 text-center text-secondary fw-semibold" style={{ width: '5%' }}>STT</th>
+                  <th className="py-3 text-secondary fw-semibold" style={{ width: '19%' }}>Khách hàng</th>
+                  <th className="py-3 text-secondary fw-semibold" style={{ width: '16%' }}>Số điện thoại & Liên hệ</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '9%' }}>Phân hạng</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '13%' }}>Trạng thái CSKH</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '7%' }}>Tổng đơn</th>
+                  <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '11%' }}>Tổng chi tiêu</th>
+                  <th className="py-3 text-secondary fw-semibold text-end" style={{ width: '9%' }}>Giao dịch gần nhất</th>
+                  <th className="py-3 text-secondary fw-semibold text-center" style={{ width: '11%' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody className="border-top-0">
@@ -723,46 +725,23 @@ export default function TrangKhachHang() {
 
                 {/* Loading State */}
                 {loading && (
-                  <tr>
-                    <td colSpan={9} className="text-center py-5">
-                      <div className="spinner-border text-primary spinner-border-sm" role="status">
-                        <span className="visually-hidden">Đang tải...</span>
-                      </div>
-                      <p className="text-muted small mt-2 mb-0">Đang đồng bộ dữ liệu khách hàng...</p>
-                    </td>
-                  </tr>
+                  <BangLoading colSpan={9} message="Đang đồng bộ dữ liệu khách hàng..." />
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Pagination Footer */}
-          <div className="bg-light p-3 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 px-4">
-            <span className="text-secondary small fw-medium">
-              Hiển thị <strong className="text-dark">{customers.length}</strong> / Tổng <strong className="text-dark">{totalElements}</strong> khách hàng
-            </span>
-
-            {totalPages > 1 && (
-              <nav aria-label="Page navigation">
-                <ul className="pagination pagination-sm mb-0 shadow-xs">
-                  <li className={`page-item ${page === 0 || loading ? 'disabled' : ''}`}>
-                    <button className="page-link px-3" onClick={() => setPage(p => p - 1)}>
-                      Trước
-                    </button>
-                  </li>
-                  <li className="page-item disabled">
-                    <span className="page-link bg-white text-dark fw-medium px-4">
-                      Trang {page + 1} / {totalPages}
-                    </span>
-                  </li>
-                  <li className={`page-item ${page + 1 >= totalPages || loading ? 'disabled' : ''}`}>
-                    <button className="page-link px-3" onClick={() => setPage(p => p + 1)}>
-                      Sau
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            )}
+          <div className="bg-light p-3 border-top px-4">
+            <PhanTrang
+              isZeroIndexed={true}
+              page={page}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              onPageChange={setPage}
+              itemName="khách hàng"
+              showPageNumbers={false}
+            />
           </div>
 
         </div>

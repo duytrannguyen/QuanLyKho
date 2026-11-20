@@ -31,7 +31,7 @@
 
       <!-- Logo -->
       <image scaleImage="RetainShape" hAlign="Center" vAlign="Middle">
-        <reportElement x="3" y="-12" width="200" height="60"/>
+        <reportElement x="5" y="4" width="186" height="24"/>
         <imageExpression><![CDATA[$P{LOGO_PATH}]]></imageExpression>
       </image>
 

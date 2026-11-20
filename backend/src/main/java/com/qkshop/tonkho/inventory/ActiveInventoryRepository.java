@@ -1,8 +1,10 @@
 package com.qkshop.tonkho.inventory;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
@@ -13,6 +15,10 @@ public interface ActiveInventoryRepository extends JpaRepository<ActiveInventory
     Optional<ActiveInventory> findBySerialKey(String serialKey);
     Optional<ActiveInventory> findBySerialKeyIgnoreCaseOrCycleId(String serialKey, String cycleId);
     boolean existsBySerialKey(String serialKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT ai FROM ActiveInventory ai WHERE UPPER(ai.serialKey) = UPPER(:serialKey) OR ai.cycleId = :serialKey")
+    Optional<ActiveInventory> findBySerialKeyOrCycleIdForUpdate(@Param("serialKey") String serialKey);
 
     @Query("SELECT ai.serialKey FROM ActiveInventory ai WHERE ai.serialKey IN (:serialKeys)")
     java.util.Set<String> findExistingSerialKeysIn(@Param("serialKeys") java.util.Collection<String> serialKeys);

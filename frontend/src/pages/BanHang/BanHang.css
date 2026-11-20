@@ -40,9 +40,22 @@ body {
 }
 
 .sticky-panel {
-  position: sticky;
-  top: 0.75rem;
-  z-index: 10;
+  position: static;
+}
+
+@media (min-width: 992px) {
+  .sticky-panel {
+    position: sticky;
+    top: 0.75rem;
+    z-index: 10;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .section-card {
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.6rem;
+  }
 }
 
 .hover-bg-light:hover {

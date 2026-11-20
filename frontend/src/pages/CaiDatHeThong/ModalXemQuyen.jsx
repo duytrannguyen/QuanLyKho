@@ -1,16 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { Shield, X, CheckCircle2, XCircle, Layers, Search } from 'lucide-react';
+import { CRITICAL_PERMISSIONS } from '../../contexts/NguCanhXacThuc';
 
 export default function ModalXemQuyen({ show, onClose, user, availablePermissions }) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isRoot = user?.username === 'admin' || user?.role === 'SUPERADMIN';
+  const isAdmin = isRoot || user?.role === 'ADMIN';
   const userPermSet = useMemo(() => new Set(user?.permissions || []), [user]);
 
   // Lọc và nhóm các quyền theo Group
   const groupedPermissions = useMemo(() => {
     const q = (searchTerm || '').trim().toLowerCase();
     const filtered = (availablePermissions || []).filter(p => {
+      // Quyền SUPERADMIN chỉ hiển thị khi xem tài khoản admin gốc
+      if (p.code === 'SUPERADMIN' && !isRoot) return false;
+
       if (!q) return true;
       return (p.name && p.name.toLowerCase().includes(q)) ||
              (p.code && p.code.toLowerCase().includes(q)) ||
@@ -29,9 +34,11 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
 
   if (!show || !user) return null;
 
-  const totalGranted = isAdmin 
+  const totalGranted = isRoot 
     ? (availablePermissions || []).length 
-    : (user.permissions ? user.permissions.length : 0);
+    : isAdmin 
+      ? (availablePermissions || []).filter(p => p.code !== 'SUPERADMIN').length
+      : (user.permissions ? user.permissions.length : 0);
 
   return (
     <div 
@@ -56,7 +63,13 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
                   Chi tiết quyền hạn: {user.fullName} ({user.username})
                 </h5>
                 <p className="text-white-50 m-0" style={{ fontSize: '0.8rem' }}>
-                  Vai trò: <span className="badge bg-primary-subtle text-primary border">{user.role}</span> · Đã cấp: <strong className="text-white">{totalGranted}</strong>/{(availablePermissions || []).length} quyền
+                  Vai trò: {isRoot ? (
+                    <span className="badge bg-warning text-dark border border-warning shadow-sm me-1 fw-bold">
+                      👑 SUPERADMIN (Quản trị tối cao)
+                    </span>
+                  ) : (
+                    <span className="badge bg-primary-subtle text-primary border me-1">{user.role}</span>
+                  )} · Đã cấp: <strong className="text-white">{totalGranted}</strong>/{(availablePermissions || []).length} quyền
                 </p>
               </div>
             </div>
@@ -86,14 +99,21 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
 
           {/* BODY */}
           <div className="modal-body p-4" style={{ maxHeight: '70vh' }}>
-            {isAdmin && (
+            {isRoot ? (
+              <div className="alert alert-warning border-0 rounded-3 mb-4 d-flex align-items-center gap-2">
+                <Shield size={18} className="text-warning flex-shrink-0" />
+                <span className="small text-dark">
+                  👑 Tài khoản <strong>Quản trị viên tối cao (Superadmin)</strong> sở hữu toàn bộ các quyền hạn và là tài khoản duy nhất có quyền tạo tài khoản và phân quyền người dùng.
+                </span>
+              </div>
+            ) : isAdmin ? (
               <div className="alert alert-success border-0 rounded-3 mb-4 d-flex align-items-center gap-2">
                 <Shield size={18} className="text-success flex-shrink-0" />
                 <span className="small">
-                  Tài khoản có vai trò <strong>ADMIN</strong> nên tự động sở hữu toàn bộ các quyền hạn trong hệ thống.
+                  Tài khoản có vai trò <strong>ADMIN</strong> sở hữu các quyền quản trị vận hành trong hệ thống.
                 </span>
               </div>
-            )}
+            ) : null}
 
             {Object.keys(groupedPermissions).length === 0 ? (
               <div className="text-center py-5 text-muted">
@@ -147,6 +167,14 @@ export default function ModalXemQuyen({ show, onClose, user, availablePermission
                                           style={{ fontSize: '0.62rem' }}
                                         >
                                           {p.type === 'ACTION' ? 'Thao tác' : 'Chức năng'}
+                                        </span>
+                                      )}
+                                      {(p.critical || CRITICAL_PERMISSIONS.has(p.code)) && (
+                                        <span
+                                          className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle"
+                                          style={{ fontSize: '0.62rem' }}
+                                        >
+                                          ⚠️ Rủi ro cao
                                         </span>
                                       )}
                                     </div>

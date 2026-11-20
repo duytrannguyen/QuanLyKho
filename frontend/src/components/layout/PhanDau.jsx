@@ -2,30 +2,27 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, RefreshCw, Settings, Plus, Menu, Bell, CheckCircle2,
-  AlertTriangle, ArrowRight, Trash2, Check, CheckCheck, Info,
+  AlertTriangle, Trash2, Check, CheckCheck, Info,
   AlertCircle, Package, Clock, ExternalLink, X,
   User, KeyRound, Shield, LogOut, Sliders, Lock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
-import { syncApi, notificationApi } from '../../api';
+import { notificationApi } from '../../api';
 import ModalCaiDatCaNhan from './ModalCaiDatCaNhan';
+import logoQK from '../../assets/qkshop_logo.png';
 
 export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', isMobile, onOpenMenu }) {
-  const { user, logout, hasPermission, requirePermission } = useAuth();
+  const { user, logout, hasPermission, requirePermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const canManageSync = hasPermission('SYNC_MANAGE');
-  const canViewSync = hasPermission('SYNC_VIEW|SYNC_MANAGE');
 
   const [time] = useState(() => {
     const now = new Date();
     return `Cập nhật ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
   });
 
-  const [syncStatus, setSyncStatus] = useState(null);
   const [showNotiDropdown, setShowNotiDropdown] = useState(false);
-  const [isQuickSyncing, setIsQuickSyncing] = useState(false);
   const notiRef = useRef(null);
 
   // State Cài đặt cá nhân & Dropdown người dùng
@@ -41,18 +38,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
   const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'UNREAD'
   const [isLoadingNoti, setIsLoadingNoti] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-
-  // Tải thông tin đồng bộ Google Sheet
-  const fetchSyncStatus = useCallback(async () => {
-    try {
-      const res = await syncApi.getLatestStatus();
-      if (res?.data) {
-        setSyncStatus(res.data);
-      }
-    } catch {
-      // Bỏ qua lỗi polling ngầm
-    }
-  }, []);
 
   // Tải danh sách thông báo
   const fetchNotifications = useCallback(async () => {
@@ -85,7 +70,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
 
   // Thiết lập SSE (Server-Sent Events) kết nối thời gian thực
   useEffect(() => {
-    fetchSyncStatus();
     fetchNotifications();
 
     const token = localStorage.getItem('token');
@@ -100,9 +84,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
           const newNoti = JSON.parse(event.data);
           setNotifications(prev => [newNoti, ...prev.filter(n => n.id !== newNoti.id)]);
           setUnreadCount(prev => prev + 1);
-
-          // Cập nhật trạng thái đồng bộ nếu có
-          fetchSyncStatus();
 
           // Báo Toast nổi góc trên
           showToast(`🔔 ${newNoti.title}: ${newNoti.message}`,
@@ -120,10 +101,9 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
       console.warn('Không thể khởi tạo EventSource:', err);
     }
 
-    // Polling định kỳ kiểm tra thông báo và đồng bộ mỗi 60 giây (dự phòng khi tab đang mở)
+    // Polling định kỳ kiểm tra thông báo mỗi 60 giây (dự phòng khi tab đang mở)
     const interval = setInterval(() => {
       if (document.hidden) return;
-      fetchSyncStatus();
       if (!eventSource || eventSource.readyState !== EventSource.OPEN) {
         fetchUnreadCount();
       }
@@ -133,7 +113,7 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
       if (eventSource) eventSource.close();
       clearInterval(interval);
     };
-  }, [fetchSyncStatus, fetchNotifications, fetchUnreadCount, showToast]);
+  }, [fetchNotifications, fetchUnreadCount, showToast]);
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -156,7 +136,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
     setShowNotiDropdown(nextState);
     if (nextState) {
       fetchNotifications();
-      fetchSyncStatus();
     }
   };
 
@@ -239,46 +218,9 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
     }
   };
 
-  // Nút đồng bộ nhanh Google Sheet
-  const handleQuickSync = async () => {
-    if (!requirePermission('SYNC_MANAGE', showToast, 'Chạy đồng bộ Google Sheet')) return;
-    setIsQuickSyncing(true);
-    try {
-      const res = await syncApi.run('MANUAL');
-      const run = res?.data;
-      if (run?.runStatus === 'FAILED') {
-        showToast(`Đồng bộ thất bại: ${run.errorMessage || 'Không rõ lỗi'}`, 'danger');
-      } else if (run) {
-        if (run.rowsProcessed > 0 && run.rowsError === 0) {
-          showToast(`🎉 Đồng bộ thành công: Đã xuất kho ${run.rowsProcessed} máy!`, 'success');
-        } else if (run.rowsError > 0) {
-          showToast(`⚠️ Đồng bộ xong: Đã xuất kho ${run.rowsProcessed} máy, nhưng có ${run.rowsError} lỗi!`, 'warning');
-        } else {
-          showToast(`ℹ️ Đồng bộ hoàn tất: Kho đã khớp với Google Sheet.`, 'info');
-        }
-      }
-      fetchSyncStatus();
-      fetchNotifications();
-    } catch (err) {
-      showToast(err.userMessage || err.message || 'Lỗi đồng bộ', 'danger');
-    } finally {
-      setIsQuickSyncing(false);
-    }
-  };
-
   const initials = user?.fullName
     ? user.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
     : 'U';
-
-  const formatRunTime = (dtStr) => {
-    if (!dtStr) return 'Chưa rõ';
-    try {
-      const d = new Date(dtStr);
-      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} - ${d.getDate()}/${d.getMonth() + 1}`;
-    } catch {
-      return dtStr;
-    }
-  };
 
   const formatTimeAgo = (dtStr) => {
     if (!dtStr) return '';
@@ -315,9 +257,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
     }
   };
 
-  const openIssues = syncStatus?.openIssuesCount || 0;
-  const latestRun = syncStatus?.latestRun;
-
   // Lọc thông báo hiển thị theo tab
   const filteredNotifications = notifications.filter(noti => {
     if (activeFilter === 'UNREAD') return !noti.isRead;
@@ -327,30 +266,41 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
   const hasReadNotifications = notifications.some(n => n.isRead);
 
   return (
-    <header className="position-fixed top-0 end-0 bg-white border-bottom d-flex align-items-center justify-content-between px-3 px-md-4 z-2"
-      style={{ left: isMobile ? '0px' : `calc(${sidebarWidth} + ${marginGap})`, height: '64px', transition: 'left 0.3s ease' }}
+    <header className="position-fixed top-0 end-0 bg-white border-bottom d-flex align-items-center justify-content-between px-2 px-sm-3 px-md-4"
+      style={{ left: isMobile ? '0px' : `calc(${sidebarWidth} + ${marginGap})`, height: '64px', transition: 'left 0.3s ease', zIndex: 1030 }}
     >
-      <div className="d-flex align-items-center flex-grow-1 gap-2 gap-md-3">
+      <div className="d-flex align-items-center flex-grow-1 min-w-0 gap-2">
         {isMobile && (
-          <button className="btn btn-light d-md-none p-1 border-0" onClick={onOpenMenu}>
-            <Menu size={24} />
+          <button 
+            type="button" 
+            className="btn btn-light d-lg-none p-1.5 border rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" 
+            onClick={onOpenMenu}
+            aria-label="Mở menu điều hướng"
+            style={{ width: '38px', height: '38px' }}
+          >
+            <Menu size={22} />
           </button>
+        )}
+        {isMobile && (
+          <div className="d-lg-none fw-bold fs-6 text-dark text-truncate d-flex align-items-center gap-2">
+            <img src={logoQK} alt="QKShop.vn" style={{ height: '24px', width: 'auto', objectFit: 'contain' }} />
+            <span className="d-none d-sm-inline small text-secondary fw-semibold border-start ps-2">Tồn Kho V2</span>
+          </div>
         )}
       </div>
 
-      <div className="d-flex align-items-center gap-3 position-relative">
+      <div className="d-flex align-items-center gap-2 gap-sm-3 position-relative flex-shrink-0">
         {/* Status Badge */}
-        <div className="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill d-flex align-items-center gap-2 py-1 px-3">
+        <div className="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill d-none d-md-flex align-items-center gap-2 py-1 px-3">
           <span className="bg-primary rounded-circle" style={{ width: '6px', height: '6px' }}></span>
           DỮ LIỆU CHÍNH THỨC
         </div>
 
         {/* Timestamp */}
-        <span className="text-secondary small">{time}</span>
+        <span className="text-secondary small d-none d-sm-inline">{time}</span>
 
         {/* Refresh Button */}
-        <button className="btn btn-light btn-sm d-flex align-items-center gap-1 border d-none d-sm-flex" onClick={() => {
-          fetchSyncStatus();
+        <button className="btn btn-light btn-sm d-none d-sm-flex align-items-center gap-1 border text-nowrap" onClick={() => {
           fetchNotifications();
           showToast('Đang làm mới dữ liệu hệ thống...', 'info');
         }}>
@@ -364,25 +314,24 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
             className={`btn btn-light btn-sm p-1 border position-relative d-flex align-items-center justify-content-center transition-all ${showNotiDropdown ? 'active bg-light border-primary shadow-sm' : ''}`}
             style={{ width: '38px', height: '38px', borderRadius: '10px' }}
             onClick={handleToggleDropdown}
-            title="Trung tâm thông báo hệ thống & đồng bộ thời gian thực"
+            title="Trung tâm thông báo hệ thống thời gian thực"
           >
             <Bell size={19} className={unreadCount > 0 ? 'text-primary' : 'text-secondary'} />
-            {unreadCount > 0 ? (
+            {unreadCount > 0 && (
               <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white shadow-sm" style={{ fontSize: '0.65rem' }}>
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
-            ) : syncStatus?.enabled ? (
-              <span className="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-white rounded-circle"></span>
-            ) : null}
+            )}
           </button>
 
           {/* Dropdown Card Thông Báo Thời Gian Thực */}
           {showNotiDropdown && (
             <div className="card shadow-lg border-0 position-absolute end-0 mt-2 rounded-3 text-start"
               style={{
-                width: 'min(410px, 94vw)',
+                width: 'min(410px, calc(100vw - 20px))',
                 zIndex: 1060,
                 top: '100%',
+                right: 0,
                 boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
                 overflow: 'hidden'
               }}
@@ -554,73 +503,6 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
                   </div>
                 )}
               </div>
-
-              {/* Card Footer: Trạng thái & Thao tác Đồng Bộ Google Sheet */}
-              <div className="card-footer bg-light border-top p-2.5">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex align-items-center gap-1.5">
-                    <span className="bg-primary rounded-circle" style={{ width: '6px', height: '6px' }}></span>
-                    <span className="fw-semibold text-dark small" style={{ fontSize: '0.75rem' }}>Đồng bộ Google Sheet:</span>
-                  </div>
-                  <span className={`badge ${syncStatus?.enabled ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary'} small`} style={{ fontSize: '0.68rem' }}>
-                    {syncStatus?.enabled ? `Tự động: Mỗi ${syncStatus.intervalMinutes}p` : 'Tự động: Tắt'}
-                  </span>
-                </div>
-
-                {latestRun && (
-                  <div className="d-flex justify-content-between align-items-center bg-white p-2 rounded border mb-2 small" style={{ fontSize: '0.74rem' }}>
-                    <div className="d-flex align-items-center gap-1.5">
-                      {latestRun.runStatus === 'COMPLETED' ? (
-                        <CheckCircle2 size={14} className="text-success flex-shrink-0" />
-                      ) : (
-                        <AlertTriangle size={14} className="text-danger flex-shrink-0" />
-                      )}
-                      <span>
-                        Xuất kho: <strong className="text-success">{latestRun.rowsProcessed} máy</strong>
-                        {latestRun.rowsError > 0 && <span> • Lỗi: <strong className="text-danger">{latestRun.rowsError}</strong></span>}
-                      </span>
-                    </div>
-                    <span className="text-muted" style={{ fontSize: '0.68rem' }}>
-                      {formatRunTime(latestRun.finishedAt || latestRun.startedAt)}
-                    </span>
-                  </div>
-                )}
-
-                {openIssues > 0 && (
-                  <div className="alert alert-warning py-1.5 px-2 small d-flex align-items-center gap-2 mb-2" style={{ fontSize: '0.74rem' }}>
-                    <AlertTriangle size={14} className="text-warning flex-shrink-0" />
-                    <div>
-                      Có <strong className="text-danger">{openIssues} lỗi sai lệch / đơn hủy</strong> cần kiểm tra đối soát.
-                    </div>
-                  </div>
-                )}
-
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-primary btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1"
-                    style={{ fontSize: '0.8rem' }}
-                    onClick={handleQuickSync}
-                    disabled={isQuickSyncing}
-                    title={canManageSync ? 'Chạy đồng bộ Google Sheet ngay' : 'Yêu cầu quyền: Quản lý đồng bộ'}
-                  >
-                    <RefreshCw size={13} className={isQuickSyncing ? 'spinner-border spinner-border-sm' : ''} />
-                    {isQuickSyncing ? 'Đang chạy...' : 'Đồng bộ ngay'}
-                    {!canManageSync && <Lock size={12} className="text-warning" />}
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
-                    style={{ fontSize: '0.8rem' }}
-                    onClick={() => {
-                      if (!requirePermission('SYNC_VIEW|SYNC_MANAGE', showToast, 'Xem màn hình Đối soát & Đồng bộ')) return;
-                      setShowNotiDropdown(false);
-                      navigate('/doi-soat');
-                    }}
-                    title={canViewSync ? 'Mở màn hình Đối soát' : 'Yêu cầu quyền: Xem đối soát'}
-                  >
-                    Đối soát {canViewSync ? <ArrowRight size={13} /> : <Lock size={12} className="text-warning" />}
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -647,11 +529,11 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
             title="Nhấp để mở menu cá nhân"
           >
             <div className="text-end d-none d-sm-block" style={{ lineHeight: '1.2' }}>
-              <div className="fw-bold small text-dark text-truncate" style={{ maxWidth: '140px' }}>
+              <div className="fw-bold small text-dark text-truncate" style={{ maxWidth: '200px' }}>
                 {user?.fullName || user?.username || 'User'}
               </div>
               <div className="text-secondary" style={{ fontSize: '0.7rem' }}>
-                {user?.role || 'Nhân viên'}
+                {isSuperAdmin ? '👑 Superadmin' : user?.role === 'ADMIN' ? '⭐ Admin' : (user?.role || 'Nhân viên')}
               </div>
             </div>
             <div 
@@ -680,7 +562,7 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
           {showUserDropdown && (
             <div 
               className="card shadow-lg border-0 position-absolute end-0 mt-2 rounded-3 text-start overflow-hidden animate__animated animate__fadeIn"
-              style={{ width: '270px', zIndex: 1060, top: '100%', boxShadow: '0 12px 35px rgba(0,0,0,0.18)' }}
+              style={{ width: 'min(280px, calc(100vw - 20px))', zIndex: 1060, top: '100%', right: 0, boxShadow: '0 12px 35px rgba(0,0,0,0.18)' }}
             >
               <div className="bg-light p-3 border-bottom d-flex align-items-center gap-2.5">
                 <div 
@@ -710,9 +592,19 @@ export default function PhanDau({ collapsed, sidebarWidth, marginGap = '0px', is
                   <div className="text-secondary small text-truncate" style={{ fontSize: '0.72rem' }}>
                     @{user?.username}
                   </div>
-                  <span className="badge bg-primary-subtle text-primary border" style={{ fontSize: '0.65rem' }}>
-                    {user?.role}
-                  </span>
+                  {isSuperAdmin ? (
+                    <span className="badge bg-warning text-dark border border-warning shadow-sm fw-bold" style={{ fontSize: '0.65rem' }}>
+                      👑 SUPERADMIN
+                    </span>
+                  ) : user?.role === 'ADMIN' ? (
+                    <span className="badge bg-primary text-white shadow-xs fw-semibold" style={{ fontSize: '0.65rem' }}>
+                      ⭐ ADMIN (Quản trị viên)
+                    </span>
+                  ) : (
+                    <span className="badge bg-primary-subtle text-primary border" style={{ fontSize: '0.65rem' }}>
+                      {user?.role}
+                    </span>
+                  )}
                 </div>
               </div>
 
