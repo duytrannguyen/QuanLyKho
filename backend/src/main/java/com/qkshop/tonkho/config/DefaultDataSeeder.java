@@ -19,7 +19,7 @@ public class DefaultDataSeeder implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.admin.auto-create:false}")
+    @Value("${app.admin.auto-create:true}")
     private boolean autoCreateAdmin;
 
     @Value("${app.admin.username:admin}")
@@ -36,23 +36,37 @@ public class DefaultDataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Nếu trong CSDL đã có sẵn tài khoản (từ file SQL khởi tạo) hoặc tắt auto-create thì không tạo thêm tài khoản admin mặc định
-        if (userRepository.count() > 0 || !autoCreateAdmin) {
-            return;
-        }
-
+        // Tự động kiểm tra và đảm bảo tài khoản Quản trị viên tối cao (admin) luôn luôn tồn tại
         if (!userRepository.existsByUsername(adminUsername)) {
             User admin = User.builder()
                     .username(adminUsername)
                     .passwordHash(passwordEncoder.encode(adminPassword))
                     .fullName(adminFullName)
                     .email(adminEmail)
-                    .role(UserRole.ADMIN)
+                    .role(UserRole.SUPERADMIN)
                     .permissions(AppPermission.allCodes())
                     .isActive(true)
                     .build();
             userRepository.save(admin);
-            log.info("======== ĐÃ KHỞI TẠO TÀI KHOẢN QUẢN TRỊ VIÊN MẶC ĐỊNH (Username: {}) ========", adminUsername);
+            log.info("======== ĐÃ TỰ ĐỘNG KHỞI TẠO TÀI KHOẢN ADMIN MẶC ĐỊNH (Username: {}, Vai trò: SUPERADMIN) ========", adminUsername);
+        } else {
+            // Nếu đã có tài khoản admin, đảm bảo tài khoản này luôn được kích hoạt và có quyền SUPERADMIN
+            userRepository.findByUsername(adminUsername).ifPresent(admin -> {
+                boolean modified = false;
+                if (!Boolean.TRUE.equals(admin.getIsActive())) {
+                    admin.setIsActive(true);
+                    modified = true;
+                }
+                if (admin.getRole() != UserRole.SUPERADMIN) {
+                    admin.setRole(UserRole.SUPERADMIN);
+                    admin.setPermissions(AppPermission.allCodes());
+                    modified = true;
+                }
+                if (modified) {
+                    userRepository.save(admin);
+                    log.info("======== ĐÃ CẬP NHẬT TRẠNG THÁI VÀ QUYỀN SUPERADMIN CHO TÀI KHOẢN ADMIN ========");
+                }
+            });
         }
     }
 }

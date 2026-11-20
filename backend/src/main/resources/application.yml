@@ -109,10 +109,10 @@ spring:
 # ==========================================
 app:
   # ----------------------------------------
-  # TÀI KHOẢN ADMIN (Mặc định tắt tự tạo mới vì CSDL đã có sẵn tài khoản quản trị)
+  # TÀI KHOẢN ADMIN (Tự động đảm bảo luôn có tài khoản admin gốc)
   # ----------------------------------------
   admin:
-    auto-create: ${ADMIN_AUTO_CREATE:false}
+    auto-create: ${ADMIN_AUTO_CREATE:true}
 
   # ----------------------------------------
   # CẤU HÌNH BẢO MẬT TOKEN (JWT)
