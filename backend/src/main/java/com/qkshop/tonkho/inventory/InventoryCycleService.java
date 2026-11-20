@@ -416,21 +416,38 @@ public class InventoryCycleService {
                 }
             }
 
-            // Deduct accessories & upgrade parts
+            // Deduct accessories, bundled charger & upgrade parts
             List<Map<String, Object>> accessories = (List<Map<String, Object>>) saleDetails.get("accessories");
             BigDecimal totalPaidAccessoriesAmount = BigDecimal.ZERO;
 
-            if (accessories != null && !accessories.isEmpty()) {
-                List<Map<String, Object>> generalAccessories = new java.util.ArrayList<>();
-                List<String> giftItems = new java.util.ArrayList<>();
-                List<String> paidItems = new java.util.ArrayList<>();
-                List<String> upgradeItems = new java.util.ArrayList<>();
+            String chargerName = saleDetails.get("chargerName") != null ? saleDetails.get("chargerName").toString().trim() : null;
+            String chargerSku = saleDetails.get("chargerSku") != null ? saleDetails.get("chargerSku").toString().trim() : null;
+            if (chargerName != null && chargerName.isEmpty()) chargerName = null;
+            if (chargerSku != null && chargerSku.isEmpty()) chargerSku = null;
 
+            List<Map<String, Object>> generalAccessories = new java.util.ArrayList<>();
+            List<String> giftItems = new java.util.ArrayList<>();
+            List<String> paidItems = new java.util.ArrayList<>();
+            List<String> upgradeItems = new java.util.ArrayList<>();
+
+            if (accessories != null && !accessories.isEmpty()) {
                 for (Map<String, Object> a : accessories) {
+                    boolean isChargerItem = Boolean.TRUE.equals(a.get("isCharger")) || "true".equalsIgnoreCase(String.valueOf(a.get("isCharger")));
                     boolean isGift = Boolean.TRUE.equals(a.get("isGift")) || "true".equalsIgnoreCase(String.valueOf(a.get("isGift")));
                     boolean isUpgrade = Boolean.TRUE.equals(a.get("isUpgrade")) || "true".equalsIgnoreCase(String.valueOf(a.get("isUpgrade")));
-                    String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
                     String sku = (String) a.get("sku");
+
+                    if (isChargerItem) {
+                        if (chargerSku == null && sku != null && !sku.trim().isEmpty()) {
+                            chargerSku = sku.trim();
+                        }
+                        if (chargerName == null && a.get("name") != null && !a.get("name").toString().trim().isEmpty()) {
+                            chargerName = a.get("name").toString().trim();
+                        }
+                        continue;
+                    }
+
+                    String nameWithQty = a.get("name") + " (x" + a.get("quantity") + ")";
                     int qty = a.get("quantity") != null ? Integer.parseInt(a.get("quantity").toString()) : 1;
                     BigDecimal price = BigDecimal.ZERO;
                     Object p = a.get("price");
@@ -464,35 +481,64 @@ public class InventoryCycleService {
                         generalAccessories.add(mutableAcc);
                     }
                 }
+            }
 
-                if (!generalAccessories.isEmpty()) {
-                    accessoryService.deductAccessories(
-                            generalAccessories,
-                            closed.getCustomerName(),
-                            closed.getCustomerPhone(),
-                            closed.getCycleId(),
-                            salesperson,
-                            closed.getSaleDate(),
-                            isShipping,
-                            isDelivered,
-                            delDate,
-                            wp
-                    );
+            if (chargerSku != null) {
+                if (chargerName == null) {
+                    chargerName = accessoryService.findBySku(chargerSku)
+                            .map(com.qkshop.tonkho.accessory.Accessory::getName)
+                            .orElse(chargerSku);
                 }
+                Map<String, Object> chargerItem = new java.util.HashMap<>();
+                chargerItem.put("sku", chargerSku);
+                chargerItem.put("name", chargerName);
+                chargerItem.put("quantity", 1);
+                chargerItem.put("isGift", true);
+                chargerItem.put("isCharger", true);
+                chargerItem.put("price", BigDecimal.ZERO);
+                generalAccessories.add(chargerItem);
+            }
 
-                StringBuilder accNote = new StringBuilder();
-                if (!upgradeItems.isEmpty()) {
-                    accNote.append("Linh kiện nâng cấp: ").append(String.join(", ", upgradeItems));
-                }
-                if (!giftItems.isEmpty()) {
-                    if (accNote.length() > 0) accNote.append(" | ");
-                    accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
-                }
-                if (!paidItems.isEmpty()) {
-                    if (accNote.length() > 0) accNote.append(" | ");
-                    accNote.append("Phụ kiện bán thêm: ").append(String.join(", ", paidItems));
-                }
+            closed.setChargerName(chargerName);
+            closed.setChargerSku(chargerSku);
 
+            if (!generalAccessories.isEmpty()) {
+                accessoryService.deductAccessories(
+                        generalAccessories,
+                        closed.getCustomerName(),
+                        closed.getCustomerPhone(),
+                        closed.getCycleId(),
+                        salesperson,
+                        closed.getSaleDate(),
+                        isShipping,
+                        isDelivered,
+                        delDate,
+                        wp,
+                        closed.getWarrantyExpiry()
+                );
+            }
+
+            StringBuilder accNote = new StringBuilder();
+            if (chargerName != null) {
+                accNote.append("Sạc kèm theo máy: ").append(chargerName);
+                if (chargerSku == null) {
+                    accNote.append(" (Ngoài kho)");
+                }
+            }
+            if (!upgradeItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Linh kiện nâng cấp: ").append(String.join(", ", upgradeItems));
+            }
+            if (!giftItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Quà tặng mặc định: ").append(String.join(", ", giftItems));
+            }
+            if (!paidItems.isEmpty()) {
+                if (accNote.length() > 0) accNote.append(" | ");
+                accNote.append("Phụ kiện bán thêm: ").append(String.join(", ", paidItems));
+            }
+
+            if (!accNote.isEmpty()) {
                 String currentNote = closed.getSaleNote() != null ? closed.getSaleNote() : "";
                 String newNote = currentNote.isEmpty() ? accNote.toString()
                                                        : currentNote + " | " + accNote.toString();

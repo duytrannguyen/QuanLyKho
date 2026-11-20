@@ -640,6 +640,8 @@ public class CrmQueryService {
                     cc != null ? cc.getDepositAmount() : null,
                     cc != null ? cc.getCodAmount() : null,
                     cc != null ? cc.getUpgradeNote() : null,
+                    cc != null ? cc.getChargerName() : null,
+                    cc != null ? cc.getChargerSku() : null,
                     ro != null ? ro.getDeviceSerial() : null,
                     ro != null ? ro.getIntakeCondition() : null,
                     ro != null ? ro.getAccessoriesReceived() : null,

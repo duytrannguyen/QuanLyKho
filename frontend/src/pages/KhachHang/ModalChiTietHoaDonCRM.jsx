@@ -4,7 +4,7 @@ import {
   Calendar, Laptop, ShieldCheck, AlertCircle, 
   Tag, Package, DollarSign, CheckCircle2, UserCheck, 
   Hash, Layers, Cpu, HardDrive, Info, Smartphone,
-  Truck, MapPin, Wrench, Clock
+  Truck, MapPin, Wrench, Clock, Zap
 } from 'lucide-react';
 import { dinhDangTien, formatDate, getCleanWarrantyType } from '../../utils/dinh_dang';
 import { CategoryBadge, OrderStatusBadge } from './HoaDonKhachHang';
@@ -218,10 +218,20 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                   ${dinhDangTien(order.netRevenue || 0)} đ
                 </td>
               </tr>`}
+              ${order.chargerName ? `
+              <tr>
+                <td style="text-align: center;">${(Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length : 1) + 1}</td>
+                <td>
+                  <strong style="color:#15803d;">Sạc kèm theo máy: ${String(order.chargerName).replace(/</g, '&lt;')}</strong>
+                </td>
+                <td style="font-family: monospace;">${String(order.chargerSku || 'Kèm máy').replace(/</g, '&lt;')}</td>
+                <td>SL: 1 | Bảo hành đồng bộ theo máy (${String(getCleanWarrantyType(order.warrantyPeriod) || 'Theo máy').replace(/</g, '&lt;')})</td>
+                <td style="text-align: right; font-weight: bold; color:#15803d;">0 đ (Kèm máy)</td>
+              </tr>` : ''}
               ${order.accompanyingOrder ? (
                 Array.isArray(order.accompanyingOrder.detailItems) && order.accompanyingOrder.detailItems.length > 0
                   ? order.accompanyingOrder.detailItems.map((accItem, accIdx) => {
-                      const baseIdx = Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length : 1;
+                      const baseIdx = (Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length : 1) + (order.chargerName ? 1 : 0);
                       const qty = Number(accItem.quantity || 1);
                       const lineTotal = Number(accItem.price || 0) * qty;
                       const accDetails = [
@@ -243,7 +253,7 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                     }).join('')
                   : `
               <tr>
-                <td style="text-align: center;">${Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length + 1 : 2}</td>
+                <td style="text-align: center;">${(Array.isArray(order.detailItems) && order.detailItems.length > 0 ? order.detailItems.length : 1) + (order.chargerName ? 1 : 0) + 1}</td>
                 <td>
                   <strong>${String(order.accompanyingOrder.productName || 'Phụ kiện kèm').replace(/</g, '&lt;')}</strong>
                   <br><small style="color:#0284c7;">(Đơn kèm: ${String(order.accompanyingOrder.transactionId).replace(/</g, '&lt;')})</small>
@@ -681,6 +691,28 @@ export default function ModalChiTietHoaDonCRM({ order, onClose }) {
                               <div className="text-muted small fw-semibold mb-1">Nâng cấp linh kiện / cấu hình</div>
                               <div className="text-dark bg-warning bg-opacity-10 border border-warning-subtle rounded-3 p-3" style={{ whiteSpace: 'pre-line', fontSize: '0.9rem' }}>
                                 {order.upgradeNote}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.chargerName && (
+                        <div className="col-12">
+                          <div className="d-flex align-items-start gap-2">
+                            <Zap size={18} className="text-success mt-1 flex-shrink-0" />
+                            <div className="w-100">
+                              <div className="text-muted small fw-semibold mb-1">Sạc kèm theo máy</div>
+                              <div className="text-dark bg-success bg-opacity-10 border border-success-subtle rounded-3 p-3 d-flex flex-wrap align-items-center justify-content-between gap-2" style={{ fontSize: '0.9rem' }}>
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                  <span className="fw-semibold">{order.chargerName}</span>
+                                  {order.chargerSku && (
+                                    <span className="badge bg-white text-secondary border font-monospace">{order.chargerSku}</span>
+                                  )}
+                                </div>
+                                <span className="badge bg-white text-success border border-success-subtle">
+                                  0 đ • Bảo hành đồng bộ theo máy
+                                </span>
                               </div>
                             </div>
                           </div>

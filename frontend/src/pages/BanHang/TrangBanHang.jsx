@@ -25,7 +25,13 @@ export default function TrangBanHang() {
     setIsUpgraded,
     defaultSpecs,
     availableAccessories,
+    allAccessories,
     selectedAccessories,
+    selectedCharger,
+    chargerSearchTerm,
+    setChargerSearchTerm,
+    showChargerDropdown,
+    setShowChargerDropdown,
     accSearchTerm,
     setAccSearchTerm,
     showAccDropdown,
@@ -60,6 +66,9 @@ export default function TrangBanHang() {
     handleUpdateAccessory,
     handleRemoveDefaultGift,
     handleRemoveAccessory,
+    handleSelectCharger,
+    handleSelectCustomCharger,
+    handleClearCharger,
     handleOpenGiftModal,
     handleAddTempGift,
     handleUpdateTempGift,
@@ -142,8 +151,18 @@ export default function TrangBanHang() {
 
               {/* 3. PHỤ KIỆN & QUÀ TẶNG */}
               <KhuVucPhuKienQuaTang
+                scannedMachine={scannedMachine}
                 availableAccessories={availableAccessories}
+                allAccessories={allAccessories}
                 selectedAccessories={selectedAccessories}
+                selectedCharger={selectedCharger}
+                chargerSearchTerm={chargerSearchTerm}
+                setChargerSearchTerm={setChargerSearchTerm}
+                showChargerDropdown={showChargerDropdown}
+                setShowChargerDropdown={setShowChargerDropdown}
+                handleSelectCharger={handleSelectCharger}
+                handleSelectCustomCharger={handleSelectCustomCharger}
+                handleClearCharger={handleClearCharger}
                 accSearchTerm={accSearchTerm}
                 setAccSearchTerm={setAccSearchTerm}
                 showAccDropdown={showAccDropdown}

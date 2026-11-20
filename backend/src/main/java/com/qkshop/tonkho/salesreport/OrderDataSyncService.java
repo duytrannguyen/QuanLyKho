@@ -177,11 +177,23 @@ public class OrderDataSyncService {
             so.setOrigin("WEB_APP");
         }
 
-        // Ghi chú & Nhân viên bán
+        // Ghi chú, sạc kèm theo máy & Nhân viên bán
         if (hasText(cc.getSaleNote())) {
             so.setNote(cc.getSaleNote());
         } else if (hasText(so.getNote())) {
             cc.setSaleNote(so.getNote());
+            cycleModified = true;
+        }
+        if (hasText(cc.getChargerName())) {
+            so.setChargerName(cc.getChargerName().trim());
+        } else if (hasText(so.getChargerName())) {
+            cc.setChargerName(so.getChargerName().trim());
+            cycleModified = true;
+        }
+        if (hasText(cc.getChargerSku())) {
+            so.setChargerSku(cc.getChargerSku().trim());
+        } else if (hasText(so.getChargerSku())) {
+            cc.setChargerSku(so.getChargerSku().trim());
             cycleModified = true;
         }
 
@@ -352,7 +364,15 @@ public class OrderDataSyncService {
                 accOrder.setIsDelivered(Boolean.TRUE.equals(cc.getIsDelivered()));
                 accOrder.setDeliveryDate(cc.getDeliveryDate());
 
-                if (cc.getCloseType() == CloseType.CUSTOMER_RETURN) {
+                boolean keepPaidAccessories = cc.getCloseType() == CloseType.CUSTOMER_RETURN
+                        && hasText(accOrder.getSaleNote())
+                        && accOrder.getSaleNote().contains("[GIU_PHU_KIEN_BAN_THEM]")
+                        && accOrder.getFinalAmount() != null
+                        && accOrder.getFinalAmount().compareTo(BigDecimal.ZERO) > 0;
+
+                if (keepPaidAccessories) {
+                    accOrder.setStatus("COMPLETED");
+                } else if (cc.getCloseType() == CloseType.CUSTOMER_RETURN) {
                     accOrder.setStatus("RETURNED");
                 } else if (cc.getCloseType() == CloseType.CANCEL) {
                     accOrder.setStatus("CANCELLED");
@@ -362,13 +382,28 @@ public class OrderDataSyncService {
                     accOrder.setStatus("COMPLETED");
                 }
 
-                // Khi xác nhận đã nhận hàng ship, tính lại hạn bảo hành item nếu có
+                // Khi xác nhận đã nhận hàng ship hoặc giữ lại phụ kiện mua thêm lúc trả máy, đồng bộ hạn BH từng item
                 if ("COMPLETED".equalsIgnoreCase(accOrder.getStatus()) && accOrder.getItems() != null) {
                     LocalDate baseDate = Boolean.TRUE.equals(accOrder.getIsDelivered()) && accOrder.getDeliveryDate() != null
                             ? accOrder.getDeliveryDate()
                             : (accOrder.getSaleDate() != null ? accOrder.getSaleDate().toLocalDate() : LocalDate.now());
                     for (AccessoryOrderItem item : accOrder.getItems()) {
-                        if (item.getWarrantyExpiry() == null && item.getWarrantyMonths() != null && item.getWarrantyMonths() > 0) {
+                        boolean isBundledCharger = item.getNote() != null && item.getNote().contains("[Sạc kèm theo máy");
+                        if (isBundledCharger) {
+                            if (cc.getCloseType() == CloseType.CUSTOMER_RETURN) {
+                                item.setWarrantyPeriod("Đã hủy (Đã hoàn theo máy)");
+                                item.setWarrantyExpiry(null);
+                            } else {
+                                if (hasText(cc.getWarrantyPeriod())) {
+                                    item.setWarrantyPeriod(cc.getWarrantyPeriod());
+                                }
+                                if (cc.getWarrantyExpiry() != null) {
+                                    item.setWarrantyExpiry(cc.getWarrantyExpiry());
+                                } else if (item.getWarrantyExpiry() == null && hasText(item.getWarrantyPeriod())) {
+                                    item.setWarrantyExpiry(SourceNormalizer.calculateWarrantyExpiry(baseDate, item.getWarrantyPeriod()));
+                                }
+                            }
+                        } else if (item.getWarrantyExpiry() == null && item.getWarrantyMonths() != null && item.getWarrantyMonths() > 0) {
                             item.setWarrantyExpiry(baseDate.plusMonths(item.getWarrantyMonths()));
                         }
                     }
@@ -377,7 +412,8 @@ public class OrderDataSyncService {
                 AccessoryOrder savedAcc = accessoryOrderRepo.save(accOrder);
                 boolean hasValue = savedAcc.getFinalAmount() != null && savedAcc.getFinalAmount().compareTo(BigDecimal.ZERO) > 0;
                 if (hasValue || salesOrderRepo.findByTransactionId(savedAcc.getOrderCode()).isPresent()) {
-                    syncAccessoryOrderToSalesOrder(savedAcc, cc.getPaymentStatus(), false);
+                    String accPaymentStatus = keepPaidAccessories ? "Đã thanh toán" : cc.getPaymentStatus();
+                    syncAccessoryOrderToSalesOrder(savedAcc, accPaymentStatus, false);
                 }
             });
         }

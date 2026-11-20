@@ -35,6 +35,8 @@ public class ClosedCycleDTO {
     private String productFullName;
     private String productSummary;
     private String upgradeNote;
+    private String chargerName;
+    private String chargerSku;
     private String note;
     private String sourceReference;   // Mã phiếu xuất hoặc mã tham chiếu
     private String closeReason;        // Lý do xuất khác / hủy

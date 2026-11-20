@@ -65,5 +65,5 @@ export default function BoCucChinh() {
         </main>
       </div>
     </div>
-  );
+  )
 }

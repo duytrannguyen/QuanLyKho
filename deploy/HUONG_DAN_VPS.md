@@ -134,9 +134,12 @@ docker compose up -d --build
 ## 🎉 5. Truy Cập Hệ Thống & Tài Khoản Quản Trị
 
 - **Địa chỉ truy cập Web:** `http://<IP_CỦA_VPS>` (Cổng 80 mặc định).
-- **Tài khoản đăng nhập:**
-  - Sử dụng trực tiếp **tài khoản Quản trị viên đã có sẵn trong cơ sở dữ liệu** (`database/init/01_qkshop_tonkho_full.sql`).
-  - Hệ thống tự động nạp nguyên vẹn 28 bảng dữ liệu, các chỉ mục (Indexes) và tài khoản quản trị hiện có của cửa hàng, **không cần tạo thêm tài khoản admin mặc định mới**.
+- **Thông tin tài khoản Quản trị viên mặc định:**
+  - **Tên đăng nhập:** `admin` (hoặc email: `admin@qkshop.vn`)
+  - **Mật khẩu:** `admin123`
+  - **Vai trò:** `SUPERADMIN` (Quản trị viên tối cao)
+- **Hệ thống dữ liệu:**
+  - Hệ thống tự động nạp nguyên vẹn toàn bộ các bảng dữ liệu, chỉ mục (Indexes) và sản phẩm, tồn kho, đơn hàng từ file khởi tạo `database/init/01_qkshop_tonkho_full.sql`.
 - **Kết nối Tên miền & SSL (Tùy chọn):** Trỏ bản ghi A của tên miền (ví dụ `kho.qkshop.vn`) về IP VPS và bật SSL qua Cloudflare (chế độ Flexible/Full) hoặc Certbot Nginx.
 
 ---

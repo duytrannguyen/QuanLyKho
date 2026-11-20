@@ -55,9 +55,13 @@ export function useLogicBanHang() {
   const [isUpgraded, setIsUpgraded] = useState(false);
   const [defaultSpecs, setDefaultSpecs] = useState({ ram: '', ssd: '' });
 
-  // State: Phụ kiện & Bộ quà tặng mặc định
+  // State: Phụ kiện, Sạc kèm theo máy & Bộ quà tặng mặc định
   const [availableAccessories, setAvailableAccessories] = useState([]);
+  const [allAccessories, setAllAccessories] = useState([]);
   const [selectedAccessories, setSelectedAccessories] = useState([]);
+  const [selectedCharger, setSelectedCharger] = useState(null);
+  const [chargerSearchTerm, setChargerSearchTerm] = useState('');
+  const [showChargerDropdown, setShowChargerDropdown] = useState(false);
   const [accSearchTerm, setAccSearchTerm] = useState('');
   const [showAccDropdown, setShowAccDropdown] = useState(false);
   const [defaultGiftBundle, setDefaultGiftBundle] = useState([]);
@@ -137,13 +141,16 @@ export function useLogicBanHang() {
 
   const fetchData = async () => {
     try {
-      const [accRes, giftRes, partsRes] = await Promise.all([
+      const [accRes, allAccRes, giftRes, partsRes] = await Promise.all([
         apiPhuKien.getAvailable(),
+        apiPhuKien.getAll().catch(() => null),
         apiPhuKien.getDefaultGifts().catch(() => ({ data: { data: '[]' } })),
         apiLinhKien.getAvailable().catch(() => ({ data: { data: [] } }))
       ]);
       const accList = accRes.data || [];
+      const fullAccList = Array.isArray(allAccRes?.data) && allAccRes.data.length > 0 ? allAccRes.data : accList;
       setAvailableAccessories(accList);
+      setAllAccessories(fullAccList);
       setAvailableParts(partsRes.data?.data || partsRes.data || []);
 
       let bundle = [];
@@ -247,6 +254,9 @@ export function useLogicBanHang() {
       setUpgradeSsdPrice('');
       setSwapRamSku('');
       setSwapSsdSku('');
+      setSelectedCharger(null);
+      setChargerSearchTerm('');
+      setShowChargerDropdown(false);
       setDefaultGiftDeduction(0);
 
       if (defaultGiftBundleRef.current && defaultGiftBundleRef.current.length > 0) {
@@ -327,6 +337,40 @@ export function useLogicBanHang() {
 
   const handleRemoveAccessory = (sku) => {
     setSelectedAccessories(prev => prev.filter(item => !(item.sku === sku && !item.isFromDefaultBundle)));
+  };
+
+  // Handlers: Sạc kèm theo máy (0đ - BH theo máy)
+  const handleSelectCharger = (acc) => {
+    if (!acc || acc.quantity <= 0) return;
+    setSelectedCharger({
+      sku: acc.sku,
+      name: acc.name,
+      category: acc.category,
+      quantity: acc.quantity,
+      isCustom: false
+    });
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
+  };
+
+  const handleSelectCustomCharger = (rawName) => {
+    const cleanName = (rawName || '').trim();
+    if (!cleanName) return;
+    setSelectedCharger({
+      sku: null,
+      name: cleanName,
+      category: 'SAC',
+      quantity: null,
+      isCustom: true
+    });
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
+  };
+
+  const handleClearCharger = () => {
+    setSelectedCharger(null);
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
   };
 
   // Gift Modal logic
@@ -430,6 +474,9 @@ export function useLogicBanHang() {
     setSwapRamSku('');
     setSwapSsdSku('');
     setSelectedAccessories([]);
+    setSelectedCharger(null);
+    setChargerSearchTerm('');
+    setShowChargerDropdown(false);
     setDefaultGiftDeduction(0);
     setMatchedCrmCustomer(null);
     setFormData({
@@ -483,6 +530,30 @@ export function useLogicBanHang() {
     if (formData.warrantyOption === 'Khác' && (!formData.customWarranty || !formData.customWarranty.trim())) {
       showToast('Vui lòng nhập chi tiết gói bảo hành khác', 'danger');
       return;
+    }
+
+    if (!selectedCharger && chargerSearchTerm.trim()) {
+      showToast(
+        'Bạn đang gõ tên sạc kèm theo máy nhưng chưa chọn. Vui lòng chọn trong danh sách, bấm "Dùng sạc ngoài kho", hoặc xóa ô tìm kiếm sạc.',
+        'warning'
+      );
+      return;
+    }
+
+    if (selectedCharger && !selectedCharger.isCustom && selectedCharger.sku) {
+      const sameSkuInAccessories = selectedAccessories
+        .filter(sa => sa.sku === selectedCharger.sku)
+        .reduce((sum, sa) => sum + (Number(sa.quantity) || 1), 0);
+      const stockItem =
+        allAccessories.find(a => a.sku === selectedCharger.sku) ||
+        availableAccessories.find(a => a.sku === selectedCharger.sku);
+      if (stockItem && sameSkuInAccessories + 1 > stockItem.quantity) {
+        showToast(
+          `Tổng số lượng xuất cho "${selectedCharger.name}" (${sameSkuInAccessories + 1}) vượt quá tồn kho (${stockItem.quantity})`,
+          'warning'
+        );
+        return;
+      }
     }
 
     const confirmMsg =
@@ -655,6 +726,8 @@ export function useLogicBanHang() {
               : formData.lastSource,
           customerType: formData.customerType,
           isStudent: isStudentBool,
+          chargerName: selectedCharger ? selectedCharger.name : null,
+          chargerSku: selectedCharger && !selectedCharger.isCustom ? selectedCharger.sku : null,
           accessories: finalAccessories,
           swapParts: swapParts
         },
@@ -686,6 +759,8 @@ export function useLogicBanHang() {
         depositAmount: 0,
         codAmount: 0,
         upgradeNote: generatedUpgradeNote,
+        chargerName: selectedCharger ? selectedCharger.name : null,
+        chargerSku: selectedCharger && !selectedCharger.isCustom ? selectedCharger.sku : null,
         accessories: finalAccessories,
         brandName: scannedMachine.brandName || scannedMachine.brand || '',
         defaultSalePrice: scannedMachine.salePrice || 0
@@ -724,7 +799,13 @@ export function useLogicBanHang() {
     setIsUpgraded,
     defaultSpecs,
     availableAccessories,
+    allAccessories,
     selectedAccessories,
+    selectedCharger,
+    chargerSearchTerm,
+    setChargerSearchTerm,
+    showChargerDropdown,
+    setShowChargerDropdown,
     accSearchTerm,
     setAccSearchTerm,
     showAccDropdown,
@@ -766,6 +847,9 @@ export function useLogicBanHang() {
     handleUpdateAccessory,
     handleRemoveDefaultGift,
     handleRemoveAccessory,
+    handleSelectCharger,
+    handleSelectCustomCharger,
+    handleClearCharger,
     handleOpenGiftModal,
     handleAddTempGift,
     handleUpdateTempGift,

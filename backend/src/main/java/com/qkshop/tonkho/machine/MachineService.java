@@ -310,6 +310,8 @@ public class MachineService {
                     .productFullName(prodFull)
                     .productSummary(prodSum)
                     .upgradeNote(cc.getUpgradeNote())
+                    .chargerName(cc.getChargerName() != null ? cc.getChargerName() : (linkedSo != null ? linkedSo.getChargerName() : null))
+                    .chargerSku(cc.getChargerSku() != null ? cc.getChargerSku() : (linkedSo != null ? linkedSo.getChargerSku() : null))
                     .note(cc.getSaleNote() != null ? cc.getSaleNote() : (cc.getCloseReason() != null ? cc.getCloseReason() : (linkedSo != null ? linkedSo.getNote() : null)))
                     .sourceReference(cc.getSourceReference() != null ? cc.getSourceReference() : (linkedSo != null ? linkedSo.getTransactionId() : null))
                     .closeReason(cc.getCloseReason())

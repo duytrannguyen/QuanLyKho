@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   X, ShieldCheck, AlertCircle, XCircle, FileText, Copy, Check, 
   Printer, User, Phone, Calendar, Laptop, Cpu, HardDrive, 
-  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench, RotateCcw, Lock
+  Layers, Tag, Clock, Package, DollarSign, CheckCircle2, UserCheck, Hash, Truck, Wrench, RotateCcw, Lock, Zap
 } from 'lucide-react';
 import { apiSuaChua } from '../../api';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
@@ -46,14 +46,25 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Trích xuất phụ kiện, quà tặng và phụ kiện bán thêm từ saleNote
+  // Trích xuất phụ kiện, sạc kèm máy, quà tặng và phụ kiện bán thêm từ saleNote
   const extractAccessoriesAndNote = (note) => {
-    if (!note) return { accessories: [], giftAccessories: [], paidAccessories: [], paidTotal: 0, cleanNote: '' };
+    if (!note) return { accessories: [], giftAccessories: [], paidAccessories: [], parsedChargerName: '', paidTotal: 0, cleanNote: '' };
     let cleanNote = note;
     const allItems = [];
     const giftItems = [];
     const paidItems = [];
+    let parsedChargerName = '';
     let paidTotal = 0;
+
+    // Tìm sạc kèm theo máy
+    const chargerMarker = 'Sạc kèm theo máy: ';
+    const chargerIdx = cleanNote.indexOf(chargerMarker);
+    if (chargerIdx !== -1) {
+      const part = cleanNote.substring(chargerIdx + chargerMarker.length);
+      const splitIdx = part.indexOf(' | ');
+      parsedChargerName = (splitIdx !== -1 ? part.substring(0, splitIdx) : part).trim();
+      cleanNote = cleanNote.substring(0, chargerIdx) + (splitIdx !== -1 ? part.substring(splitIdx + 3) : '');
+    }
 
     // Tìm quà tặng mặc định
     const giftMarker = 'Quà tặng mặc định: ';
@@ -105,10 +116,12 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
     }
 
     cleanNote = cleanNote.replace(/^\|\s*|\s*\|\s*$/g, '').trim();
-    return { accessories: allItems, giftAccessories: giftItems, paidAccessories: paidItems, paidTotal, cleanNote };
+    return { accessories: allItems, giftAccessories: giftItems, paidAccessories: paidItems, parsedChargerName, paidTotal, cleanNote };
   };
 
-  const { accessories, giftAccessories, paidAccessories, paidTotal, cleanNote } = extractAccessoriesAndNote(order.saleNote);
+  const { accessories, giftAccessories, paidAccessories, parsedChargerName, paidTotal, cleanNote } = extractAccessoriesAndNote(order.saleNote);
+  const chargerName = order.chargerName || parsedChargerName || '';
+  const chargerSku = order.chargerSku || '';
   const StatusIcon = statusInfo?.icon || ShieldCheck;
 
   const extractUpgradeTotal = (note) => {
@@ -270,9 +283,20 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                   ${formatMoney(originalAmt > 0 ? originalAmt : finalAmt)}
                 </td>
               </tr>
+              ${chargerName ? `
+              <tr>
+                <td style="text-align: center;">2</td>
+                <td>
+                  <strong style="color: #15803d;">Sạc kèm theo máy: ${String(chargerName).replace(/</g, '&lt;')}</strong>
+                  ${chargerSku ? `<br><small style="color:#64748b;">SKU: ${String(chargerSku).replace(/</g, '&lt;')}</small>` : ''}
+                </td>
+                <td style="font-family: monospace;">${chargerSku ? String(chargerSku).replace(/</g, '&lt;') : 'Kèm máy'}</td>
+                <td>Bảo hành đồng bộ theo máy (${getCleanWarrantyType(order.warrantyPeriod)})</td>
+                <td style="text-align: right; font-weight: 600; color: #15803d;">0 đ (Kèm máy)</td>
+              </tr>` : ''}
               ${paidAccessories.map((pAcc, pIdx) => `
               <tr>
-                <td style="text-align: center;">${pIdx + 2}</td>
+                <td style="text-align: center;">${pIdx + (chargerName ? 3 : 2)}</td>
                 <td colspan="2">
                   <strong>${pAcc.name}</strong> <small style="color: #64748b;">(Phụ kiện bán thêm)</small>
                 </td>
@@ -284,7 +308,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               `).join('')}
               ${giftAccessories.length > 0 ? `
               <tr>
-                <td style="text-align: center;">${paidAccessories.length + 2}</td>
+                <td style="text-align: center;">${paidAccessories.length + (chargerName ? 3 : 2)}</td>
                 <td colspan="3">
                   <strong>Quà tặng kèm theo:</strong> ${giftAccessories.join(', ')}
                 </td>
@@ -899,6 +923,28 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
                       </div>
                     )}
 
+                    {/* Sạc kèm theo máy nếu có */}
+                    {chargerName && (
+                      <div className="p-3 rounded-3 bg-success bg-opacity-10 border border-success-subtle mb-3">
+                        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                          <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                            <Zap size={16} className="text-success" />
+                            <span>Sạc kèm theo máy:</span>
+                          </div>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle small">
+                            <ShieldCheck size={12} className="me-1 d-inline" /> Bảo hành đồng bộ theo máy
+                          </span>
+                        </div>
+                        <div className="fw-semibold text-dark mt-1 d-flex flex-wrap align-items-center gap-2">
+                          <span>{chargerName}</span>
+                          {chargerSku && (
+                            <span className="badge bg-white text-secondary border font-monospace">{chargerSku}</span>
+                          )}
+                          <span className="badge bg-white text-success border border-success-subtle">0 đ (Kèm máy)</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Phụ kiện bán kèm / Tặng kèm */}
                     {accessories.length > 0 && (
                       <div className="p-3 rounded-3 bg-white border mb-3">
@@ -1029,7 +1075,7 @@ export default function ModalChiTietDonHang({ order, onClose, statusInfo, onConf
               >
                 Đóng
               </button>
-              {!order.isInStock && !order.isVoided && onReturnOrder && (
+              {!order.isInStock && !order.isVoided && order.closeType !== 'CUSTOMER_RETURN' && onReturnOrder && (
                 <button
                   type="button"
                   className="btn btn-outline-danger px-3 rounded-pill d-flex align-items-center gap-1 shadow-sm fw-semibold"

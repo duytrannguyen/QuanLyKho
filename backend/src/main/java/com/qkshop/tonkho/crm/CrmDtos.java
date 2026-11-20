@@ -75,6 +75,8 @@ public final class CrmDtos {
             BigDecimal depositAmount,
             BigDecimal codAmount,
             String upgradeNote,
+            String chargerName,
+            String chargerSku,
             String deviceSerial,
             String intakeCondition,
             String accessoriesReceived,
@@ -84,7 +86,7 @@ public final class CrmDtos {
             java.util.List<OrderDetailLineItem> detailItems) {
         public static OrderEnrichment empty() {
             return new OrderEnrichment(null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, java.util.List.of());
+                    null, null, null, null, null, null, null, null, null, java.util.List.of());
         }
     }
 
@@ -133,6 +135,8 @@ public final class CrmDtos {
             BigDecimal depositAmount,
             BigDecimal codAmount,
             String upgradeNote,
+            String chargerName,
+            String chargerSku,
             String deviceSerial,
             String intakeCondition,
             String accessoriesReceived,
@@ -171,6 +175,8 @@ public final class CrmDtos {
             BigDecimal deposit = firstPositiveOrNonNull(s.getDepositAmount(), enrichment != null ? enrichment.depositAmount() : null);
             BigDecimal cod = firstPositiveOrNonNull(s.getCodAmount(), enrichment != null ? enrichment.codAmount() : null);
             String resolvedSalesperson = firstNonBlank(s.getSalesperson(), enrichment != null ? enrichment.fallbackSalesperson() : null);
+            String resolvedChargerName = firstNonBlank(s.getChargerName(), enrichment != null ? enrichment.chargerName() : null);
+            String resolvedChargerSku = firstNonBlank(s.getChargerSku(), enrichment != null ? enrichment.chargerSku() : null);
             java.util.List<OrderDetailLineItem> items = enrichment != null && enrichment.detailItems() != null
                     ? enrichment.detailItems()
                     : java.util.List.of();
@@ -220,6 +226,8 @@ public final class CrmDtos {
                     deposit,
                     cod,
                     enrichment != null ? enrichment.upgradeNote() : null,
+                    resolvedChargerName,
+                    resolvedChargerSku,
                     enrichment != null ? enrichment.deviceSerial() : null,
                     enrichment != null ? enrichment.intakeCondition() : null,
                     enrichment != null ? enrichment.accessoriesReceived() : null,

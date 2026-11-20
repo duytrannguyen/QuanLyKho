@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3, Truck, Clock, Calendar, Lock, RotateCcw } from 'lucide-react';
+import { Search, ShieldCheck, AlertCircle, FileText, XCircle, X, Laptop, ShoppingBag, Wrench, Info, CheckCircle2, Edit3, Truck, Clock, Calendar, Lock } from 'lucide-react';
 import { apiBaoHanh } from '../../api';
 import { useToast } from '../../contexts/notification/NguCanhThongBao';
 import { useAuth } from '../../contexts/NguCanhXacThuc';
@@ -10,6 +10,7 @@ import ModalSuaDonSuaChua from './ModalSuaDonSuaChua';
 import ModalXacNhanGiaoHang from './ModalXacNhanGiaoHang';
 import ModalChiTietSuaChua from './ModalChiTietSuaChua';
 import ModalChiTietPhuKien from './ModalChiTietPhuKien';
+import ModalHoanTraMay from './ModalHoanTraMay';
 import { getCleanWarrantyType, formatCurrency, formatDate, getTodayDateString, getItemExpiryStatus, parseCurrency } from '../../utils/dinh_dang';
 
 export default function TrangKiemTraBaoHanh() {
@@ -52,6 +53,7 @@ export default function TrangKiemTraBaoHanh() {
   const [returningOrder, setReturningOrder] = useState(null);
   const [returnReason, setReturnReason] = useState('Khách đổi trả / Hoàn trả máy về kho');
   const [returnState, setReturnState] = useState('READY');
+  const [restoreCharger, setRestoreCharger] = useState(true);
   const [restoreAccessories, setRestoreAccessories] = useState(true);
   const [restoreUpgradeParts, setRestoreUpgradeParts] = useState(true);
   const [returnSalePrice, setReturnSalePrice] = useState('');
@@ -86,6 +88,7 @@ export default function TrangKiemTraBaoHanh() {
     setReturningOrder(order);
     setReturnReason('Khách hoàn trả / Đổi trả máy từ màn hình Tra cứu bảo hành');
     setReturnState('READY');
+    setRestoreCharger(true);
     setRestoreAccessories(true);
     setRestoreUpgradeParts(true);
 
@@ -106,6 +109,7 @@ export default function TrangKiemTraBaoHanh() {
       await apiBaoHanh.returnOrder(returningOrder.cycleId, {
         reason: returnReason,
         returnState,
+        restoreCharger,
         restoreAccessories,
         restoreUpgradeParts,
         salePrice: parsedPrice > 0 ? parsedPrice : null
@@ -973,7 +977,8 @@ export default function TrangKiemTraBaoHanh() {
             selectedOrder.isShipping,
             selectedOrder.isDelivered,
             selectedOrder.deliveryDate,
-            selectedOrder.closeType
+            selectedOrder.closeType,
+            selectedOrder.warrantyCancelled
           )}
           onConfirmDelivery={handleOpenConfirmDelivery}
           onReturnOrder={handleOpenReturnOrder}
@@ -983,151 +988,25 @@ export default function TrangKiemTraBaoHanh() {
 
       {/* Modal Xác Nhận Hoàn Hàng / Thu Hồi Máy Về Kho */}
       {returningOrder && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content rounded-4 border-0 shadow">
-              <div className="modal-header bg-danger bg-opacity-10 border-0 p-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-danger bg-opacity-25 text-danger rounded-3">
-                    <RotateCcw size={20} />
-                  </div>
-                  <h5 className="modal-title fw-bold text-danger m-0">Xác Nhận Đổi Trả / Thu Hồi Máy Về Kho</h5>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setReturningOrder(null)}
-                  disabled={isSubmittingReturn}
-                ></button>
-              </div>
-
-              <form onSubmit={handleReturnSubmit}>
-                <div className="modal-body p-4">
-                  <div className="alert alert-warning py-2 px-3 small rounded-3 mb-3">
-                    Thao tác này sẽ chuyển chu kỳ máy sang <strong>CUSTOMER_RETURN</strong>, hủy quyền bảo hành đơn cũ và tự động đưa máy trở lại kho hoạt động với <strong>giá gốc niêm yết</strong>.
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">Máy & Serial</label>
-                    <div className="p-2.5 bg-light rounded-3 border">
-                      <div className="fw-bold text-dark">{returningOrder.sourceModelText || 'Không rõ dòng máy'}</div>
-                      <div className="font-monospace small text-primary fw-bold mt-0.5">Serial: {returningOrder.serialKey}</div>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-1">
-                      <label className="form-label small fw-bold text-secondary text-uppercase mb-0">
-                        Giá máy gốc trả về kho (VNĐ) <span className="text-danger">*</span>
-                      </label>
-                      <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace" style={{ fontSize: '0.7rem' }}>
-                        Tự động tách giá gốc
-                      </span>
-                    </div>
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control rounded-start-3 font-monospace fw-bold text-primary"
-                        value={formatCurrency(returnSalePrice)}
-                        onChange={(e) => setReturnSalePrice(parseCurrency(e.target.value))}
-                        placeholder="Nhập giá máy gốc..."
-                        required
-                      />
-                      <span className="input-group-text bg-light rounded-end-3 text-secondary fw-semibold">đ</span>
-                    </div>
-                    <div className="form-text text-muted" style={{ fontSize: '0.72rem' }}>
-                      Giá bán niêm yết khi máy quay lại kho. Đã bóc tách riêng linh kiện nâng cấp, phụ kiện và chiết khấu của đơn cũ.
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
-                      Lý do đổi trả / thu hồi <span className="text-danger">*</span>
-                    </label>
-                    <textarea
-                      className="form-control rounded-3"
-                      rows="2"
-                      value={returnReason}
-                      onChange={(e) => setReturnReason(e.target.value)}
-                      placeholder="VD: Khách nâng đời máy khác, máy không phù hợp nhu cầu..."
-                      required
-                    ></textarea>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
-                      Trạng thái nhập lại kho
-                    </label>
-                    <select
-                      className="form-select rounded-3"
-                      value={returnState}
-                      onChange={(e) => setReturnState(e.target.value)}
-                    >
-                      <option value="READY">Sẵn sàng bán lại ngay (READY)</option>
-                      <option value="NEEDS_INSPECTION">Cần kiểm tra / KTV test lại máy (NEEDS_INSPECTION)</option>
-                    </select>
-                  </div>
-
-                  <div className="p-3 bg-light rounded-3 border mb-2">
-                    <div className="form-check mb-2">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="returnBhAccCheck"
-                        checked={restoreAccessories}
-                        onChange={(e) => setRestoreAccessories(e.target.checked)}
-                      />
-                      <label className="form-check-label small fw-semibold text-dark" htmlFor="returnBhAccCheck">
-                        Hoàn kho các phụ kiện / quà tặng kèm theo đơn
-                      </label>
-                    </div>
-
-                    <div className="form-check mb-0">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="returnBhPartsCheck"
-                        checked={restoreUpgradeParts}
-                        onChange={(e) => setRestoreUpgradeParts(e.target.checked)}
-                      />
-                      <label className="form-check-label small fw-semibold text-dark" htmlFor="returnBhPartsCheck">
-                        Hoàn kho các linh kiện đã nâng cấp (RAM/SSD)
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modal-footer border-0 p-4 pt-0">
-                  <button
-                    type="button"
-                    className="btn btn-light rounded-pill px-4 fw-medium"
-                    onClick={() => setReturningOrder(null)}
-                    disabled={isSubmittingReturn}
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-danger rounded-pill px-4 fw-medium d-inline-flex align-items-center gap-2 shadow-sm"
-                    disabled={isSubmittingReturn}
-                  >
-                    {isSubmittingReturn ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm" role="status"></span>
-                        <span>Đang xử lý...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw size={16} />
-                        <span>Xác nhận hoàn kho</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ModalHoanTraMay
+          order={returningOrder}
+          returnReason={returnReason}
+          setReturnReason={setReturnReason}
+          returnState={returnState}
+          setReturnState={setReturnState}
+          restoreCharger={restoreCharger}
+          setRestoreCharger={setRestoreCharger}
+          restoreAccessories={restoreAccessories}
+          setRestoreAccessories={setRestoreAccessories}
+          restoreUpgradeParts={restoreUpgradeParts}
+          setRestoreUpgradeParts={setRestoreUpgradeParts}
+          returnSalePrice={returnSalePrice}
+          setReturnSalePrice={setReturnSalePrice}
+          isSubmitting={isSubmittingReturn}
+          idPrefix="returnBh"
+          onSubmit={handleReturnSubmit}
+          onClose={() => setReturningOrder(null)}
+        />
       )}
 
       {/* Modal Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành */}

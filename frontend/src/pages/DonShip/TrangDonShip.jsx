@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/NguCanhXacThuc';
 import ModalChiTietDonHang from '../KiemTraBaoHanh/ModalChiTietDonHang';
 import ModalSuaDonMay from '../KiemTraBaoHanh/ModalSuaDonMay';
 import ModalXacNhanGiaoHang from '../KiemTraBaoHanh/ModalXacNhanGiaoHang';
+import ModalHoanTraMay from '../KiemTraBaoHanh/ModalHoanTraMay';
 import PhanTrang from '../../components/common/PhanTrang';
 import { formatCurrency, formatDate, getCleanWarrantyType, getTodayDateString, parseCurrency } from '../../utils/dinh_dang';
 
@@ -52,6 +53,7 @@ export default function TrangDonShip() {
   const [returningOrder, setReturningOrder] = useState(null);
   const [returnReason, setReturnReason] = useState('Khách từ chối nhận hàng / Hoàn hàng về kho');
   const [returnState, setReturnState] = useState('READY');
+  const [restoreCharger, setRestoreCharger] = useState(true);
   const [restoreAccessories, setRestoreAccessories] = useState(true);
   const [restoreUpgradeParts, setRestoreUpgradeParts] = useState(true);
   const [returnSalePrice, setReturnSalePrice] = useState('');
@@ -129,6 +131,7 @@ export default function TrangDonShip() {
     setReturningOrder(order);
     setReturnReason('Khách từ chối nhận hàng / Hoàn hàng về kho');
     setReturnState('READY');
+    setRestoreCharger(true);
     setRestoreAccessories(true);
     setRestoreUpgradeParts(true);
 
@@ -149,6 +152,7 @@ export default function TrangDonShip() {
       await apiBaoHanh.returnShippingOrder(returningOrder.cycleId, {
         reason: returnReason,
         returnState,
+        restoreCharger,
         restoreAccessories,
         restoreUpgradeParts,
         salePrice: parsedPrice > 0 ? parsedPrice : null
@@ -582,6 +586,7 @@ export default function TrangDonShip() {
           order={selectedOrder}
           statusInfo={computeWarrantyInfo(selectedOrder)}
           onConfirmDelivery={handleOpenConfirm}
+          onReturnOrder={handleOpenReturn}
           onClose={() => setSelectedOrder(null)}
         />
       )}
@@ -612,151 +617,29 @@ export default function TrangDonShip() {
 
       {/* Modal Hoàn hàng / Hủy giao */}
       {returningOrder && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content rounded-4 border-0 shadow">
-              <div className="modal-header bg-danger bg-opacity-10 border-0 p-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-danger bg-opacity-25 text-danger rounded-3">
-                    <RotateCcw size={20} />
-                  </div>
-                  <h5 className="modal-title fw-bold text-danger m-0">Xác Nhận Hoàn Hàng / Giao Thất Bại</h5>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setReturningOrder(null)}
-                  disabled={isSubmittingReturn}
-                ></button>
-              </div>
-
-              <form onSubmit={handleReturnSubmit}>
-                <div className="modal-body p-4">
-                  <div className="alert alert-warning py-2 px-3 small rounded-3 mb-3">
-                    Thao tác này sẽ hủy giao đơn hàng, chuyển trạng thái chu kỳ sang <strong>CUSTOMER_RETURN</strong> và tự động đưa máy trở lại kho hoạt động.
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">Máy & Serial</label>
-                    <div className="p-2.5 bg-light rounded-3 border">
-                      <div className="fw-bold text-dark">{returningOrder.sourceModelText || 'Không rõ dòng máy'}</div>
-                      <div className="font-monospace small text-primary fw-bold mt-0.5">Serial: {returningOrder.serialKey}</div>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-1">
-                      <label className="form-label small fw-bold text-secondary text-uppercase mb-0">
-                        Giá máy gốc trả về kho (VNĐ) <span className="text-danger">*</span>
-                      </label>
-                      <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 font-monospace" style={{ fontSize: '0.7rem' }}>
-                        Tự động tách giá gốc
-                      </span>
-                    </div>
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control rounded-start-3 font-monospace fw-bold text-primary"
-                        value={formatCurrency(returnSalePrice)}
-                        onChange={(e) => setReturnSalePrice(parseCurrency(e.target.value))}
-                        placeholder="Nhập giá máy gốc..."
-                        required
-                      />
-                      <span className="input-group-text bg-light rounded-end-3 text-secondary fw-semibold">đ</span>
-                    </div>
-                    <div className="form-text text-muted" style={{ fontSize: '0.72rem' }}>
-                      Giá bán niêm yết khi máy quay lại kho. Đã bóc tách riêng linh kiện nâng cấp, phụ kiện và chiết khấu của đơn cũ.
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
-                      Lý do hoàn hàng <span className="text-danger">*</span>
-                    </label>
-                    <textarea
-                      className="form-control rounded-3"
-                      rows="2"
-                      value={returnReason}
-                      onChange={(e) => setReturnReason(e.target.value)}
-                      placeholder="VD: Khách đổi ý, bom hàng, không liên lạc được..."
-                      required
-                    ></textarea>
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-bold text-secondary text-uppercase mb-1">
-                      Trạng thái nhập lại kho
-                    </label>
-                    <select
-                      className="form-select rounded-3"
-                      value={returnState}
-                      onChange={(e) => setReturnState(e.target.value)}
-                    >
-                      <option value="READY">Sẵn sàng bán lại ngay (READY)</option>
-                      <option value="NEEDS_INSPECTION">Cần kiểm tra / Test lại máy (NEEDS_INSPECTION)</option>
-                    </select>
-                  </div>
-
-                  <div className="p-3 bg-light rounded-3 border mb-2">
-                    <div className="form-check mb-2">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="restoreAccCheck"
-                        checked={restoreAccessories}
-                        onChange={(e) => setRestoreAccessories(e.target.checked)}
-                      />
-                      <label className="form-check-label small fw-semibold text-dark" htmlFor="restoreAccCheck">
-                        Hoàn kho các phụ kiện / quà tặng kèm theo đơn
-                      </label>
-                    </div>
-
-                    <div className="form-check mb-0">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="restorePartsCheck"
-                        checked={restoreUpgradeParts}
-                        onChange={(e) => setRestoreUpgradeParts(e.target.checked)}
-                      />
-                      <label className="form-check-label small fw-semibold text-dark" htmlFor="restorePartsCheck">
-                        Hoàn kho các linh kiện đã nâng cấp (RAM/SSD)
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modal-footer border-0 p-4 pt-0">
-                  <button
-                    type="button"
-                    className="btn btn-light rounded-pill px-4 fw-medium"
-                    onClick={() => setReturningOrder(null)}
-                    disabled={isSubmittingReturn}
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-danger rounded-pill px-4 fw-medium d-inline-flex align-items-center gap-2 shadow-sm"
-                    disabled={isSubmittingReturn}
-                  >
-                    {isSubmittingReturn ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm" role="status"></span>
-                        <span>Đang xử lý...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw size={16} />
-                        <span>Xác nhận hoàn kho</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <ModalHoanTraMay
+          order={returningOrder}
+          returnReason={returnReason}
+          setReturnReason={setReturnReason}
+          returnState={returnState}
+          setReturnState={setReturnState}
+          restoreCharger={restoreCharger}
+          setRestoreCharger={setRestoreCharger}
+          restoreAccessories={restoreAccessories}
+          setRestoreAccessories={setRestoreAccessories}
+          restoreUpgradeParts={restoreUpgradeParts}
+          setRestoreUpgradeParts={setRestoreUpgradeParts}
+          returnSalePrice={returnSalePrice}
+          setReturnSalePrice={setReturnSalePrice}
+          isSubmitting={isSubmittingReturn}
+          title="Xác Nhận Hoàn Hàng / Giao Thất Bại"
+          alertText="Thao tác này sẽ hủy giao đơn hàng, chuyển trạng thái chu kỳ sang CUSTOMER_RETURN và tự động đưa máy trở lại kho hoạt động."
+          reasonLabel="Lý do hoàn hàng"
+          reasonPlaceholder="VD: Khách đổi ý, bom hàng, không liên lạc được..."
+          idPrefix="returnShip"
+          onSubmit={handleReturnSubmit}
+          onClose={() => setReturningOrder(null)}
+        />
       )}
 
     </div>

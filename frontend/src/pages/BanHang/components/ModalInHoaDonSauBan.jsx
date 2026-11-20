@@ -131,6 +131,8 @@ function buildInvoiceData(order) {
     finalPrice: toAmount(order.finalPrice),
     upgrades,
     upgradeWarrantyText: parsedUpgrade.warrantyText,
+    chargerName: order.chargerName || '',
+    chargerSku: order.chargerSku || '',
     gifts,
     paid,
     warrantyPeriod,
@@ -163,6 +165,24 @@ function createPrintHTML(invoice) {
     : 'Mua và nhận máy trực tiếp tại quầy';
 
   let rowNumber = 1;
+
+  const chargerRowHTML = invoice.chargerName ? (() => {
+    rowNumber += 1;
+    return `
+      <tr>
+        <td class="center">${rowNumber}</td>
+        <td>
+          <strong class="green">Sạc kèm theo máy: ${e(invoice.chargerName)}</strong>
+          ${invoice.chargerSku ? `<div class="sub">SKU: ${e(invoice.chargerSku)}</div>` : ''}
+        </td>
+        <td>
+          Bảo hành đồng bộ theo máy${invoice.hasWarranty ? ` (${e(invoice.warrantyPeriod)})` : ''}
+        </td>
+        <td class="center">1</td>
+        <td class="right green">Kèm máy (0đ)</td>
+      </tr>
+    `;
+  })() : '';
 
   const upgradeRowsHTML = invoice.upgrades.map((u) => {
     rowNumber += 1;
@@ -428,6 +448,7 @@ function createPrintHTML(invoice) {
             <td class="center">1</td>
             <td class="right">${money(invoice.machineBasePrice)}</td>
           </tr>
+          ${chargerRowHTML}
           ${upgradeRowsHTML}
           ${paidRowsHTML}
           ${giftRowHTML}
@@ -899,6 +920,28 @@ export default function ModalInHoaDonSauBan({ order, onClose }) {
                   </div>
                   <span className="fw-bold text-dark text-nowrap flex-shrink-0">{money(invoice.machineBasePrice)}</span>
                 </div>
+
+                {/* Sạc kèm theo máy */}
+                {invoice.chargerName && (
+                  <div className="d-flex align-items-start justify-content-between gap-2 pt-2 border-top">
+                    <div className="d-flex align-items-start gap-2 min-w-0">
+                      <span
+                        className="badge bg-success-subtle text-success border border-success-subtle flex-shrink-0 mt-1"
+                        style={{ fontSize: '0.67rem' }}
+                      >
+                        Sạc kèm máy
+                      </span>
+                      <div className="min-w-0">
+                        <span className="fw-medium text-dark lh-sm d-block">{invoice.chargerName}</span>
+                        <span className="text-secondary d-block" style={{ fontSize: '0.73rem' }}>
+                          {invoice.chargerSku ? `SKU: ${invoice.chargerSku} • ` : ''}
+                          Bảo hành đồng bộ theo máy ({invoice.warrantyPeriod})
+                        </span>
+                      </div>
+                    </div>
+                    <span className="fw-semibold text-success text-nowrap flex-shrink-0">Kèm máy (0đ)</span>
+                  </div>
+                )}
 
                 {/* Nâng cấp linh kiện */}
                 {invoice.upgrades.map((item, idx) => (

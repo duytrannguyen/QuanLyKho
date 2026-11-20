@@ -88,6 +88,12 @@ public class ClosedCycle {
     @Column(name = "upgrade_note", columnDefinition = "TEXT")
     private String upgradeNote;
 
+    @Column(name = "charger_name", length = 255)
+    private String chargerName;
+
+    @Column(name = "charger_sku", length = 100)
+    private String chargerSku;
+
     @Column(name = "sale_note", columnDefinition = "TEXT")
     private String saleNote;
 
