@@ -5,6 +5,7 @@ import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.CycleState;
 import com.qkshop.tonkho.inventory.InventoryCycleService;
+import com.qkshop.tonkho.inventory.InventoryDurationHelper;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -85,7 +86,13 @@ public class SaleController {
         result.put("sourceModelText", ai.getSourceModelText());
         result.put("state", ai.getState().name());
         result.put("salePrice", ai.getSalePrice());
+        LocalDateTime now = LocalDateTime.now();
+        long storageDays = InventoryDurationHelper.calculateStorageDays(ai, now);
+        long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(ai, now);
         result.put("intakeAt", ai.getIntakeAt());
+        result.put("storageDays", storageDays);
+        result.put("pausedDays", pausedDays);
+        result.put("sellableDays", InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays));
         result.put("warrantyPeriod", ai.getWarrantyPeriod());
         result.put("warrantyExpiry", ai.getWarrantyExpiry());
 
@@ -1105,8 +1112,13 @@ public class SaleController {
         map.put("sourceReference", ai.getIntakeReference());
         map.put("closeReason", null);
         map.put("upgradeNote", null);
+        LocalDateTime now = LocalDateTime.now();
+        long storageDays = InventoryDurationHelper.calculateStorageDays(ai, now);
+        long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(ai, now);
         map.put("saleNote", ai.getNote());
-        map.put("pausedDays", ai.getPausedDays());
+        map.put("storageDays", storageDays);
+        map.put("pausedDays", pausedDays);
+        map.put("sellableDays", InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays));
         map.put("salesperson", "Kho");
         map.put("isVoided", false);
         map.put("isInStock", true);
@@ -1262,8 +1274,12 @@ public class SaleController {
         map.put("upgradeNote", cc.getUpgradeNote());
         map.put("chargerName", hasText(cc.getChargerName()) ? cc.getChargerName() : (linkedSo != null ? linkedSo.getChargerName() : null));
         map.put("chargerSku", hasText(cc.getChargerSku()) ? cc.getChargerSku() : (linkedSo != null ? linkedSo.getChargerSku() : null));
+        long storageDays = InventoryDurationHelper.calculateStorageDays(cc);
+        long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(cc);
         map.put("saleNote", hasText(cc.getSaleNote()) ? cc.getSaleNote() : (linkedSo != null ? linkedSo.getNote() : null));
-        map.put("pausedDays", cc.getPausedDays());
+        map.put("storageDays", storageDays);
+        map.put("pausedDays", pausedDays);
+        map.put("sellableDays", InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays));
 
         String salesperson = (linkedSo != null && hasText(linkedSo.getSalesperson())) ? linkedSo.getSalesperson() : null;
         if (!hasText(salesperson) && cc.getCloseEventId() != null) {

@@ -273,10 +273,10 @@ export default function TrangKiemDinh() {
                   <tr>
                     <th style={{ width: '6%' }} className="text-center py-3">STT</th>
                     <th style={{ width: '16%' }} className="py-3">Serial</th>
-                    <th style={{ width: '24%' }} className="py-3">Tên máy</th>
-                    <th style={{ width: '22%' }} className="py-3">Cấu hình</th>
+                    <th style={{ width: '23%' }} className="py-3">Tên máy</th>
+                    <th style={{ width: '21%' }} className="py-3">Cấu hình</th>
                     <th style={{ width: '16%' }} className="py-3">Loại yêu cầu</th>
-                    <th style={{ width: '16%' }} className="py-3">Thời gian (Tồn/Chờ)</th>
+                    <th style={{ width: '18%' }} className="py-3">Lưu kho / Chờ</th>
                   </tr>
                 </thead>
                 <tbody className="border-top-0">
@@ -329,13 +329,19 @@ export default function TrangKiemDinh() {
                           <td className="text-nowrap">
                             <div className="d-flex flex-column gap-1 small">
                               <div className="d-flex align-items-center justify-content-between bg-light rounded px-2 py-0.5">
-                                <span className="text-secondary">Tồn:</span>
-                                <span className="fw-medium text-dark ms-1">{item.inventoryDays}</span>
+                                <span className="text-secondary">Lưu kho:</span>
+                                <span className="fw-semibold text-dark ms-1">{item.inventoryDays}</span>
                               </div>
                               <div className="d-flex align-items-center justify-content-between bg-danger-subtle bg-opacity-50 rounded px-2 py-0.5">
-                                <span className="text-secondary">Chờ:</span>
+                                <span className="text-secondary">Chờ QC:</span>
                                 <span className="text-danger fw-bold ms-1">{item.waitDays}</span>
                               </div>
+                              {item.sellableDays && (
+                                <div className="d-flex align-items-center justify-content-between bg-info-subtle bg-opacity-25 rounded px-2 py-0.5">
+                                  <span className="text-secondary">Tuổi bán:</span>
+                                  <span className="text-info-emphasis fw-medium ms-1">{item.sellableDays}</span>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -426,17 +432,27 @@ export default function TrangKiemDinh() {
                   </div>
                 </div>
 
-                {/* Lưới 3 chỉ số nhanh: Ngày tồn, Thời gian chờ, Dữ liệu bắt buộc */}
+                {/* Lưới 4 chỉ số nhanh: Tổng lưu kho, Tuổi tồn bán hàng, Thời gian chờ xử lý, Dữ liệu bắt buộc */}
                 <div className="row g-2 mb-3 text-center">
-                  <div className="col-4">
+                  <div className="col-6">
                     <div className="border rounded-3 p-2 h-100 bg-white">
                       <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
-                        Ngày tồn kho
+                        Tổng lưu kho
                       </div>
                       <div className="fw-bold text-dark small">{activeItem.inventoryDays}</div>
                     </div>
                   </div>
-                  <div className="col-4">
+                  <div className="col-6">
+                    <div className="border border-info-subtle rounded-3 p-2 h-100 bg-info-subtle bg-opacity-10">
+                      <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
+                        Tuổi tồn bán hàng
+                      </div>
+                      <div className="fw-bold text-info-emphasis small">
+                        {activeItem.sellableDays || activeItem.inventoryDays}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-6">
                     <div className="border border-danger-subtle rounded-3 p-2 h-100 bg-danger-subtle bg-opacity-10">
                       <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
                         Thời gian chờ xử lý
@@ -444,7 +460,7 @@ export default function TrangKiemDinh() {
                       <div className="fw-bold text-danger small">{activeItem.waitDays}</div>
                     </div>
                   </div>
-                  <div className="col-4">
+                  <div className="col-6">
                     <div className="border rounded-3 p-2 h-100 bg-white">
                       <div className="text-secondary small mb-1" style={{ fontSize: '0.75rem' }}>
                         Dữ liệu bắt buộc

@@ -291,12 +291,12 @@ Một chiếc máy tính khi nhập về kho sẽ trải qua các chặng trạn
    - Nhập tiến độ: Đánh giá ngoại hình, bàn phím, màn hình, loa, mic, camera, pin, cổng kết nối, nhiệt độ. Bấm **"Lưu tiến độ"** để lưu tạm.
    - Bấm **"Xác nhận Đạt"** $\rightarrow$ Hệ thống gọi `StateTransitionService.transitionToReady`: Máy chuyển sang `READY`, `readyAt = now()`, cập nhật `serial_registry.currentState = READY`.
    - Bấm **"Hủy / Trả máy lỗi"** $\rightarrow$ Đóng vòng đời với loại `SUPPLIER_RETURN` hoặc `CANCEL`.
-3. **Cơ chế tính tuổi tồn kho chính xác (`pausedDays`):**
-   - Khi máy nằm ở trạng thái `NEEDS_INSPECTION`, thời gian này máy chưa thể bán được.
-   - Hệ thống tự động đo đạc khoảng thời gian từ lúc nhập/tạm dừng đến khi được duyệt đạt và cộng vào trường `pausedDays`.
-   - Khi hệ thống tính toán **Tuổi thọ tồn kho (Inventory Age)** trên Dashboard, công thức tính là:
-     $$\mathbf{Tu\hat{o}i\ t\grave{o}n\ kho\ th\uhorn c\ t\acute{e}} = (\mathbf{Th\grave{o}i\ \dj i\hat{e}m\ hi\hat{e}n\ t\d{a}i} - \mathbf{Ng\grave{a}y\ nh\text{ậ}p\ intakeAt}) - \mathbf{pausedDays}$$
-     Giúp quản lý đánh giá đúng tốc độ bán của đội ngũ Sales, không tính oan thời gian máy nằm chờ linh kiện hoặc chờ test.
+3. **Cơ chế tách bạch Tổng lưu kho và Tuổi tồn kho bán hàng (`pausedDays`):**
+   - **Tổng thời gian lưu kho (`storageDays`):** Tính xuyên suốt từ ngày nhập kho (`intakeAt`) đến hiện tại (hoặc `closedAt` khi đã xuất), phản ánh chính xác tổng số ngày máy nằm vật lý trong kho (kể cả khi đang ở trạng thái `NEEDS_INSPECTION`).
+   - **Thời gian tạm dừng / chờ kiểm định (`pausedDays`):** Khi máy nằm ở trạng thái `NEEDS_INSPECTION` (chờ test, sửa chữa hoặc chờ linh kiện), hệ thống tự động cộng dồn khoảng thời gian này vào `pausedDays` khi duyệt đạt hoặc đóng vòng đời.
+   - **Tuổi tồn kho bán hàng (`sellableDays` / Inventory Age):** Dùng trên Dashboard và theo dõi hiệu suất bán hàng:
+     $$\mathbf{Tu\hat{o}i\ t\grave{o}n\ kho\ b\acute{a}n\ h\grave{a}ng} = \mathbf{T\hat{o}ng\ ng\grave{a}y\ l\uhorn u\ kho} - \mathbf{pausedDays}$$
+     Giúp quản lý vừa thấy đúng số ngày máy lưu trong kho, vừa đánh giá công bằng tốc độ bán của đội ngũ Sales mà không tính oan thời gian máy nằm chờ sửa chữa/kiểm tra.
 
 ---
 

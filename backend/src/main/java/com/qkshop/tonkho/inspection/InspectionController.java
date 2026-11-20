@@ -4,6 +4,9 @@ import com.qkshop.tonkho.inspection.dto.UpdateInspectionProgressRequest;
 import com.qkshop.tonkho.core.dto.ApiResponse;
 import com.qkshop.tonkho.inspection.dto.InspectionDTO;
 import com.qkshop.tonkho.inventory.ActiveInventory;
+import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.inventory.ClosedCycleRepository;
+import com.qkshop.tonkho.inventory.InventoryDurationHelper;
 import com.qkshop.tonkho.inspection.dto.InspectionRequest;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
 import com.qkshop.tonkho.inspection.InspectionService;
@@ -16,8 +19,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -27,6 +32,7 @@ public class InspectionController {
 
     private final InspectionService inspectionService;
     private final ActiveInventoryRepository activeInventoryRepo;
+    private final ClosedCycleRepository closedCycleRepo;
 
     /** Lấy danh sách phiếu kiểm tra, lọc theo status */
     @GetMapping
@@ -34,9 +40,9 @@ public class InspectionController {
     public ResponseEntity<ApiResponse<List<InspectionDTO>>> getInspections(
             @RequestParam(required = false) String status) {
         List<InspectionRequest> requests = inspectionService.getActiveRequests(status);
-        java.util.Map<String, ActiveInventory> inventoryMap = preloadInventories(requests);
+        CycleLookupContext ctx = preloadCycles(requests);
         List<InspectionDTO> result = requests.stream()
-                .map(req -> toDTO(req, inventoryMap.get(req.getCycleId())))
+                .map(req -> toDTO(req, ctx.activeMap().get(req.getCycleId()), ctx.closedMap().get(req.getCycleId())))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
@@ -49,8 +55,9 @@ public class InspectionController {
             @RequestParam(defaultValue = "20") int size) {
         Page<InspectionRequest> paged = inspectionService.getAllRequests(
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-        java.util.Map<String, ActiveInventory> inventoryMap = preloadInventories(paged.getContent());
-        Page<InspectionDTO> dtoPaged = paged.map(req -> toDTO(req, inventoryMap.get(req.getCycleId())));
+        CycleLookupContext ctx = preloadCycles(paged.getContent());
+        Page<InspectionDTO> dtoPaged = paged.map(
+                req -> toDTO(req, ctx.activeMap().get(req.getCycleId()), ctx.closedMap().get(req.getCycleId())));
         return ResponseEntity.ok(ApiResponse.ok(dtoPaged));
     }
 
@@ -110,42 +117,81 @@ public class InspectionController {
 
     // ==================== MAPPER ====================
 
-    private java.util.Map<String, ActiveInventory> preloadInventories(List<InspectionRequest> requests) {
+    private record CycleLookupContext(Map<String, ActiveInventory> activeMap, Map<String, ClosedCycle> closedMap) {}
+
+    private CycleLookupContext preloadCycles(List<InspectionRequest> requests) {
         if (requests == null || requests.isEmpty()) {
-            return java.util.Collections.emptyMap();
+            return new CycleLookupContext(Collections.emptyMap(), Collections.emptyMap());
         }
-        java.util.Set<String> cycleIds = requests.stream()
+        Set<String> cycleIds = requests.stream()
                 .map(InspectionRequest::getCycleId)
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
         if (cycleIds.isEmpty()) {
-            return java.util.Collections.emptyMap();
+            return new CycleLookupContext(Collections.emptyMap(), Collections.emptyMap());
         }
-        return activeInventoryRepo.findByCycleIdIn(cycleIds).stream()
+        Map<String, ActiveInventory> activeMap = activeInventoryRepo.findByCycleIdIn(cycleIds).stream()
                 .collect(Collectors.toMap(ActiveInventory::getCycleId, ai -> ai, (a, b) -> a));
+
+        Set<String> missingIds = cycleIds.stream()
+                .filter(id -> !activeMap.containsKey(id))
+                .collect(Collectors.toSet());
+        Map<String, ClosedCycle> closedMap = missingIds.isEmpty()
+                ? Collections.emptyMap()
+                : closedCycleRepo.findByCycleIdIn(missingIds).stream()
+                        .collect(Collectors.toMap(ClosedCycle::getCycleId, cc -> cc, (a, b) -> a));
+        return new CycleLookupContext(activeMap, closedMap);
     }
 
-    private InspectionDTO toDTO(InspectionRequest req, ActiveInventory inventory) {
-        
-        String machineName = inventory != null && inventory.getSourceModelText() != null ? inventory.getSourceModelText() : "-";
+    private InspectionDTO toDTO(InspectionRequest req, ActiveInventory inventory, ClosedCycle closedCycle) {
+        String machineName = "-";
         String config = "-";
-        if (inventory != null && inventory.getConfig() != null) {
-            config = inventory.getConfig().getDisplayName() != null ? inventory.getConfig().getDisplayName() : inventory.getConfig().getConfigKey();
-        }
-        
-        long waitDays = 0;
-        if (req.getCreatedAt() != null) {
-            waitDays = ChronoUnit.DAYS.between(req.getCreatedAt(), LocalDateTime.now());
+        LocalDateTime intakeAt = null;
+
+        if (inventory != null) {
+            if (inventory.getSourceModelText() != null && !inventory.getSourceModelText().isBlank()) {
+                machineName = inventory.getSourceModelText();
+            }
+            if (inventory.getConfig() != null) {
+                config = inventory.getConfig().getDisplayName() != null
+                        ? inventory.getConfig().getDisplayName()
+                        : inventory.getConfig().getConfigKey();
+            }
+            intakeAt = inventory.getIntakeAt();
+        } else if (closedCycle != null) {
+            if (closedCycle.getSourceModelText() != null && !closedCycle.getSourceModelText().isBlank()) {
+                machineName = closedCycle.getSourceModelText();
+            } else if (closedCycle.getProductFullName() != null && !closedCycle.getProductFullName().isBlank()) {
+                machineName = closedCycle.getProductFullName();
+            }
+            if (closedCycle.getConfig() != null) {
+                config = closedCycle.getConfig().getDisplayName() != null
+                        ? closedCycle.getConfig().getDisplayName()
+                        : closedCycle.getConfig().getConfigKey();
+            } else if (closedCycle.getProductSummary() != null && !closedCycle.getProductSummary().isBlank()) {
+                config = closedCycle.getProductSummary();
+            }
+            intakeAt = closedCycle.getIntakeAt();
         }
 
-        long inventoryDays = 0;
-        if (inventory != null && inventory.getIntakeAt() != null) {
-            inventoryDays = ChronoUnit.DAYS.between(inventory.getIntakeAt(), LocalDateTime.now());
-            long paused = inventory.getPausedDays() != null ? inventory.getPausedDays() : 0;
-            if (inventory.getLastPausedAt() != null) {
-                paused += ChronoUnit.DAYS.between(inventory.getLastPausedAt(), LocalDateTime.now());
-            }
-            inventoryDays = Math.max(0, inventoryDays - paused);
+        LocalDateTime now = LocalDateTime.now();
+        boolean isCompletedTicket = req.getCompletedAt() != null
+                && (req.getStatus() == InspectionRequestStatus.PASSED
+                    || req.getStatus() == InspectionRequestStatus.REJECTED_RETURNED);
+        LocalDateTime waitEnd = isCompletedTicket ? req.getCompletedAt() : now;
+        long waitDays = InventoryDurationHelper.calculateDaysBetween(req.getCreatedAt(), waitEnd);
+
+        long storageDays = 0;
+        long pausedDays = 0;
+        long sellableDays = 0;
+        if (inventory != null) {
+            storageDays = InventoryDurationHelper.calculateStorageDays(inventory, now);
+            pausedDays = InventoryDurationHelper.calculateTotalPausedDays(inventory, now, req.getCreatedAt());
+            sellableDays = InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays);
+        } else if (closedCycle != null) {
+            storageDays = InventoryDurationHelper.calculateStorageDays(closedCycle);
+            pausedDays = InventoryDurationHelper.calculateTotalPausedDays(closedCycle);
+            sellableDays = InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays);
         }
 
         return InspectionDTO.builder()
@@ -155,13 +201,17 @@ public class InspectionController {
                 .config(config)
                 .type(req.getRequestType() != null ? req.getRequestType().getDisplayName() : "-")
                 .waitDays(waitDays + " ngày")
-                .inventoryDays(inventoryDays + " ngày")
+                .inventoryDays(storageDays + " ngày")
+                .sellableDays(sellableDays + " ngày")
+                .pausedDays(pausedDays + " ngày")
                 .dataStatus(Boolean.TRUE.equals(req.getRequiredDataComplete()) ? "Đã đủ" : "Chưa đủ")
                 .progressNotes(req.getProgressNotes())
                 .status(req.getStatus().name())
                 .reason(req.getReason())
                 .note(req.getNote())
+                .intakeAt(intakeAt)
                 .createdAt(req.getCreatedAt())
+                .completedAt(req.getCompletedAt())
                 .build();
     }
 }

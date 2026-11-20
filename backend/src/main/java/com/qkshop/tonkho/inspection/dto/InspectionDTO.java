@@ -14,10 +14,14 @@ public class InspectionDTO {
     private String type;
     private String waitDays;
     private String inventoryDays;
+    private String sellableDays;
+    private String pausedDays;
     private String dataStatus;
     private String progressNotes;
     private String status;
     private String reason;
     private String note;
+    private LocalDateTime intakeAt;    // Ngày nhập kho
     private LocalDateTime createdAt;   // Ngày tạo yêu cầu kiểm tra
+    private LocalDateTime completedAt; // Ngày hoàn tất kiểm tra
 }

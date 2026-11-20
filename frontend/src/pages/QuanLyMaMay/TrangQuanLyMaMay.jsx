@@ -109,13 +109,36 @@ export default function TrangQuanLyMaMay() {
   // Reset trạng thái khi đổi Tab
   useEffect(() => { setStatus('Tất cả'); }, [tab]);
 
-  // Render thời gian lưu kho
+  // Render thời gian lưu kho thực tế và tuổi tồn bán hàng (nếu có ngày chờ kiểm tra/sửa chữa)
   const getStorageTime = (record) => {
     if (record.storageDays !== undefined && record.storageDays !== null) {
-      if (record.closedAt) {
-        return <span className="text-secondary small">Lưu kho: <strong>{record.storageDays}</strong> ngày</span>;
-      }
-      return <span className="text-warning-emphasis small fw-medium">Đang tồn: {record.storageDays} ngày</span>;
+      const paused = Number(record.pausedDays) || 0;
+      const sellable = record.sellableDays !== undefined && record.sellableDays !== null
+        ? record.sellableDays
+        : Math.max(0, record.storageDays - paused);
+      const showSellableBreakdown = paused > 0 || record.state === 'NEEDS_INSPECTION';
+      const intakeTitle = record.intakeAt
+        ? `Ngày nhập: ${new Date(record.intakeAt).toLocaleDateString('vi-VN')}`
+        : undefined;
+
+      return (
+        <div className="d-flex flex-column gap-0" title={intakeTitle}>
+          {record.closedAt ? (
+            <span className="text-secondary small">
+              Lưu kho: <strong>{record.storageDays}</strong> ngày
+            </span>
+          ) : (
+            <span className="text-warning-emphasis small fw-medium">
+              Đang tồn: <strong>{record.storageDays}</strong> ngày
+            </span>
+          )}
+          {showSellableBreakdown && (
+            <span className="text-muted" style={{ fontSize: '11px' }}>
+              Tuổi bán: <strong>{sellable}</strong> ngày{paused > 0 ? ` (Chờ KT: ${paused}n)` : ''}
+            </span>
+          )}
+        </div>
+      );
     }
     return '—';
   };
@@ -175,7 +198,7 @@ export default function TrangQuanLyMaMay() {
               showToast('Không có dữ liệu mã máy để xuất', 'warning');
               return;
             }
-            const headers = ['STT', 'Serial', 'Tên máy / Model', 'Cấu hình', 'Giá bán', 'Loại nhập', 'Trạng thái', 'Số ngày lưu kho'];
+            const headers = ['STT', 'Serial', 'Tên máy / Model', 'Cấu hình', 'Giá bán', 'Loại nhập', 'Trạng thái', 'Số ngày lưu kho', 'Ngày chờ KT/sửa', 'Tuổi tồn bán hàng'];
             const rows = results.map((r, i) => [
               i + 1,
               r.serialKey || '',
@@ -184,7 +207,9 @@ export default function TrangQuanLyMaMay() {
               r.salePriceSnapshot || r.grossRevenue || '',
               r.intakeType ? formatIntakeType(r.intakeType) : '',
               r.closeType ? formatCloseType(r.closeType) : (r.state ? formatCycleState(r.state) : ''),
-              r.storageDays ?? ''
+              r.storageDays ?? '',
+              r.pausedDays ?? 0,
+              r.sellableDays ?? r.storageDays ?? ''
             ]);
             const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -284,12 +309,12 @@ export default function TrangQuanLyMaMay() {
                 <tr>
                   <th className="text-center py-3" style={{ width: '4%' }}>STT</th>
                   <th className="py-3" style={{ width: '11%' }}>Serial</th>
-                  <th className="py-3" style={{ width: tab === 'CLOSED' ? '15%' : '20%' }}>Tên máy / Model</th>
-                  <th className="py-3" style={{ width: tab === 'CLOSED' ? '15%' : '22%' }}>Cấu hình máy</th>
+                  <th className="py-3" style={{ width: tab === 'CLOSED' ? '14%' : '19%' }}>Tên máy / Model</th>
+                  <th className="py-3" style={{ width: tab === 'CLOSED' ? '14%' : '20%' }}>Cấu hình máy</th>
                   <th className="py-3" style={{ width: '10%' }}>Giá bán</th>
                   <th className="py-3" style={{ width: '9%' }}>Loại nhập</th>
                   <th className="py-3" style={{ width: '10%' }}>Trạng thái</th>
-                  <th className="py-3" style={{ width: '8%' }}>Lưu kho</th>
+                  <th className="py-3" style={{ width: '11%' }}>Lưu kho</th>
                   {tab === 'CLOSED' && <th className="py-3" style={{ width: '14%' }}>Lý do / Tham chiếu</th>}
                   {tab === 'CLOSED' && <th className="py-3" style={{ width: '8%' }}>Ngày đóng</th>}
                   {tab === 'CLOSED' && <th className="text-center py-3" style={{ width: '10%' }}>Thao tác</th>}

@@ -3,6 +3,7 @@ package com.qkshop.tonkho.analytics;
 import com.qkshop.tonkho.core.enums.CloseType;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.inventory.InventoryDurationHelper;
 import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
 import com.qkshop.tonkho.log.EventLogRepository;
@@ -10,7 +11,6 @@ import com.qkshop.tonkho.catalog.BrandRepository;
 import com.qkshop.tonkho.catalog.PlatformRepository;
 import com.qkshop.tonkho.analytics.dto.AnalyticsFilterRequest;
 import com.qkshop.tonkho.analytics.dto.BrandValueProjection;
-import com.qkshop.tonkho.analytics.dto.AgeGroupProjection;
 import com.qkshop.tonkho.core.enums.SegmentCode;
 import com.qkshop.tonkho.accessory.Accessory;
 import com.qkshop.tonkho.accessory.AccessoryHistory;
@@ -435,9 +435,20 @@ public class AnalyticsService {
         ageMap.put("Trên 90 ngày", 0L);
 
         if (isLaptop(filter)) {
-            List<AgeGroupProjection> rawAges = activeInventoryRepo.getInventoryAgeGrouped(filter.getBrandId(), segment, filter.getModelLineId());
-            for (AgeGroupProjection proj : rawAges) {
-                ageMap.put(proj.getAgeGroup(), ageMap.getOrDefault(proj.getAgeGroup(), 0L) + proj.getCount());
+            LocalDateTime now = LocalDateTime.now();
+            List<ActiveInventory> activeLaptops = activeInventoryRepo.findFilteredAll(
+                    filter.getBrandId(), segment, filter.getModelLineId());
+            for (ActiveInventory ai : activeLaptops) {
+                long sellableDays = InventoryDurationHelper.calculateSellableDays(ai, now);
+                if (sellableDays <= 30) {
+                    ageMap.put("Dưới 30 ngày", ageMap.get("Dưới 30 ngày") + 1);
+                } else if (sellableDays <= 60) {
+                    ageMap.put("30 - 60 ngày", ageMap.get("30 - 60 ngày") + 1);
+                } else if (sellableDays <= 90) {
+                    ageMap.put("60 - 90 ngày", ageMap.get("60 - 90 ngày") + 1);
+                } else {
+                    ageMap.put("Trên 90 ngày", ageMap.get("Trên 90 ngày") + 1);
+                }
             }
         }
 
@@ -674,10 +685,10 @@ public class AnalyticsService {
 
         if (isLaptop(filter)) {
             List<ActiveInventory> all = activeInventoryRepo.findAllWithHierarchy();
-            LocalDate limitDate = LocalDate.now().minusDays(90);
+            LocalDateTime now = LocalDateTime.now();
 
             Map<String, List<ActiveInventory>> grouped = all.stream()
-                .filter(a -> a.getIntakeAt() != null && a.getIntakeAt().toLocalDate().isBefore(limitDate))
+                .filter(a -> a.getIntakeAt() != null && InventoryDurationHelper.calculateSellableDays(a, now) > 90)
                 .collect(Collectors.groupingBy(a -> {
                     if (a.getConfig() != null && a.getConfig().getVariant() != null) {
                         return a.getConfig().getVariant().getVariantName();

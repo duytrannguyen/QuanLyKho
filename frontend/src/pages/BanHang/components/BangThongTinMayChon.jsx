@@ -4,9 +4,16 @@ import { formatDate } from '../../../utils/dinh_dang';
 
 export default function BangThongTinMayChon({ machine }) {
   const isReady = machine?.state === 'READY';
-  const waitDays = machine?.intakeAt
-    ? Math.floor((new Date() - new Date(machine.intakeAt)) / (1000 * 60 * 60 * 24))
+  const fallbackStorageDays = machine?.intakeAt
+    ? Math.max(0, Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(machine.intakeAt).setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24)))
     : 0;
+  const storageDays = machine?.storageDays !== undefined && machine?.storageDays !== null
+    ? Number(machine.storageDays)
+    : fallbackStorageDays;
+  const pausedDays = Number(machine?.pausedDays) || 0;
+  const sellableDays = machine?.sellableDays !== undefined && machine?.sellableDays !== null
+    ? Number(machine.sellableDays)
+    : Math.max(0, storageDays - pausedDays);
 
   return (
     <div className="card shadow-sm border-0 rounded-3 mb-2.5 overflow-hidden">
@@ -72,8 +79,14 @@ export default function BangThongTinMayChon({ machine }) {
         </div>
         <div className="d-flex justify-content-between align-items-center py-1 border-top" style={{ fontSize: '0.75rem' }}>
           <span className="text-muted">Lưu kho:</span>
-          <span className="fw-medium text-dark">{waitDays} ngày ({formatDate(machine.intakeAt)})</span>
+          <span className="fw-medium text-dark">{storageDays} ngày ({formatDate(machine.intakeAt)})</span>
         </div>
+        {pausedDays > 0 && (
+          <div className="d-flex justify-content-between align-items-center py-1 border-top" style={{ fontSize: '0.75rem' }}>
+            <span className="text-muted">Tuổi tồn bán hàng:</span>
+            <span className="fw-medium text-info-emphasis">{sellableDays} ngày (trừ {pausedDays} ngày chờ KT/sửa)</span>
+          </div>
+        )}
       </div>
     </div>
   );

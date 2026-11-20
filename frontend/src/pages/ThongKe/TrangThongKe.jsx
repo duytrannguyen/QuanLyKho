@@ -395,7 +395,11 @@ export default function TrangThongKe() {
               <div className="card border-0 rounded-4 shadow-sm h-100 bg-white">
                 <div className="card-body p-3">
                   <h6 className="fw-bold mb-1 text-dark">Tuổi tồn kho theo nhóm thời gian</h6>
-                  <p className="text-muted small mb-3" style={{ fontSize: '11px' }}>Phân loại dựa trên ngày khởi tạo SP. Có thể khác Tổng Nhập (IN) nếu hàng có sẵn từ đầu kỳ.</p>
+                  <p className="text-muted small mb-3" style={{ fontSize: '11px' }}>
+                    {activeTab === 'LAPTOP'
+                      ? 'Phân loại theo tuổi tồn kho bán hàng (đã trừ thời gian chờ kiểm định/sửa chữa).'
+                      : 'Phân loại dựa trên ngày khởi tạo SP. Có thể khác Tổng Nhập (IN) nếu hàng có sẵn từ đầu kỳ.'}
+                  </p>
                   <div style={{ height: '220px', width: '100%' }}>
                     {ageData && ageData.length > 0 && ageData.some(d => d.count > 0) ? (
                       <ResponsiveContainer width="100%" height="100%">

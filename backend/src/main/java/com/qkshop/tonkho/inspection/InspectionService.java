@@ -35,6 +35,14 @@ public class InspectionService {
      */
     @Transactional
     public InspectionRequest createInspectionRequest(String cycleId, InspectionRequestType type) {
+        return createInspectionRequest(cycleId, type, null);
+    }
+
+    /**
+     * Tạo yêu cầu kiểm tra với mốc thời gian tạo tùy chọn (dùng khi nhập kho có ngày nhập lùi).
+     */
+    @Transactional
+    public InspectionRequest createInspectionRequest(String cycleId, InspectionRequestType type, LocalDateTime createdAt) {
         ActiveInventory inventory = activeInventoryRepo.findByCycleId(cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Cycle ID: " + cycleId));
         
@@ -54,6 +62,7 @@ public class InspectionService {
                 .serialKey(inventory.getSerialKey())
                 .requestType(type)
                 .status(InspectionRequestStatus.OPEN)
+                .createdAt(createdAt != null ? createdAt : LocalDateTime.now())
                 .build();
                 
         return inspectionRepo.save(request);

@@ -174,10 +174,14 @@ public class IntakeService {
             registry.setCurrentState(initialState);
             registry = serialRegistryRepo.save(registry);
 
-            LocalDateTime intakeAt = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime intakeAt = now;
             if (payload.getImportDate() != null && !payload.getImportDate().trim().isEmpty()) {
                 try {
-                    intakeAt = java.time.LocalDate.parse(payload.getImportDate().trim()).atStartOfDay();
+                    java.time.LocalDate parsedDate = java.time.LocalDate.parse(payload.getImportDate().trim());
+                    if (!parsedDate.equals(now.toLocalDate())) {
+                        intakeAt = parsedDate.atStartOfDay();
+                    }
                 } catch (Exception e) {
                     log.warn("Invalid importDate format: {}", payload.getImportDate());
                 }
@@ -205,7 +209,7 @@ public class IntakeService {
                     .intakeAt(intakeAt)
                     .state(initialState)
                     .readyAt(readyAt)
-                    .lastPausedAt(initialState == CycleState.NEEDS_INSPECTION ? LocalDateTime.now() : null)
+                    .lastPausedAt(initialState == CycleState.NEEDS_INSPECTION ? intakeAt : null)
                     .salePrice(initialSalePrice)
                     .note(payload.getNotes())
                     .warrantyPeriod(wp)
@@ -219,7 +223,7 @@ public class IntakeService {
                 if (intakeType == IntakeType.CUSTOMER_RETURN || intakeType == IntakeType.CUSTOMER_BUYBACK) {
                     reqType = InspectionRequestType.CUSTOMER_RETURN;
                 }
-                inspectionService.createInspectionRequest(cycleId, reqType);
+                inspectionService.createInspectionRequest(cycleId, reqType, intakeAt);
             }
 
             // 6. Ghi Event Log

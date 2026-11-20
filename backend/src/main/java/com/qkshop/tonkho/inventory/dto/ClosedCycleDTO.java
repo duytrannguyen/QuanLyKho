@@ -61,5 +61,9 @@ public class ClosedCycleDTO {
     private String segment;
 
     // Computed
-    private long storageDays;         // Số ngày lưu kho = closedAt - intakeAt
+    private long storageDays;         // Tổng số ngày lưu kho thực tế = (now/closedAt) - intakeAt
+    private long pausedDays;          // Số ngày tạm dừng (chờ kiểm định / sửa chữa)
+    private long sellableDays;        // Tuổi tồn kho bán hàng = storageDays - pausedDays
+    private LocalDateTime readyAt;
+    private LocalDateTime lastPausedAt;
 }

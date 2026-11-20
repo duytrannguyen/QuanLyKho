@@ -8,6 +8,7 @@ import com.qkshop.tonkho.inventory.ActiveInventoryRepository;
 import com.qkshop.tonkho.inventory.CycleState;
 import com.qkshop.tonkho.inventory.ClosedCycle;
 import com.qkshop.tonkho.inventory.ClosedCycleRepository;
+import com.qkshop.tonkho.inventory.InventoryDurationHelper;
 import com.qkshop.tonkho.inventory.dto.ClosedCycleDTO;
 import com.qkshop.tonkho.inspection.InspectionRequestRepository;
 import com.qkshop.tonkho.inspection.InspectionRequestStatus;
@@ -34,7 +35,6 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -171,6 +171,22 @@ public class MachineService {
                 : serialRegistryRepository.findBySerialKeyIn(new ArrayList<>(allSerialKeys)).stream()
                         .collect(Collectors.toMap(SerialRegistry::getSerialKey, sr -> sr, (a, b) -> a));
 
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, LocalDateTime> openInspectionCreatedMap = Collections.emptyMap();
+        boolean needsPauseFallback = actives.stream()
+                .anyMatch(ai -> ai.getState() == CycleState.NEEDS_INSPECTION && ai.getLastPausedAt() == null);
+        if (needsPauseFallback && inspectionRequestRepository != null) {
+            openInspectionCreatedMap = inspectionRequestRepository.findByStatusIn(List.of(
+                    InspectionRequestStatus.OPEN,
+                    InspectionRequestStatus.IN_PROGRESS,
+                    InspectionRequestStatus.RECHECK_REQUESTED)).stream()
+                    .filter(r -> r.getCycleId() != null && r.getCreatedAt() != null)
+                    .collect(Collectors.toMap(
+                            InspectionRequest::getCycleId,
+                            InspectionRequest::getCreatedAt,
+                            (a, b) -> a.isBefore(b) ? a : b));
+        }
+
         // 1. Máy đang trong kho (Active)
         for (ActiveInventory ai : actives) {
             SerialRegistry sr = srMap.get(ai.getSerialKey());
@@ -193,15 +209,10 @@ public class MachineService {
 
             String configName = ai.getConfig() != null ? ai.getConfig().getDisplayName() : null;
 
-            long days = 0;
-            if (ai.getIntakeAt() != null) {
-                days = ChronoUnit.DAYS.between(ai.getIntakeAt(), LocalDateTime.now());
-                long paused = ai.getPausedDays() != null ? ai.getPausedDays() : 0;
-                if (ai.getLastPausedAt() != null) {
-                    paused += ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
-                }
-                days = Math.max(0, days - paused);
-            }
+            long storageDays = InventoryDurationHelper.calculateStorageDays(ai, now);
+            LocalDateTime fallbackPause = openInspectionCreatedMap.get(ai.getCycleId());
+            long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(ai, now, fallbackPause);
+            long sellableDays = InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays);
 
             combined.add(ClosedCycleDTO.builder()
                     .cycleId(ai.getCycleId())
@@ -212,6 +223,8 @@ public class MachineService {
                     .intakeType(ai.getIntakeType() != null ? ai.getIntakeType().name() : null)
                     .state(ai.getState() != null ? ai.getState().name() : null)
                     .intakeAt(ai.getIntakeAt())
+                    .readyAt(ai.getReadyAt())
+                    .lastPausedAt(ai.getLastPausedAt())
                     .salePriceSnapshot(ai.getSalePrice())
                     .note(ai.getNote())
                     .warrantyPeriod(ai.getWarrantyPeriod())
@@ -219,7 +232,9 @@ public class MachineService {
                     .brandId(brandId)
                     .brandName(brandName)
                     .segment(segName)
-                    .storageDays(days)
+                    .storageDays(storageDays)
+                    .pausedDays(pausedDays)
+                    .sellableDays(sellableDays)
                     .build());
         }
 
@@ -245,13 +260,9 @@ public class MachineService {
 
             String configName = cc.getConfig() != null ? cc.getConfig().getDisplayName() : null;
 
-            long days = 0;
-            if (cc.getIntakeAt() != null && cc.getClosedAt() != null) {
-                days = ChronoUnit.DAYS.between(cc.getIntakeAt(), cc.getClosedAt());
-                if (cc.getPausedDays() != null) {
-                    days = Math.max(0, days - cc.getPausedDays());
-                }
-            }
+            long storageDays = InventoryDurationHelper.calculateStorageDays(cc);
+            long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(cc);
+            long sellableDays = InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays);
 
             com.qkshop.tonkho.salesreport.SalesOrder linkedSo = salesOrderByKey.get("CYC:" + cc.getCycleId());
             if (linkedSo == null && cc.getSourceReference() != null) {
@@ -330,7 +341,10 @@ public class MachineService {
                     .brandId(brandId)
                     .brandName(brandName)
                     .segment(segName)
-                    .storageDays(days)
+                    .readyAt(cc.getReadyAt())
+                    .storageDays(storageDays)
+                    .pausedDays(pausedDays)
+                    .sellableDays(sellableDays)
                     .build());
         }
 
@@ -511,13 +525,10 @@ public class MachineService {
             String statusStr = updates.get("status").toString();
             switch (statusStr) {
                 case "SAN_SANG_BAN", "READY" -> {
+                    LocalDateTime now = LocalDateTime.now();
                     ai.setState(CycleState.READY);
-                    if (ai.getReadyAt() == null) ai.setReadyAt(LocalDateTime.now());
-                    if (ai.getLastPausedAt() != null) {
-                        long days = java.time.temporal.ChronoUnit.DAYS.between(ai.getLastPausedAt(), LocalDateTime.now());
-                        ai.setPausedDays((ai.getPausedDays() != null ? ai.getPausedDays() : 0) + days);
-                        ai.setLastPausedAt(null);
-                    }
+                    if (ai.getReadyAt() == null) ai.setReadyAt(now);
+                    InventoryDurationHelper.accumulatePausedDays(ai, now);
                     // Đóng các InspectionRequest đang mở
                     closeOpenInspectionRequests(ai.getCycleId(), username);
                     // Đồng bộ SerialRegistry
@@ -611,15 +622,21 @@ public class MachineService {
     }
 
     private void closeOpenInspectionRequests(String cycleId, String actor) {
-        List<InspectionRequestStatus> openStatuses = List.of(
-                InspectionRequestStatus.OPEN,
-                InspectionRequestStatus.IN_PROGRESS,
-                InspectionRequestStatus.RECHECK_REQUESTED);
-        inspectionRequestRepository.findByCycleIdAndStatusIn(cycleId, openStatuses).ifPresent(req -> {
-            req.setStatus(InspectionRequestStatus.PASSED);
-            req.setCompletedAt(LocalDateTime.now());
-            inspectionRequestRepository.save(req);
-        });
+        List<InspectionRequest> requests = inspectionRequestRepository.findByCycleId(cycleId);
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (InspectionRequest req : requests) {
+            if (req.getStatus() == InspectionRequestStatus.OPEN
+                    || req.getStatus() == InspectionRequestStatus.IN_PROGRESS
+                    || req.getStatus() == InspectionRequestStatus.RECHECK_REQUESTED) {
+                req.setStatus(InspectionRequestStatus.PASSED);
+                req.setCompletedAt(now);
+                req.setAssignedTo(actor);
+                inspectionRequestRepository.save(req);
+            }
+        }
     }
 
     private void ensureOpenInspectionRequest(ActiveInventory ai, String reason) {
@@ -897,8 +914,14 @@ public class MachineService {
         detail.put("cycleId", ai.getCycleId());
         detail.put("state", ai.getState().name());
         detail.put("intakeType", ai.getIntakeType() != null ? ai.getIntakeType().name() : null);
+        LocalDateTime now = LocalDateTime.now();
+        long storageDays = InventoryDurationHelper.calculateStorageDays(ai, now);
+        long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(ai, now);
         detail.put("intakeAt", ai.getIntakeAt());
         detail.put("readyAt", ai.getReadyAt());
+        detail.put("storageDays", storageDays);
+        detail.put("pausedDays", pausedDays);
+        detail.put("sellableDays", InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays));
         detail.put("salePrice", ai.getSalePrice());
         detail.put("note", ai.getNote());
         detail.put("warrantyPeriod", ai.getWarrantyPeriod());
@@ -938,8 +961,13 @@ public class MachineService {
         detail.put("cycleId", cc.getCycleId());
         detail.put("state", "CLOSED");
         detail.put("closeType", cc.getCloseType().name());
+        long storageDays = InventoryDurationHelper.calculateStorageDays(cc);
+        long pausedDays = InventoryDurationHelper.calculateTotalPausedDays(cc);
         detail.put("closedAt", cc.getClosedAt());
         detail.put("intakeAt", cc.getIntakeAt());
+        detail.put("storageDays", storageDays);
+        detail.put("pausedDays", pausedDays);
+        detail.put("sellableDays", InventoryDurationHelper.calculateSellableDays(storageDays, pausedDays));
         detail.put("salePrice", cc.getSalePriceSnapshot());
         detail.put("customerName", cc.getCustomerName());
         detail.put("customerPhone", cc.getCustomerPhone());
@@ -1101,21 +1129,27 @@ public class MachineService {
             price = latestClosed.getConfig().getDefaultSalePrice();
         }
 
+        LocalDateTime now = LocalDateTime.now();
         ActiveInventory ai = ActiveInventory.builder()
                 .cycleId(newCycleId)
                 .serialKey(key)
                 .config(latestClosed.getConfig())
                 .sourceModelText(latestClosed.getSourceModelText())
                 .intakeType(latestClosed.getIntakeType() != null ? latestClosed.getIntakeType() : com.qkshop.tonkho.intake.IntakeType.OPENING_BALANCE)
-                .intakeAt(LocalDateTime.now())
+                .intakeAt(now)
                 .state(nextState)
-                .readyAt(nextState == CycleState.READY ? LocalDateTime.now() : null)
+                .readyAt(nextState == CycleState.READY ? now : null)
+                .lastPausedAt(nextState == CycleState.NEEDS_INSPECTION ? now : null)
                 .salePrice(price)
                 .note("Nhập lại kho từ máy xuất khác (" + (latestClosed.getSourceReference() != null ? latestClosed.getSourceReference() : latestClosed.getCycleId()) + "): " + reason)
                 .warrantyPeriod(latestClosed.getWarrantyPeriod())
                 .warrantyExpiry(latestClosed.getWarrantyExpiry())
                 .build();
         ai = activeInventoryRepository.save(ai);
+
+        if (nextState == CycleState.NEEDS_INSPECTION) {
+            ensureOpenInspectionRequest(ai, reason);
+        }
 
         // Cập nhật SerialRegistry
         serialRegistryRepository.findBySerialKey(key).ifPresentOrElse(sr -> {

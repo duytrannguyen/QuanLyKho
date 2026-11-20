@@ -6,6 +6,7 @@ import com.qkshop.tonkho.inspection.InspectionRequestStatus;
 import com.qkshop.tonkho.inspection.dto.InspectionRequest;
 import com.qkshop.tonkho.inventory.ActiveInventory;
 import com.qkshop.tonkho.inventory.ClosedCycle;
+import com.qkshop.tonkho.inventory.InventoryDurationHelper;
 import com.qkshop.tonkho.log.EventLog;
 import com.qkshop.tonkho.machine.SerialRegistry;
 import com.qkshop.tonkho.core.enums.CloseType;
@@ -52,13 +53,10 @@ public class StateTransitionService {
             throw new IllegalStateException("Chỉ có thể chuyển sang READY từ trạng thái NEEDS_INSPECTION");
         }
 
+        LocalDateTime now = LocalDateTime.now();
         inventory.setState(CycleState.READY);
-        inventory.setReadyAt(LocalDateTime.now());
-        if (inventory.getLastPausedAt() != null) {
-            long days = java.time.temporal.ChronoUnit.DAYS.between(inventory.getLastPausedAt(), LocalDateTime.now());
-            inventory.setPausedDays((inventory.getPausedDays() != null ? inventory.getPausedDays() : 0) + days);
-            inventory.setLastPausedAt(null);
-        }
+        inventory.setReadyAt(now);
+        InventoryDurationHelper.accumulatePausedDays(inventory, now);
         inventory = activeInventoryRepo.save(inventory);
 
         // Update SerialRegistry
@@ -120,12 +118,9 @@ public class StateTransitionService {
                 .notes(notes)
                 .build();
 
+        LocalDateTime now = LocalDateTime.now();
         // Tính chốt pausedDays nếu đang paused
-        Long finalPausedDays = inventory.getPausedDays() != null ? inventory.getPausedDays() : 0L;
-        if (inventory.getState() == CycleState.NEEDS_INSPECTION && inventory.getLastPausedAt() != null) {
-            long days = java.time.temporal.ChronoUnit.DAYS.between(inventory.getLastPausedAt(), LocalDateTime.now());
-            finalPausedDays += days;
-        }
+        long finalPausedDays = InventoryDurationHelper.calculateTotalPausedDays(inventory, now);
 
         // Tạo ClosedCycle từ ActiveInventory
         ClosedCycle closedCycle = ClosedCycle.builder()
@@ -136,6 +131,7 @@ public class StateTransitionService {
                 .intakeType(inventory.getIntakeType())
                 .intakeAt(inventory.getIntakeAt())
                 .readyAt(inventory.getReadyAt())
+                .closedAt(now)
                 .closeType(closeType)
                 .salePriceSnapshot(inventory.getSalePrice())
                 .sourceReference(externalRefId)
